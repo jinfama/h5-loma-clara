@@ -137,7 +137,9 @@ export async function fila(r, ctx) {
 }
 
 export async function panel(ctx) {
-  if (!ctx._panel) ctx._panel = Promise.all(RASGOS.map(r => fila(r, ctx))).then(xs => xs.filter(Boolean));
+  // solo los rasgos cuyo indicador y año están en el catálogo (el sitio público no lleva lo retenido ni lo que está en revisión)
+  const hay = r => { const c = ctx.cat.get(r.id); return !!c && (!Array.isArray(c.anios) || r.media || c.anios.map(Number).includes(+r.a)); };
+  if (!ctx._panel) ctx._panel = Promise.all(RASGOS.filter(hay).map(r => fila(r, ctx))).then(xs => xs.filter(Boolean));
   return ctx._panel;
 }
 
