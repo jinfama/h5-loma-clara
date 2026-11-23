@@ -1,0 +1,61 @@
+/* fuentes.html · lo propio de la página (tokens y piezas comunes en atlas2.css) */
+.fu-head { padding-top: clamp(24px, 4vw, 48px); padding-bottom: 8px; }
+.fu-head h1 { max-width: 18ch; }
+.fu-autoria { font-size: .92rem; color: var(--a2-ink-2); border-left: 3px solid var(--a2-accent); padding-left: 10px; max-width: 70ch; }
+.fu-toc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.fu-toc a { font: 500 .86rem var(--a2-font-text); text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--a2-line-2); background: var(--a2-surface); }
+.fu-toc a:hover { border-color: var(--a2-ink); color: var(--a2-ink); }
+.a2-section { scroll-margin-top: calc(var(--a2-nav-h) + 8px); }
+
+.fu-version { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 14px 0 18px; }
+.fu-version .a2-panel { padding: 14px 16px; }
+.fu-version .a2-stat__value { font-size: 1.8rem; }
+.fu-version .a2-mono { font-size: .95rem; }
+
+.fu-filtros { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.fu-filtros button { border: 1px solid var(--a2-line-2); background: var(--a2-surface); color: var(--a2-ink-2); border-radius: 999px; padding: 6px 12px; font: 500 .84rem var(--a2-font-text); cursor: pointer; min-height: 34px; }
+.fu-filtros button[aria-pressed="true"] { background: var(--a2-ink); color: var(--a2-bg); border-color: var(--a2-ink); }
+
+.fu-tablawrap { overflow-x: auto; border: 1px solid var(--a2-line); border-radius: var(--a2-radius-lg); background: var(--a2-surface); }
+.fu-tabla { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.fu-tabla th, .fu-tabla td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--a2-line); vertical-align: top; }
+.fu-tabla th { font: 600 .72rem var(--a2-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--a2-ink-3); background: var(--a2-surface-2); position: sticky; top: 0; }
+.fu-tabla tr:last-child td { border-bottom: 0; }
+.fu-tabla td.a2-mono, .fu-tabla .a2-mono { font-size: .8rem; }
+.fu-tabla small { color: var(--a2-ink-3); }
+.fu-tabla .fu-usada { font-size: .78rem; color: var(--a2-ink-2); }
+.fu-details { margin-top: 14px; }
+.fu-details summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+
+.fu-badge-estado { white-space: nowrap; }
+.a2-badge--aceptado { color: var(--a2-teal); background: color-mix(in srgb, var(--a2-teal) 10%, transparent); }
+
+.fu-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 12px; }
+.fu-cards h3 { margin-top: 10px; }
+.fu-cards p { font-size: .94rem; color: var(--a2-ink-2); }
+.fu-card-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.fu-sub { margin-top: 24px; }
+.fu-lista { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; font-size: .9rem; }
+.fu-lista li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+
+.fu-reserva { border-left: 3px solid var(--a2-ochre); padding: 4px 0 4px 14px; margin: 16px 0; }
+.fu-reserva h3 { margin: 0 0 6px; }
+.fu-reserva .a2-quote { font-style: normal; color: var(--a2-ink); border-left: 0; padding-left: 0; }
+
+.fu-buscar { max-width: 420px; margin: 10px 0 16px; }
+.fu-fuentes { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin: 0; }
+.fu-fuente { background: var(--a2-surface); border: 1px solid var(--a2-line); border-radius: var(--a2-radius-lg); padding: 14px 16px; }
+.fu-fuente dt { font-family: var(--a2-font-display); font-weight: 600; font-size: 1.02rem; letter-spacing: -0.01em; }
+.fu-fuente dt code { display: block; font: 400 .72rem var(--a2-font-mono); color: var(--a2-ink-3); margin-bottom: 4px; letter-spacing: 0; }
+.fu-fuente dd { margin: 6px 0 0; font-size: .88rem; color: var(--a2-ink-2); }
+.fu-fuente dd.fu-orig { color: var(--a2-ink); }
+
+.fu-tramas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 10px; }
+.fu-trama { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: start; }
+.fu-trama .fu-muestra { width: 64px; height: 44px; border-radius: 4px; border: 1px solid var(--a2-line-2); }
+.fu-trama h3 { margin: 0 0 4px; font-size: 1rem; }
+.fu-trama p { margin: 0; font-size: .88rem; color: var(--a2-ink-2); }
+.fu-nota { font-size: 1rem; max-width: 80ch; }
+
+/* citas de reservas con rutas o códigos largos sin espacios: que partan (si no, scroll lateral a 390 px) */
+.fu-reserva, .fu-reserva .a2-quote { overflow-wrap: anywhere; min-width: 0; }

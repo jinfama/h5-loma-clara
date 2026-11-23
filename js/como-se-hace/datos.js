@@ -1,0 +1,150 @@
+// Atlas Histórico de Andalucía · «Cómo se hace»: lee las cifras de los ejemplos de los mismos datos que usa el visor.
+// Ninguna cifra de los ejemplos está escrita a mano: si una falta, la carga falla y la página lo dice.
+import { N } from './util.js';
+
+const BASE = 'data/v2/';
+const leer = p => fetch(BASE + p).then(r => { if (!r.ok) throw new Error('sin datos: ' + p); return r.json(); });
+const exige = (x, que) => { if (x === null || x === undefined) throw new Error('falta ' + que); return x; };
+
+export const MARCHENA = '41060';
+export const DALIAS = '04038';
+export const EJIDO = '04902';
+
+export async function cargar() {
+  const [pob, vec, hab, oli, andal, topo, fuentes] = await Promise.all([
+    leer('series/poblacion.json'),
+    leer('visor/valores/poblacion_1591_vecinos__municipio.json'),
+    leer('visor/valores/poblacion_1591_habitantes__municipio.json'),
+    leer('visor/valores/usos_olivar_ha__municipio.json'),
+    leer('visor/valores/poblacion_hab__andalucia.json'),
+    leer('geo/municipios.topo.json'),
+    leer('fuentes.json'),
+  ]);
+
+  // ---------- series anuales ----------
+  const serie = ine => pob.anios.map((y, i) => ({ y, v: pob.v[ine][i], e: +pob.e[ine][i], m: pob.m[ine][i] }));
+  const censos = pob.censos.anios;
+  const mar = serie(MARCHENA);
+  const de = (s, y) => exige(s.find(p => p.y === y), 'año ' + y);
+  const marCensos = mar.filter(p => censos.includes(p.y));
+
+  // ---------- 1787: varones + mujeres frente al total ----------
+  const U = pob.pre1842.unidades;
+  const u87 = Object.entries(U).filter(([, u]) => u.a === 1787 && u.tot != null && u.var != null && u.muj != null)
+    .map(([k, u]) => ({ k, n: u.n, var: u.var, muj: u.muj, tot: u.tot, ok: u.var + u.muj === u.tot, mh: u.mh }));
+  const mal87 = u87.filter(u => !u.ok);
+  const sev = u87.filter(u => u.k.startsWith('UE-1787-41') && u.mh.length === 1).sort((a, b) => a.n.localeCompare(b.n, 'es'));
+  const iM = sev.findIndex(u => u.k === 'UE-1787-' + MARCHENA);
+  const hoja = sev.slice(Math.max(0, iM - 2), iM + 3);
+  const m87 = exige(u87.find(u => u.k === 'UE-1787-' + MARCHENA), 'Marchena 1787');
+  const torrox = exige(mal87.find(u => u.n === 'Torrox'), 'Torrox 1787');
+
+  // ---------- vecinos y habitantes ----------
+  const i91 = vec.ids.indexOf(MARCHENA);
+  const m91 = {
+    vec: exige(vec.v[0][i91], 'vecinos 1591'), hab: exige(hab.v[0][i91], 'habitantes 1591'),
+    min: exige(hab.horquilla.min[0][i91], 'mínimo 1591'), max: exige(hab.horquilla.max[0][i91], 'máximo 1591'),
+  };
+  const u52 = exige(U['UE-1752-' + MARCHENA], 'Marchena 1752');
+  // 1752: la base trae vecinos y habitantes, sin horquilla; el factor es el que resulta de esas dos cifras
+  const k52 = exige(u52.hab, 'habitantes 1752') / exige(u52.vec, 'vecinos 1752');
+
+  // ---------- Dalías y El Ejido ----------
+  const dal = serie(DALIAS), eji = serie(EJIDO);
+  const srD = pob.censos.sr_unidad[DALIAS].serie, srE = pob.censos.sr_unidad[EJIDO].serie;
+  const f81D = exige(srD.find(s => s[0] === 1981), 'reparto 1981');
+  const f81E = exige(srE.find(s => s[0] === 1981), 'reparto 1981');
+  const pila = censos.map(y => {
+    const d = de(dal, y), e = de(eji, y);
+    return { y, d: d.v, e: e.v, total: d.v + e.v, est: d.e === 1 || e.e === 1 };
+  });
+
+  // ---------- olivar de Marchena ----------
+  const iO = oli.ids.indexOf(MARCHENA);
+  const olivar = oli.anios.map((y, k) => ({ y, v: exige(oli.v[k][iO], 'olivar ' + y), f: oli.f[k][iO] }));
+
+  // ---------- 1591 en el mapa ----------
+  const motivo = {};
+  (vec.motivo_vacio?.celdas || []).forEach(([, i, m]) => { motivo[vec.ids[i]] = vec.motivo_vacio.textos[m] || ''; });
+  const clase91 = {}, valor91 = {};
+  vec.ids.forEach((id, i) => { clase91[id] = vec.f[0][i]; valor91[id] = vec.v[0][i]; });
+  const esGranada = id => (motivo[id] || '').startsWith('la fuente no cubre el reino de Granada');
+  const nSin = vec.ids.filter(id => clase91[id] === '.').length;
+  const nGr = vec.ids.filter(id => clase91[id] === '.' && esGranada(id)).length;
+  const nCon = vec.ids.length - nSin;
+  const iA = andal.anios.indexOf(1591);
+  const and91 = exige(andal.v[iA][0], 'Andalucía 1591');
+  const par91 = exige((andal.parcial || []).find(p => p[0] === iA), 'suma parcial 1591');
+
+  // ---------- años con reparto, para el paso 1 ----------
+  const conReparto = censos.filter((y, i) => Object.values(pob.censos.caso)
+    .some(c => String(pob.censos.casos[c[i]] || '').startsWith('reparto_')));
+
+  const d = {
+    pob, topo, fuentes, censos, conReparto,
+    mar, marCensos, de,
+    hoja, m87, u87, mal87, torrox,
+    m91, u52, k52,
+    dal, eji, pila, f81D, f81E,
+    olivar,
+    clase91, valor91, motivo, esGranada, nSin, nGr, nCon, nMun: vec.ids.length, and91, par91,
+  };
+
+  // ---------- textos que se ponen dentro de la prosa ----------
+  d.t = {
+    nFuentes: N(Object.keys(fuentes).length),
+    m87v: N(m87.var), m87m: N(m87.muj), m87t: N(m87.tot),
+    n87: N(u87.length), n87ok: N(u87.length - mal87.length), n87mal: N(mal87.length),
+    txV: N(torrox.var), txM: N(torrox.muj), txS: N(torrox.var + torrox.muj), txT: N(torrox.tot),
+    m91v: N(m91.vec), m91h: N(m91.hab), m91min: N(m91.min), m91max: N(m91.max),
+    m52v: N(u52.vec), m52h: N(u52.hab), m52k: N(k52, 2),
+    dVec: N(m91.vec - u52.vec), dHab: N(u52.hab - m91.hab),
+    d81: N(f81D[2]), d81d: N(de(dal, 1981).v), d81e: N(de(eji, 1981).v),
+    d91d: N(de(dal, 1991).v), d91e: N(de(eji, 1991).v),
+    pd: N(f81D[3] * 100, 2) + ' %', pe: N(f81E[3] * 100, 2) + ' %',
+    nC: N(marCensos.length), nA: N(mar.length), nE: N(mar.filter(p => p.e === 1).length),
+    c1910: N(de(mar, 1910).v), c1920: N(de(mar, 1920).v), y1915: N(de(mar, 1915).v),
+    o52: N(olivar.find(p => p.y === 1752).v, 1), o07: N(olivar.find(p => p.y === 2007).v, 1), o20: N(olivar.find(p => p.y === 2020).v, 1),
+    gap91: N(1752 - 1591), nSin: N(nSin), nGr: N(nGr), nCon: N(nCon), nMun: N(vec.ids.length), and91: N(and91),
+  };
+
+  // ---------- tabla final: cada ejemplo con su fuente ----------
+  const F = {
+    flo: 'Censo de Floridablanca (1787), transcripción antigua sin revisar',
+    v91: 'Censo de 1591 (vecindario de la Corona de Castilla), edición del INE',
+    ens: 'Catastro de Ensenada (1750-1754), transcripción y edición del INE',
+    ine: 'Censos de población, INE',
+    goe: 'Censos del INE y series homogéneas de Goerlich y otros',
+    pad: 'Censos y padrón continuo, INE',
+    es2: 'Catastro de Ensenada (1750-1754), superficie por clase, transcripción sin revisar',
+    mu7: 'Mapa de usos y coberturas vegetales (MUCVA) 2007, Junta de Andalucía',
+    sip: 'SIPNA 2020, Junta de Andalucía',
+  };
+  d.tabla = [
+    ['2', 'Marchena, 1787: varones', N(m87.var), 'Extraído', F.flo],
+    ['2', 'Marchena, 1787: mujeres', N(m87.muj), 'Extraído', F.flo],
+    ['2', 'Marchena, 1787: total', N(m87.tot), 'Extraído', F.flo],
+    ['2', 'Torrox, 1787: varones + mujeres', N(torrox.var + torrox.muj), 'Suma de comprobación', F.flo],
+    ['2', 'Torrox, 1787: total impreso', N(torrox.tot), 'Extraído, no cuadra', F.flo],
+    ['3', 'Marchena, 1591: vecinos', N(m91.vec), 'Extraído', F.v91],
+    ['3', 'Marchena, 1591: habitantes', `${N(m91.hab)} (${N(m91.min)} a ${N(m91.max)})`, 'Estimado', F.v91],
+    ['3', 'Marchena, 1752: vecinos', N(u52.vec), 'Extraído', F.ens],
+    ['3', 'Marchena, 1752: habitantes', N(u52.hab), 'Estimado', F.ens],
+    ['4', 'Dalías antes de dividirse, 1981', N(f81D[2]), 'Tomado', F.ine],
+    ['4', 'Dalías en sus límites de hoy, 1981', N(de(dal, 1981).v), 'Estimado (reparto)', F.goe],
+    ['4', 'El Ejido en sus límites de hoy, 1981', N(de(eji, 1981).v), 'Estimado (reparto)', F.goe],
+    ['4', 'Dalías, 1991', N(de(dal, 1991).v), 'Tomado', F.ine],
+    ['4', 'El Ejido, 1991', N(de(eji, 1991).v), 'Tomado', F.ine],
+    ['5', 'Marchena, 1910', N(de(mar, 1910).v), 'Tomado', F.ine],
+    ['5', 'Marchena, 1915', N(de(mar, 1915).v), 'Estimado (interpolación)', F.ine],
+    ['5', 'Marchena, 1920', N(de(mar, 1920).v), 'Tomado', F.ine],
+    ['5', 'Olivar de Marchena, 1752 (ha)', N(olivar.find(p => p.y === 1752).v, 1), 'Extraído', F.es2],
+    ['5', 'Olivar de Marchena, 2007 (ha)', N(olivar.find(p => p.y === 2007).v, 1), 'Tomado', F.mu7],
+    ['5', 'Olivar de Marchena, 2020 (ha)', N(olivar.find(p => p.y === 2020).v, 1), 'Tomado', F.sip],
+    ['6', 'Marchena, 1991', N(de(mar, 1991).v), 'Observada', F.ine],
+    ['6', 'Marchena, 2015', N(de(mar, 2015).v), 'Estimada (padrón)', F.pad],
+    ['6', `Andalucía, 1591 (${N(par91[2])} de ${N(par91[3])} municipios)`, N(and91), 'Suma parcial, estimada', F.v91],
+    ['6', 'Dalías, 1591', 'sin dato', 'La fuente no cubre el reino de Granada', F.v91],
+  ];
+  return d;
+}

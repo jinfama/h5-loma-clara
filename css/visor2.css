@@ -1,0 +1,115 @@
+/* visor2.css — capa del visor analítico para el Atlas v2 (19-nov-2026). Se carga DESPUÉS de styles.css y atlas2.css.
+   1. Paleta y tipografía del cromo hacia las del diseño común (css/atlas2.css) sin tocar styles.css:
+      solo se redefinen los tokens --c-* y --ff*. Los colores de DATOS (rampas de js/utils.js) no se tocan.
+   2. Barra de navegación común arriba (js/atlas2/nav.js) sin romper la maquetación a pantalla completa.
+   3. Procedencia: barra #prov-bar, marcas de estimado / con reserva / sin dato, filas de tabla, barras. */
+
+/* ---------- 1. Paleta y tipografía ------------------------------------------------------------ */
+:root {
+    --c-primary: #1d4f7a;          /* azul «oficial, observado» del diseño común */
+    --c-primary-tint: rgba(29,79,122,.09);
+    --c-primary-soft: #4b85aa;
+    --c-accent: #d63a1f;           /* almagre */
+    --c-accent-h: #b02d16;
+    --c-accent-soft: #e8836f;
+    --c-agua-clara: #93b3c6;
+    --c-success: #2f7d74;
+    --c-text: #13171b;
+    --c-text-2: #3d454d;
+    --c-text-3: #5d666f;
+    --c-border: #d3d7d4;
+    --c-border-lt: #e6e9e6;
+    --c-bg: #ffffff;
+    --c-bg-s: #f3f4f2;
+    --c-bg-h: #e9ebe8;
+    --c-sb-bg: #13171b;
+    --c-sb-text: #b9c1c8;
+    --c-sb-active: #ffffff;
+    --c-sb-accent: #ff6a48;
+    --c-sb-off: rgba(185,193,200,.34);
+    --ff: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --ff-display: "Bricolage Grotesque", "Schibsted Grotesk", system-ui, sans-serif;
+    --a2-nav-h: 56px;
+}
+body { font-size-adjust: none; }
+.app-title, .about-content h1, .about-content h2, .about-heading, .picker-title, .settings-title {
+    font-weight: 800; letter-spacing: -0.02em;
+}
+.map-legend { background: rgba(255,255,255,.96); }
+.tooltip { background: rgba(19,23,27,.96); }
+
+/* ---------- 2. Navegación común ---------------------------------------------------------------- */
+/* body queda en altura de pantalla; la barra de navegación ocupa su alto y #app se lleva el resto */
+#app { height: calc(100vh - var(--a2-nav-h)); height: calc(100dvh - var(--a2-nav-h)); }
+.a2-nav { flex: none; }
+.loading-screen, .picker-overlay, .settings-overlay { z-index: 1000; }
+@media (max-width: 820px) {
+    .a2-nav__brand { font-size: .92rem; }
+}
+
+/* ---------- 3. Procedencia ---------------------------------------------------------------------- */
+.mk-sw-est, .mk-sw-res, .mk-sw-nd, .pb-sw {
+    display: inline-block; width: 12px; height: 12px; border: 1px solid var(--c-border); flex-shrink: 0; vertical-align: -2px;
+    background-color: #fff;
+}
+.mk-sw-est { background-image: repeating-linear-gradient(45deg, rgba(19,23,27,.55) 0 1.3px, transparent 1.3px 5px); }
+.mk-sw-res { background-image: radial-gradient(circle at 50% 50%, rgba(19,23,27,.65) 1.05px, transparent 1.2px); background-size: 5px 5px; }
+.mk-sw-nd  { background-color: #d6d3cc;
+             background-image: linear-gradient(45deg, transparent 46%, rgba(93,102,111,.45) 46% 54%, transparent 54%),
+                               linear-gradient(-45deg, transparent 46%, rgba(93,102,111,.45) 46% 54%, transparent 54%);
+             background-size: 6px 6px; }
+
+.prov-bar {
+    flex: none; font-size: 11.5px; color: var(--c-text-2);
+    background: var(--c-bg-s); border-bottom: 1px solid var(--c-border-lt);
+    padding: 3px var(--sp-4);
+}
+.pb-row { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; min-height: 24px; }
+.pb-src { flex: 1 1 260px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-src b { color: var(--c-text); font-weight: 600; }
+.pb-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid transparent;
+}
+.pb-rev    { background: #fdf0d3; color: #6b4a06; border-color: #e3ad45; }
+.pb-legacy { background: #ece8f6; color: #4b3a7a; border-color: #a78bdb; }
+.pb-note   { background: #e6eef5; color: #1d4f7a; border-color: #93b3c6; }
+.pb-mark   { background: transparent; color: var(--c-text-3); font-weight: 500; gap: 4px; }
+.pb-mark .pb-sw { margin-left: 6px; }
+.pb-btn {
+    border: 1px solid var(--c-border); background: var(--c-bg); color: var(--c-text); border-radius: 999px;
+    padding: 2px 10px; font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.pb-btn:hover { border-color: var(--c-primary); color: var(--c-primary); }
+.pb-btn.on { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }
+.pb-detail {
+    max-height: 34vh; overflow: auto; margin: 4px 0 2px; padding: 6px 10px; background: var(--c-bg);
+    border: 1px solid var(--c-border-lt); line-height: 1.5;
+}
+.pb-detail p { margin: 0 0 5px; max-width: 120ch; }
+.pb-foot { color: var(--c-text-3); }
+
+.map-year-badge {
+    display: inline-block; margin-left: 10px; vertical-align: middle; font-size: 13px; font-weight: 700;
+    color: #6b4a06; background: #fdf0d3; border: 1px solid #e3ad45; border-radius: 999px; padding: 2px 10px;
+    letter-spacing: 0; pointer-events: auto;
+}
+.tooltip-note { margin-top: 4px; max-width: 240px; font-size: 10.5px; line-height: 1.4; color: #c9d1d7; white-space: normal; }
+.tooltip-row.tt-est .tooltip-value { color: #f1c86a; }
+.tooltip-row.tt-nd .tooltip-value { color: #c9d1d7; }
+
+/* tabla */
+.tb-mark { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--c-border); white-space: nowrap; }
+.tb-mark.est { background: #fdf0d3; border-color: #e3ad45; color: #6b4a06; }
+.tb-mark.res { background: #e6eef5; border-color: #93b3c6; color: #1d4f7a; }
+.tb-mark.obs { background: #e4f1ee; border-color: #8cc7bf; color: #1f5b54; }
+.tb-mark.nd  { background: transparent; color: var(--c-text-3); }
+.nd-row td { color: var(--c-text-3); }
+.nd-row .tb-nd { font-style: italic; }
+.est-row td:nth-child(4) { font-style: italic; }
+
+/* barras */
+.bars-container { width: 100%; height: 100%; overflow: auto; padding: var(--sp-3) var(--sp-4); }
+.bars-head { font-size: 13px; margin-bottom: 4px; color: var(--c-text-2); }
+.bars-head b { color: var(--c-text); }
+.bars-svg .axis text { fill: var(--c-text-3); }

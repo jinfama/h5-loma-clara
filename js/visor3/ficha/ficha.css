@@ -1,0 +1,53 @@
+/* js/visor3/ficha · ficha universal (tokens de css/atlas2.css; la historia usa las piezas .fr-* de css/fronteras.css) */
+
+.v3fi { font-family: var(--a2-font-text); color: var(--a2-ink); font-size: .94rem; line-height: 1.45; }
+.v3fi section + section { margin-top: 16px; }
+.v3fi-k { font: 600 .72rem var(--a2-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--a2-ink-3); margin: 0 0 4px; }
+.v3fi-k--sm { margin-top: 12px; }
+.v3fi-sub { margin: 0 0 2px; font-size: .86rem; color: var(--a2-ink-2); }
+.v3fi-v { font: 800 clamp(1.7rem, 1.3rem + 1.4vw, 2.3rem)/1.05 var(--a2-font-display); letter-spacing: -0.03em; margin: 2px 0 8px; font-variant-numeric: tabular-nums; }
+.v3fi-v.is-nd { color: var(--a2-ink-3); }
+.v3fi-v.is-est { text-decoration: underline dashed var(--a2-ink-3); text-decoration-thickness: 2px; text-underline-offset: 6px; }
+.v3fi-proc { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.v3fi-proc .a2-badge { font-size: .66rem; }
+.v3fi .a2-badge--aceptado { color: var(--a2-teal); background: color-mix(in srgb, var(--a2-teal) 10%, transparent); }
+.v3fi-nd { gap: 6px; }
+.v3fi-nd::before { display: none; }
+.v3fi-sw { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.v3fi-lineas { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 3px; font-size: .86rem; color: var(--a2-ink-2); }
+.v3fi-lineas li::before { content: "· "; color: var(--a2-ink-3); }
+.v3fi-nota { margin-top: 6px; }
+.v3fi-lit { font-style: italic; }
+.v3fi-fuentes { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: .86rem; }
+.v3fi-fuentes small { color: var(--a2-ink-3); }
+
+.v3fi-serie { display: block; width: 100%; height: auto; overflow: visible; }
+.v3fi-s-obs { fill: none; stroke: var(--a2-ink); stroke-width: 1.8; }
+.v3fi-s-est { fill: none; stroke: var(--a2-ink-3); stroke-width: 1.4; stroke-dasharray: 3 3; }
+.v3fi-s-cur { stroke: var(--a2-accent); stroke-width: 1; }
+.v3fi-s-dot { fill: var(--a2-accent); stroke: var(--a2-surface); stroke-width: 1.5; }
+.v3fi-s-val { font: 600 10px var(--a2-font-mono); fill: var(--a2-ink-2); }
+.v3fi-s-eje { font: 400 10px var(--a2-font-mono); fill: var(--a2-ink-3); }
+.v3fi-s-ley { margin: 2px 0 0; font-size: .74rem; color: var(--a2-ink-3); }
+.v3fi-s-sw { display: inline-block; width: 18px; height: 0; vertical-align: middle; margin: 0 4px 0 8px; border-top: 2px solid var(--a2-ink); }
+.v3fi-s-sw:first-child { margin-left: 0; }
+.v3fi-s-sw--est { border-top: 2px dashed var(--a2-ink-3); }
+
+.v3fi-h3 { font: 600 .72rem var(--a2-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--a2-ink-3); margin: 18px 0 8px; }
+.v3fi-h3--grande { font: 800 1.2rem var(--a2-font-display); letter-spacing: -0.01em; text-transform: none; color: var(--a2-ink); border-top: 1px solid var(--a2-line); padding-top: 14px; }
+.v3fi-hist h3 { font: 600 .72rem var(--a2-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--a2-ink-3); margin: 18px 0 8px; }
+.v3fi-hist .fr-ficha__meta { margin-top: 0; }
+.v3fi-term { display: grid; grid-template-columns: 132px 1fr; gap: 12px; align-items: start; }
+.v3fi-term__mapa { background: var(--a2-map-bg); border-radius: var(--a2-radius); overflow: hidden; }
+.v3fi-term__mapa svg { display: block; width: 100%; height: auto; }
+.v3fi-pueblos, .v3fi-muns { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: .9rem; }
+.v3fi-muns { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.v3fi-muns small, .v3fi-pueblos small { color: var(--a2-ink-3); }
+.v3fi details summary { cursor: pointer; font-size: .86rem; margin: 6px 0; }
+.v3fi-det p { margin: 4px 0; }
+.v3fi .fr-acciones { margin-top: 14px; }
+.v3fi .fr-minis { margin: 0 -2px; }
+
+@media (max-width: 640px) {
+  .v3fi-term { grid-template-columns: 108px 1fr; }
+}

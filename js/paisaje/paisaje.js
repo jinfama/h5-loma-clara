@@ -1,0 +1,390 @@
+// Comparador de paisaje: dos capas de servicios públicos sobre un mismo mapa, separadas por una cortina.
+import { TIPOS, capaPorId, capasDeTipo } from './servicios.js';
+import { mostrarCifras } from './cifras.js';
+
+const $ = (id) => document.getElementById(id);
+const MUN_INICIAL = '04902'; // El Ejido: el cambio entre 1956 y hoy se ve a simple vista
+const LIMITES = [[35.6, -8.2], [38.9, -1.2]];
+const TESELA_FALLO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#f3ddd5"/>'
+  + '<path d="M0 256 256 0M-64 64 64-64M192 320 320 192" stroke="#c98f7f" stroke-width="2"/>'
+  + '<text x="128" y="132" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#8f2d1f">Sin imagen</text></svg>');
+
+const estado = { mun: MUN_INICIAL, a: 'foto-1956', b: 'foto-2022', frac: 0.5 };
+const lados = {
+  a: { capa: null, total: 0, ok: 0, fallos: 0, vacias: 0, reloj: null },
+  b: { capa: null, total: 0, ok: 0, fallos: 0, vacias: 0, reloj: null },
+};
+let mapa;
+let borde = null;
+let municipios = [];
+let porEtiqueta = new Map();
+
+/* ---------- capa con un reintento: estos servicios cortan alguna conexión suelta ---------- */
+function claseCapa() {
+  return L.TileLayer.WMS.extend({
+    _tileOnError(done, tesela, e) {
+      if (!tesela.dataset.reintento) {
+        tesela.dataset.reintento = '1';
+        const src = tesela.src;
+        setTimeout(() => { tesela.src = `${src}&reintento=1`; }, 700);
+        return;
+      }
+      L.TileLayer.WMS.prototype._tileOnError.call(this, done, tesela, e);
+    },
+  });
+}
+
+/* ---------- ¿la imagen llegó vacía? Solo se puede mirar en los servicios que lo permiten ---------- */
+const lienzo = document.createElement('canvas');
+lienzo.width = 8; lienzo.height = 8;
+function teselaVacia(img) {
+  try {
+    const c = lienzo.getContext('2d', { willReadFrequently: true });
+    c.clearRect(0, 0, 8, 8);
+    c.drawImage(img, 0, 0, 8, 8);
+    const p = c.getImageData(0, 0, 8, 8).data;
+    for (let i = 4; i < p.length; i += 4) {
+      if (Math.abs(p[i] - p[0]) > 2 || Math.abs(p[i + 1] - p[1]) > 2 || Math.abs(p[i + 2] - p[2]) > 2) return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/* ---------- estado de cada lado en pantalla ---------- */
+function pintarChip(l, texto) {
+  const c = capaPorId(estado[l]);
+  const tipo = TIPOS.find((t) => t.id === c.tipo).rotulo;
+  $(`pz-chip-${l}`).innerHTML = `${c.rotulo} · ${tipo}${texto ? `<small>${texto}</small>` : ''}`;
+}
+
+function pintarAviso(l, texto, conBoton) {
+  const caja = $(`pz-aviso-${l}`);
+  if (!texto) { caja.hidden = true; caja.textContent = ''; return; }
+  caja.hidden = false;
+  caja.textContent = texto;
+  if (conBoton) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = 'Reintentar';
+    b.addEventListener('click', () => { pintarAviso(l, ''); lados[l].capa?.redraw(); });
+    caja.append(b);
+  }
+}
+
+function cerrarLado(l) {
+  const s = lados[l];
+  clearTimeout(s.reloj);
+  const c = capaPorId(estado[l]);
+  if (s.total && s.fallos >= s.total) {
+    pintarChip(l, 'sin respuesta');
+    pintarAviso(l, `No se ha podido cargar ${c.rotulo}: el servicio ${c.organismo} no responde ahora mismo.`, true);
+  } else if (s.fallos) {
+    pintarChip(l, 'incompleto');
+    pintarAviso(l, `Faltan ${s.fallos} de ${s.total} partes de la imagen de ${c.rotulo}: el servicio ${c.organismo} no las ha enviado.`, true);
+  } else if (s.total && s.vacias >= s.total) {
+    pintarChip(l, 'sin imagen aquí');
+    pintarAviso(l, `Este vuelo (${c.rotulo}) no tiene imagen en esta zona.`, false);
+  } else if (s.total && s.vacias / s.total >= 0.25) {
+    pintarChip(l, 'parte sin foto o mar');
+    pintarAviso(l, '');
+  } else {
+    pintarChip(l, '');
+    pintarAviso(l, '');
+  }
+}
+
+function vigilar(capa, l) {
+  const s = lados[l];
+  const c = capaPorId(estado[l]);
+  capa.on('loading', () => {
+    Object.assign(s, { total: 0, ok: 0, fallos: 0, vacias: 0 });
+    pintarChip(l, 'cargando…');
+    pintarAviso(l, '');
+    clearTimeout(s.reloj);
+    s.reloj = setTimeout(() => {
+      pintarChip(l, 'tarda mucho');
+      pintarAviso(l, `El servicio ${c.organismo} está tardando más de lo normal en enviar ${c.rotulo}.`, true);
+    }, 15000);
+  });
+  capa.on('tileloadstart', () => { s.total += 1; });
+  capa.on('tileload', (e) => {
+    if (e.tile.src.startsWith('data:')) return;
+    s.ok += 1;
+    if (c.leePixeles && teselaVacia(e.tile)) s.vacias += 1;
+  });
+  capa.on('tileerror', () => { s.fallos += 1; });
+  capa.on('load', () => cerrarLado(l));
+}
+
+/* ---------- capas ---------- */
+function ponerCapa(l) {
+  const s = lados[l];
+  if (s.capa) { clearTimeout(s.reloj); mapa.removeLayer(s.capa); }
+  const c = capaPorId(estado[l]);
+  mapa.getPane(`pz-${l}`).classList.toggle('pz-es-usos', c.tipo === 'usos');
+  const Capa = claseCapa();
+  const opciones = {
+    layers: c.capa, styles: '', format: c.formato, transparent: c.formato === 'image/png', version: '1.3.0',
+    pane: `pz-${l}`, tileSize: 256, maxZoom: 17, updateWhenIdle: true, keepBuffer: 1, errorTileUrl: TESELA_FALLO,
+  };
+  if (c.maxNativeZoom) opciones.maxNativeZoom = c.maxNativeZoom;
+  if (c.leePixeles) opciones.crossOrigin = 'anonymous';
+  s.capa = new Capa(c.url, opciones);
+  vigilar(s.capa, l);
+  pintarChip(l, 'cargando…');
+  pintarAviso(l, '');
+  s.capa.addTo(mapa);
+}
+
+/* ---------- cortina ---------- */
+function recortar() {
+  if (!mapa) return;
+  const t = mapa.containerPointToLayerPoint([0, 0]);
+  const tam = mapa.getSize();
+  const b = mapa.containerPointToLayerPoint(tam);
+  const x = t.x + tam.x * estado.frac;
+  mapa.getPane('pz-a').style.clip = `rect(${t.y}px, ${x}px, ${b.y}px, ${t.x}px)`;
+  mapa.getPane('pz-b').style.clip = `rect(${t.y}px, ${b.x}px, ${b.y}px, ${x}px)`;
+}
+
+function moverCortina(frac) {
+  estado.frac = Math.max(0, Math.min(1, frac));
+  const pct = Math.round(estado.frac * 100);
+  $('pz-cortina').style.left = `${estado.frac * 100}%`;
+  $('pz-tirador').setAttribute('aria-valuenow', String(pct));
+  recortar();
+}
+
+function montarCortina() {
+  const t = $('pz-tirador');
+  const marco = $('pz-marco');
+  const aFrac = (ev) => { const r = marco.getBoundingClientRect(); return (ev.clientX - r.left) / r.width; };
+  let activo = false;
+  t.addEventListener('pointerdown', (ev) => { activo = true; t.setPointerCapture(ev.pointerId); ev.preventDefault(); ev.stopPropagation(); });
+  t.addEventListener('pointermove', (ev) => { if (activo) moverCortina(aFrac(ev)); });
+  const fin = () => { activo = false; };
+  t.addEventListener('pointerup', fin);
+  t.addEventListener('pointercancel', fin);
+  t.addEventListener('keydown', (ev) => {
+    const paso = ev.shiftKey ? 0.1 : 0.02;
+    if (ev.key === 'ArrowLeft') moverCortina(estado.frac - paso);
+    else if (ev.key === 'ArrowRight') moverCortina(estado.frac + paso);
+    else if (ev.key === 'Home') moverCortina(0);
+    else if (ev.key === 'End') moverCortina(1);
+    else return;
+    ev.preventDefault();
+  });
+}
+
+/* ---------- textos que dependen de la elección ---------- */
+function pintarCreditos() {
+  const enlace = (u, t) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
+  const linea = (l, nombre) => {
+    const c = capaPorId(estado[l]);
+    const k = c.atribucion;
+    const fichas = k.fichas.map((u, i) => enlace(u, k.fichas.length > 1 ? `Ficha ${i + 1}` : 'Ficha')).join(' · ');
+    const pnoa = k.pnoa ? ' La ficha menciona el Plan Nacional de Ortofotografía Aérea (PNOA).' : '';
+    return `<p><b>${nombre} · ${c.rotulo}.</b> ${k.titulo}. ${k.autoria.replace(/\.$/, '')}.${pnoa} Servida por ${k.servida}. Licencia: ${enlace(k.licenciaUrl, k.licencia)} · ${fichas}</p>`;
+  };
+  $('pz-creditos').innerHTML = linea('a', 'Izquierda') + linea('b', 'Derecha');
+}
+
+function pintarNotas() {
+  const a = capaPorId(estado.a);
+  const b = capaPorId(estado.b);
+  const notas = [];
+  if (a.id === b.id) notas.push(['', 'Has elegido lo mismo en los dos lados.']);
+  if (a.tipo === 'usos' && b.tipo === 'usos' && a.familia !== b.familia) {
+    notas.push(['fuerte', 'Entre 2007 y 2020 cambia la fuente: son dos mapas con distinta leyenda y método. Parte de lo que cambia al mover la cortina no es un cambio real del paisaje.']);
+  } else if (a.id === 'usos-2020' || b.id === 'usos-2020') {
+    notas.push(['fuerte', 'El mapa de 2020 es de otra fuente que los de 1956 a 2007, con otra leyenda. De cerca se ve menos detallado porque el servicio solo da color hasta cierta escala.']);
+  }
+  if (a.tipo === 'usos' || b.tipo === 'usos') {
+    notas.push(['', 'Los colores son los de la leyenda original de cada mapa; no son clases armonizadas del Atlas.']);
+  }
+  for (const c of new Set([a, b])) if (c.aviso) notas.push(['', c.aviso]);
+  $('pz-notas').innerHTML = notas.map(([k, t]) => `<p class="pz-nota${k ? ` pz-nota--${k}` : ''}">${t}</p>`).join('');
+}
+
+function pintarLeyenda() {
+  const cuerpo = $('pz-leyenda-cuerpo');
+  const vistas = [...new Set([estado.a, estado.b])].map(capaPorId).filter((c) => c.tipo === 'usos');
+  if (!vistas.length) {
+    cuerpo.innerHTML = '<p>Elige «Usos del suelo» en algún lado para ver sus colores.</p>';
+    return;
+  }
+  cuerpo.innerHTML = '';
+  for (const c of vistas) {
+    const h = document.createElement('h3');
+    h.textContent = `Mapa de ${c.rotulo}`;
+    const img = document.createElement('img');
+    img.alt = `Leyenda original del mapa de usos del suelo de ${c.rotulo}`;
+    img.loading = 'lazy';
+    img.addEventListener('error', () => {
+      const p = document.createElement('p');
+      p.className = 'pz-nota pz-nota--fuerte';
+      p.textContent = 'El servicio no ha enviado la leyenda de este mapa.';
+      img.replaceWith(p);
+    });
+    img.src = c.leyenda;
+    cuerpo.append(h, img);
+  }
+}
+
+function guardarUrl() {
+  const q = new URLSearchParams({ mun: estado.mun, izq: estado.a, der: estado.b });
+  history.replaceState(null, '', `${location.pathname}?${q}`);
+}
+
+/* ---------- selectores ---------- */
+function llenarAnios(l) {
+  const c = capaPorId(estado[l]);
+  $(`pz-${l}-anio`).innerHTML = capasDeTipo(c.tipo).map((x) => `<option value="${x.id}">${x.rotulo}</option>`).join('');
+  $(`pz-${l}-anio`).value = c.id;
+  $(`pz-${l}-tipo`).value = c.tipo;
+}
+
+function alCambiarLado(l) {
+  llenarAnios(l);
+  ponerCapa(l);
+  recortar();
+  pintarCreditos();
+  pintarNotas();
+  pintarLeyenda();
+  guardarUrl();
+}
+
+function montarSelectores() {
+  for (const l of ['a', 'b']) {
+    $(`pz-${l}-tipo`).innerHTML = TIPOS.map((t) => `<option value="${t.id}">${t.rotulo}</option>`).join('');
+    llenarAnios(l);
+    $(`pz-${l}-tipo`).addEventListener('change', (ev) => {
+      const actual = capaPorId(estado[l]);
+      const lista = capasDeTipo(ev.target.value);
+      const cerca = lista.reduce((m, x) => (Math.abs(x.anio - actual.anio) < Math.abs(m.anio - actual.anio) ? x : m), lista[0]);
+      estado[l] = cerca.id;
+      alCambiarLado(l);
+    });
+    $(`pz-${l}-anio`).addEventListener('change', (ev) => { estado[l] = ev.target.value; alCambiarLado(l); });
+  }
+  $('pz-cambiar').addEventListener('click', () => {
+    [estado.a, estado.b] = [estado.b, estado.a];
+    alCambiarLado('a');
+    alCambiarLado('b');
+  });
+}
+
+/* ---------- municipio ---------- */
+function irAMunicipio(ine, encuadrar = true) {
+  const m = municipios.find((x) => x.ine === ine);
+  if (!m) return false;
+  estado.mun = ine;
+  $('pz-mun').value = m.etiqueta;
+  $('pz-error-mun').hidden = true;
+  if (borde) mapa.removeLayer(borde);
+  borde = L.geoJSON(m.geo, {
+    pane: 'pz-borde', interactive: false,
+    style: { color: '#fff', weight: 2.5, opacity: 1, fill: false, dashArray: '7 4' },
+  }).addTo(mapa);
+  if (encuadrar) mapa.fitBounds(borde.getBounds(), { padding: [26, 26], maxZoom: 15, animate: false });
+  guardarUrl();
+  return true;
+}
+
+function montarMunicipios(topo) {
+  const provincias = { '04': 'Almería', 11: 'Cádiz', 14: 'Córdoba', 18: 'Granada', 21: 'Huelva', 23: 'Jaén', 29: 'Málaga', 41: 'Sevilla' };
+  const fc = topojson.feature(topo, topo.objects.municipios);
+  municipios = fc.features.map((f) => ({
+    ine: f.properties.c, nombre: f.properties.n, geo: f,
+    etiqueta: `${f.properties.n} (${provincias[f.properties.p] || f.properties.p})`,
+  })).sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
+  porEtiqueta = new Map(municipios.map((m) => [m.etiqueta.toLocaleLowerCase('es'), m.ine]));
+  $('pz-munis').innerHTML = municipios.map((m) => `<option value="${m.etiqueta.replace(/"/g, '&quot;')}"></option>`).join('');
+
+  const entrada = $('pz-mun');
+  const elegir = () => {
+    const t = entrada.value.trim().toLocaleLowerCase('es');
+    if (!t) return;
+    let ine = porEtiqueta.get(t);
+    if (!ine) {
+      const exactos = municipios.filter((m) => m.nombre.toLocaleLowerCase('es') === t);
+      if (exactos.length === 1) ine = exactos[0].ine;
+    }
+    if (ine) { if (ine !== estado.mun) irAMunicipio(ine); else $('pz-error-mun').hidden = true; return; }
+    const err = $('pz-error-mun');
+    err.textContent = 'No encuentro ese municipio. Elige uno de la lista.';
+    err.hidden = false;
+  };
+  entrada.addEventListener('change', elegir);
+  entrada.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); elegir(); } });
+  entrada.addEventListener('focus', () => entrada.select());
+}
+
+function montarDialogo() {
+  const d = $('pz-dialogo');
+  $('pz-cifras').addEventListener('click', () => {
+    const m = municipios.find((x) => x.ine === estado.mun);
+    d.showModal();
+    mostrarCifras($('pz-dialogo-cuerpo'), m.ine, m.etiqueta);
+  });
+  $('pz-dialogo-cerrar').addEventListener('click', () => d.close());
+  d.addEventListener('click', (ev) => { if (ev.target === d) d.close(); });
+}
+
+function fallo(texto) {
+  const f = $('pz-fallo');
+  f.textContent = texto;
+  f.hidden = false;
+}
+
+async function arrancar() {
+  if (!window.L || !window.topojson) {
+    fallo('No se ha podido cargar la herramienta del mapa. Comprueba la conexión y recarga la página.');
+    return;
+  }
+  const q = new URLSearchParams(location.search);
+  if (capaPorId(q.get('izq'))) estado.a = q.get('izq');
+  if (capaPorId(q.get('der'))) estado.b = q.get('der');
+
+  mapa = L.map('pz-mapa', {
+    attributionControl: false, minZoom: 8, maxZoom: 17, maxBounds: LIMITES, maxBoundsViscosity: 0.7,
+    zoomSnap: 1, wheelPxPerZoomLevel: 90,
+  });
+  for (const [n, z] of [['pz-a', 210], ['pz-b', 211], ['pz-borde', 450]]) {
+    const p = mapa.createPane(n);
+    p.style.zIndex = String(z);
+    if (n === 'pz-borde') p.classList.add('pz-borde');
+  }
+  mapa.on('move zoom zoomend moveend resize viewreset', recortar);
+
+  let topo;
+  try {
+    const r = await fetch('data/v2/geo/municipios.topo.json');
+    if (!r.ok) throw new Error(String(r.status));
+    topo = await r.json();
+  } catch (e) {
+    fallo('No se ha podido cargar la lista de municipios. Recarga la página.');
+    return;
+  }
+  montarMunicipios(topo);
+  montarSelectores();
+  montarCortina();
+  montarDialogo();
+
+  const pedido = q.get('mun');
+  if (!(pedido && irAMunicipio(pedido))) irAMunicipio(MUN_INICIAL);
+  ponerCapa('a');
+  ponerCapa('b');
+  moverCortina(0.5);
+  pintarCreditos();
+  pintarNotas();
+  pintarLeyenda();
+  guardarUrl();
+}
+
+if (document.readyState === 'complete') arrancar();
+else window.addEventListener('load', arrancar);
+

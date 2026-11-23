@@ -1,0 +1,958 @@
+// capas.js — sección «Capas» de la barra derecha: dibujos encima de cualquier indicador del mapa (RONDA_V5.md).
+// · Fronteras históricas: malla interior de los términos del corte vigente (geo/terminos/<corte>.topo.json, candidata) y
+//   el término del municipio de hoy elegido, resaltado en cada fecha.
+// · Relieve sombreado y altitud por tintas: data/v2/geo/relieve/ (imágenes en grados, reproyectadas aquí al mapa).
+// · Ríos: llegan de «geografía» (próximamente).
+// · Transporte: data/v2/capas/capas.json (rótulo y atribución de cada capa, a la vista). El ferrocarril y las carreteras
+//   del JRC siguen la barra de tiempo: aparecen por su año de apertura o por `existe_<año>`.
+// Nada se dibuja a mano: todo sale de esos ficheros.
+
+/* global d3, topojson */
+import { cargarSiHay } from '../atlas2/data.js';
+import { estado, setEstado, on } from '../visor3/estado.js';
+import { M } from '../visor3/motor.js';
+import * as niveles from '../visor3/niveles.js';
+import { esc, token } from '../atlas2/fmt.js';
+import { mapa } from './mapa.js';
+import { registrarIndicador } from '../visor3/registro.js';
+import { cargar } from '../atlas2/data.js';
+import { INSIGNIAS } from '../atlas2/leyenda.js';
+import { hayEstados, dibujaBordes } from './limites.js';
+import * as datosV from '../visor3/datos.js';
+
+const $ = (s, el = document) => el.querySelector(s);
+// vía de tren de atlas: un filo blanco que la separa del fondo, traviesas cortas y finas y el carril oscuro de 2 px
+const VIA = (c, t = '#5c5c5c') => [{ c: '#ffffff', w: 3.4 }, { c: t, w: 3.8, dash: [0.75, 5.6] }, { c, w: 1.7 }];
+// estilo de cada capa de transporte, por lo que es (el id puede cambiar; el rótulo y la fuente vienen de capas.json).
+// Ronda v8: cada clase con su dibujo de mapa de siempre. `trazo`: capas de trazo, de abajo arriba (el ferrocarril, negro
+// con tramos blancos; la calzada, piedras; los caminos del XVIII, a trazos); `punto`: símbolo (estación, puerto, faro…).
+const ESTILOS = [
+  [/calzad/, { nombre: 'Calzadas romanas', color: '#a8714f', trazo: [{ c: '#c49a7e', w: 0.7 }, { c: '#a8714f', w: 2.6, dash: [0.01, 4.6], cap: 'round' }] }],
+  [/camino/, { nombre: 'Caminos del siglo XVIII', color: '#5b4a3a', trazo: [{ c: '#ffffff', w: 3 }, { c: '#5b4a3a', w: 1.6, dash: [6, 3.5] }] }],
+  [/puertos?_xviii|ciudades_puertos/, { nombre: 'Ciudades y puertos del XVIII', color: '#5b4a3a', punto: 'rombo', r: 4.4 }],
+  [/ferrocarril_lin|ferrocarril$/, { nombre: 'Ferrocarril: líneas', color: '#262626', trazo: VIA('#262626'), tiempo: 'apertura', via: true }],
+  [/estacion/, { nombre: 'Ferrocarril: estaciones', color: '#3a3a3a', punto: 'estacion', r: 1.8, tiempo: 'apertura' }],
+  [/jrc/, { nombre: 'Carreteras 1955-2012 (JRC)', color: '#b5432b', tiempo: 'existe', porClase: true }],
+  [/carreteras?_hoy|carreteras_princ|carreteras_auton/, { nombre: 'Carreteras de hoy', color: '#c0392b', porTipo: true }],
+  [/puerto/, { nombre: 'Puertos de hoy', color: '#1f5f8b', punto: 'puerto', r: 4.6 }],
+  [/faro/, { nombre: 'Faros', color: '#e0a526', punto: 'faro', r: 5 }],
+  [/pecuari/, { nombre: 'Vías pecuarias', color: '#6f7f3a', trazo: [{ c: '#6f7f3a', w: 0.9, dash: [2, 2] }] }],
+];
+// carreteras de hoy, por tipo (campo `tipo` de la capa); del JRC, por su `clase_<año>` (la capa no dice qué es cada clase)
+const CARRETERA = {
+  conv: { rot: 'Convencional', trazo: [{ c: '#ffffff', w: 2.4 }, { c: '#d9805a', w: 1.2 }] },
+  multi: { rot: 'Multicarril', trazo: [{ c: '#ffffff', w: 3.4 }, { c: '#c0392b', w: 2 }] },
+  auto: { rot: 'Autovía o autopista', trazo: [{ c: '#6e1f12', w: 4 }, { c: '#f0b43c', w: 2 }] },
+};
+const claseCarretera = p => { const t = String(p.tipo || ''); return /Autov|Autopista/i.test(t) ? 'auto' : /multicarril/i.test(t) ? 'multi' : 'conv'; };
+// JRC: clase 1, más gruesa y oscura; clase 2, fina y clara. Tonos tierra: no compiten con el gris oscuro de la vía
+const JRC = {
+  2: { rot: 'clase 2 de la capa', trazo: [{ c: '#d99f7c', w: 1.1 }] },
+  1: { rot: 'clase 1 de la capa', trazo: [{ c: '#ffffff', w: 3.6 }, { c: '#9a4a2c', w: 2.2 }] },
+};
+// tramos nuevos (abiertos desde el fotograma anterior) y tramos ya cerrados en el año de la barra
+const VIA_NUEVA = VIA('#007a3d', '#3f8f63');
+const VIA_CERRADA = [{ c: '#a9a59b', w: 0.9, dash: [3, 2.5] }];
+const ESTILO = new Proxy({}, { get: (_, id) => { if (typeof id !== 'string') return undefined; const e = ESTILOS.find(([re]) => re.test(id)); return e ? e[1] : undefined; } });
+const idsTransporte = () => (CAT && CAT.capas || []).map(c => c.id).filter(id => ESTILO[id] && !/rio/.test(id));
+// ríos (de «geografía», cuando estén en capas/capas.json): campo `nivel` 1 Guadalquivir, 2 > 90 km, 3 de 25 a 90 km,
+// 4 menores (fichero aparte y pesado, se carga solo al encenderlo). Trazo que crece con el nivel, azul grisáceo.
+const RIOS_NIVELES = [
+  { id: 'rios:1-2', niveles: [1, 2], rotulo: 'Guadalquivir y ríos de más de 90 km' },
+  { id: 'rios:3', niveles: [3], rotulo: 'Ríos de 25 a 90 km' },
+  { id: 'rios:4', niveles: [4], rotulo: 'Ríos y arroyos menores (pesado)' },
+];
+const RIO_TRAZO = { 1: 2.6, 2: 1.7, 3: 1.05, 4: 0.5 };
+const RIO_COLOR = { 1: '#3f6479', 2: '#4a6f86', 3: '#5f8297', 4: '#8fadbd' };
+const RIOS_ATRIB = 'Ríos: IECA, DERA, capa T03_01_Rio, CC BY 4.0';
+// ficheros de ríos: el bloque `rios` de capas.json ({rios_1_3: {archivo, atribucion, aviso_longitud…}, rios_4: …}) o, si
+// algún día van en `capas`, las entradas con id de ríos
+const ficherosRios = () => {
+  const r = CAT && CAT.rios;
+  const delBloque = r && typeof r === 'object' ? Object.entries(r).filter(([, v]) => v && typeof v === 'object' && v.archivo).map(([id, v]) => ({ id, ...v })) : [];
+  return delBloque.length ? delBloque : (CAT && CAT.capas || []).filter(c => /(^|_)rios?(_|$)/i.test(c.id));
+};
+// aviso de las longitudes (solo dentro de Andalucía): del fichero de ríos o del bloque `rios` de capas.json
+const avisoLongitud = () => { const c = ficherosRios().find(x => x.aviso_longitud); return (c && c.aviso_longitud) || (CAT && CAT.rios && CAT.rios.aviso_longitud) || ''; };
+const NOTA_SIN_REVISAR = 'Capas heredadas o candidatas, aún sin revisar.';
+const NOTA_TRANSPORTE = 'Aún no están el ferrocarril completo por tramo y estación con sus fechas, las carreteras por clase de 1955 a 2012 ni los puertos históricos: entrarán cuando lleguen sus fuentes.';
+
+let CAT = null;          // capas.json
+let RELIEVE = null;      // geo/relieve/capas.json
+const datos = new Map(); // id → {features, cargando}
+const imagenes = new Map(); // relieve | altitud → {img, lim, warp, clave}
+const cacheGeo = new Map(); // clave de proyección + capa → Path2D[]
+let host = null;
+
+const activas = () => new Set(estado.capas || []);
+// capas que pinta el indicador activo cuando es una capa (tema Geografía o «Fronteras de cada año»)
+const PROTA = { capa_relieve: ['relieve'], capa_altitud: ['altitud'], capa_rios: ['rios'], capa_fronteras: ['fronteras'] };
+// tema Transporte: cada indicador reúne las capas de capas.json de su clase (por lo que son, no por un id fijo)
+const TRANS = {
+  capa_t_calzadas: [/calzad/],
+  capa_t_xviii: [/camino/, /puertos?_xviii|ciudades/],
+  capa_t_ferrocarril: [/ferrocarril_lin|ferrocarril$/],
+  capa_t_jrc: [/jrc/],
+  capa_t_carreteras: [/carreteras?_hoy|carreteras_princ|carreteras_auton/],
+  capa_t_costa: [/(^|_)puertos?($|_)(?!.*xviii)/, /faro/, /verde/],
+};
+const idsDe = ind => (TRANS[ind] ? idsTransporte().filter(id => TRANS[ind].some(re => re.test(id)) && !(ind === 'capa_t_costa' && /xviii|ciudades/.test(id))) : null);
+// los ids de capas de transporte que hay en una lista (para dejar paso al juego de otro indicador de transporte)
+export const sinTransporte = lista => (lista || []).filter(id => !ESTILO[id] || /rio/.test(id));
+// el indicador de transporte pone su juego de capas mientras no se marque ninguna otra de transporte
+const presetTrans = () => (estado.vista === 'mapa' && TRANS[estado.ind] ? idsDe(estado.ind) : null);
+function activasEf() {
+  const a = activas();
+  if (estado.vista === 'mapa') {
+    if (PROTA[estado.ind]) PROTA[estado.ind].forEach(x => a.add(x));
+    if (estado.ind === 'capa_rios' && !RIOS_NIVELES.some(n => a.has(n.id))) a.add('rios:1-2');
+    const pre = presetTrans();
+    if (pre && !idsTransporte().some(id => a.has(id))) pre.forEach(x => a.add(x));
+  }
+  return a;
+}
+// fondo del mapa (sección «Fondo»): se recuerda en este navegador
+export const FONDO_IDS = ['relieve', 'altitud', 'rios', 'rios:1-2', 'rios:3', 'rios:4', 'lim_mun', 'sinprov', 'fronteras', 'reinos'];
+let cargandoRios4 = false;
+const conmuta = id => {
+  const a = activas();
+  const pre = presetTrans();
+  if (pre && ESTILO[id] && !idsTransporte().some(x => a.has(x))) pre.forEach(x => a.add(x));
+  if (id === 'lim_prov') { a.has('sinprov') ? a.delete('sinprov') : a.add('sinprov'); setEstado({ capas: [...a] }); return; }
+  if (a.has(id)) { a.delete(id); if (id === 'rios') RIOS_NIVELES.forEach(n => a.delete(n.id)); }
+  else { a.add(id); if (id === 'rios' && !RIOS_NIVELES.some(n => a.has(n.id))) a.add('rios:1-2'); }
+  setEstado({ capas: [...a] });
+};
+
+let hostFondo = null;
+export async function montarCapas(el, elFondo) {
+  host = el;
+  hostFondo = elFondo || null;
+  [CAT, RELIEVE] = await Promise.all([cargarSiHay('capas/capas.json'), cargarSiHay('geo/relieve/capas.json'), niveles.cortes()]);
+  pinta();
+  mapa.capa('capas4', dibujar);
+  mapa.sonda = (x, y) => sondaTransporte(x, y) || sondaRios(x, y);
+  // una línea o un punto de transporte (o un río) bajo el puntero manda sobre el municipio
+  mapa.sondaHit = (x, y) => !!(elementoEn(x, y) || rioEn(x, y));
+  mapa.clic = (x, y) => clicTransporte(x, y) || clicRio(x, y);
+  on('cambio', ({ claves }) => {
+    if (claves.has('capas')) { pinta(); cargaActivas(); mapa.repintar(); }
+    if (claves.has('ficha') || claves.has('mun') || claves.has('sel') || claves.has('fn')) mapa.repintar();
+    if (claves.has('vista')) pinta();
+  });
+  on('motor', () => { cargaActivas(); });
+  on('anio', () => { if (activasEf().size) mapa.repintar(); if (REINOS_OK && en1591() !== ultimo1591) pintaFondo(); });
+  on('motor', () => { if (REINOS_OK && en1591() !== ultimo1591) pintaFondo(); });
+  datosV.existe(RUTA_REINOS).then(ok => { REINOS_OK = !!ok; if (ok) { pintaFondo(); cargaReinos(); } }).catch(() => {});
+  mapa.tipExtra = (x, y) => tipReino(x, y);
+  cargaActivas();
+}
+
+// ---------------------------------------------------------------- la sección
+// muestra de una capa: el mismo dibujo que en el mapa, en pequeño (lista de capas y leyenda)
+function lineaSVG(trazo, w = 30) {
+  return `<svg class="c4-sw" width="${w}" height="10" aria-hidden="true">${trazo.map(t => `<line x1="2" y1="5" x2="${w - 2}" y2="5" stroke="${t.c}" stroke-width="${t.w}"${t.dash ? ` stroke-dasharray="${t.dash.join(' ')}"` : ''}${t.cap ? ` stroke-linecap="${t.cap}"` : ''}/>`).join('')}</svg>`;
+}
+function puntoSVG(e) {
+  const r = Math.min(4.6, e.r), x = 15, y = 5.5;
+  const forma = {
+    estacion: `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff" stroke="${e.color}" stroke-width="1.1"/>`,
+    rombo: `<path d="M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z" fill="${e.color}" stroke="#fff" stroke-width="1"/>`,
+    puerto: `<circle cx="${x}" cy="${y}" r="${r}" fill="${e.color}" stroke="#fff" stroke-width="1"/><path d="M${x} ${y - r * 0.6}V${y + r * 0.45}M${x - r * 0.5} ${y + r * 0.05}Q${x} ${y + r * 0.75} ${x + r * 0.5} ${y + r * 0.05}" stroke="#fff" stroke-width="1" fill="none"/>`,
+    faro: `<path d="M${x} ${y - r}L${x + r * 0.85} ${y + r * 0.8}L${x - r * 0.85} ${y + r * 0.8}Z" fill="${e.color}" stroke="#3a2a00" stroke-width=".8"/>`,
+  }[e.punto] || `<rect x="${x - 3}" y="${y - 3}" width="6" height="6" fill="${e.color}"/>`;
+  return `<svg class="c4-sw" width="30" height="11" aria-hidden="true">${forma}</svg>`;
+}
+function swatchDe(e) {
+  if (!e) return '';
+  if (e.punto) return puntoSVG(e);
+  if (e.porTipo) return lineaSVG(CARRETERA.auto.trazo);
+  if (e.porClase) return lineaSVG(JRC[1].trazo);
+  return lineaSVG(e.trazo || [{ c: e.color, w: 1.4 }]);
+}
+const reservaDe = c => (c && (c.reserva || (/sin_revisar|candidata/.test(String(c.estado || '')) ? String(c.estado).replace(/_/g, ' ') : ''))) || '';
+// ronda v22: «capa heredada, sin revisar», en el title de cada capa, en su recuadro y en su leyenda (sin etiqueta en cada fila)
+const revisionDe = c => (reservaDe(c) ? (/candidata/.test(String(c.estado || '')) ? 'capa candidata, sin revisar' : 'capa heredada, sin revisar') : '');
+const marcaRes = c => { const r = reservaDe(c); return r ? `<span class="c4-res" title="${esc(r)}">${/candidata/.test(String(c.estado || '')) ? 'candidata' : 'sin revisar'}</span>` : ''; };
+function item(id, nombre, sub, { swatch = '', apagado = '', on = activasEf().has(id), badge = '', titulo = '' } = {}) {
+  return `<li><button type="button" class="c4-it" data-capa="${esc(id)}" aria-pressed="${on}"${titulo ? ` title="${esc(titulo)}"` : ''}${apagado ? ' disabled' : ''}>
+    <i class="c4-caja" aria-hidden="true"></i>${swatch}<span class="c4-n">${esc(nombre)}</span>${badge}</button>
+    ${sub || apagado ? `<p class="c4-sub">${esc(apagado || sub)}</p>` : ''}</li>`;
+}
+function pinta() { pintaFondo(); pintaTrans(); }
+// «Fondo»: relieve, ríos, límites y fronteras, para cualquier tema (casillas, se recuerdan)
+const ICONO_FONDO = {
+  relieve: '<path d="M1 13l4.5-7 3 4.5L11 7l4 6z" fill="currentColor" opacity=".85"/>',
+  rios: '<path d="M1 5c2.2-1.6 3.8 1.6 6 0s3.8-1.6 6 0M1 10c2.2-1.6 3.8 1.6 6 0s3.8-1.6 6 0" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  altitud: '<path d="M2 12h12M3.5 9h9M5 6h6M6.5 3h3" stroke="currentColor" stroke-width="1.6"/>',
+  lim_mun: '<path d="M1.5 1.5h13v13h-13zM1.5 6.5h6l2 3h5M7.5 6.5V1.5M9.5 9.5v5" fill="none" stroke="currentColor" stroke-width="1.1"/>',
+  lim_prov: '<path d="M2 3.5l5-2 7 3-1 7-6 3-5-4z" fill="none" stroke="currentColor" stroke-width="1.7"/>',
+  fronteras: '<path d="M2 3.5l5-2 7 3-1 7-6 3-5-4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 1.8"/>',
+  reinos: '<path d="M3 13h10M4 13l-1-7 3 2.5L8 4l2 4.5L13 6l-1 7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+};
+// ---------- reinos de 1591 (ronda v12): capa de fondo solo en el corte 1591, si geo/reinos/1591.topo.json existe
+const RUTA_REINOS = 'geo/reinos/1591.topo.json';
+let REINOS_OK = false, REINOS = null, ultimo1591 = null;
+const en1591 = () => { const f = M.F[M.i]; return !!f && (String(f.corte || '') === '1591' || String(f.clave) === '1591' || +f.anio === 1591); };
+// reino deducido: lo dice su propiedad (`deducido`, `rnd`, una marca con «deduc» o confianza baja)
+const reinoDeducido = p => !!p && (p.deducido === true || p.deducido === 'si' || p.rnd != null || /deduc/i.test(String(p.rp || p.marca || p.estado || p.procedencia || '')));
+const sinReino = p => !!p && /sin_reino|^SIN-REINO/i.test(String(p.rp || p.id || ''));
+const nombreReino = p => (sinReino(p) ? 'sin reino en la fuente' : String((p && (p.r || p.n || p.nombre || p.reino || p.rn || p.rnd)) || 'Reino'));
+const marcaReino = p => `${String((p && (p.marca_texto || (/deduc/.test(String(p.rp || '')) ? p.rp : '') || p.marca)) || 'deducido de la intendencia de 1752').replace(/_/g, ' ')}; sin línea en 1591`;
+function cargaReinos() {
+  if (REINOS || !REINOS_OK) return;
+  REINOS = { cargando: true };
+  cargarSiHay(RUTA_REINOS).then(t => {
+    if (!t) { REINOS = null; REINOS_OK = false; return; }
+    const obj = t.objects.reinos || t.objects[Object.keys(t.objects)[0]];
+    const feats = topojson.feature(t, obj).features;
+    REINOS = { t, obj, feats, ded: f => reinoDeducido(f.properties),
+      // un reino partido en varios polígonos no lleva línea por dentro
+      solidos: topojson.mesh(t, obj, (a, b) => a !== b && nombreReino(a.properties) !== nombreReino(b.properties) && !reinoDeducido(a.properties) && !reinoDeducido(b.properties)),
+      trazos: topojson.mesh(t, obj, (a, b) => a !== b && nombreReino(a.properties) !== nombreReino(b.properties) && (reinoDeducido(a.properties) || reinoDeducido(b.properties))) };
+    mapa.repintar();
+  }).catch(() => { REINOS = null; });
+}
+let reinosProy = { k: '', p: [] };
+function dibujaReinos(ctx, proj) {
+  cargaReinos();
+  if (!REINOS || REINOS.cargando) return;
+  const gp = d3.geoPath(proj), k = proj.scale() + '|' + proj.translate().join(',');
+  if (reinosProy.k !== k) reinosProy = { k, p: REINOS.feats.map(f => ({ f, p: new Path2D(gp(f) || ''), c: (() => { let best = null, a0 = -1; const g = f.geometry; for (const pol of g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates]) { const x = { type: 'Polygon', coordinates: pol }; const a = gp.area(x); if (a > a0) { a0 = a; best = x; } } return best ? gp.centroid(best) : [NaN, NaN]; })() })), sol: new Path2D(gp(REINOS.solidos) || ''), tra: new Path2D(gp(REINOS.trazos) || '') };
+  const tinta = token('--v4-tinta') || '#101010';
+  ctx.save();
+  // el deducido, con una trama suave (sin línea en 1591)
+  const trama = (() => { const c = document.createElement('canvas'); c.width = c.height = 8; const g = c.getContext('2d'); g.strokeStyle = 'rgba(16,16,16,.16)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke(); return ctx.createPattern(c, 'repeat'); })();
+  for (const r of reinosProy.p) if (reinoDeducido(r.f.properties)) { ctx.fillStyle = trama; ctx.fill(r.p); }
+  // límites de reino, gruesos y sobrios; los que tocan un reino deducido, discontinuos
+  ctx.lineJoin = 'round'; ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 0.9; ctx.lineWidth = 4.2; ctx.stroke(reinosProy.sol);
+  ctx.strokeStyle = tinta; ctx.globalAlpha = 0.78; ctx.lineWidth = 2.1; ctx.stroke(reinosProy.sol);
+  ctx.setLineDash([6, 4]); ctx.globalAlpha = 0.7; ctx.lineWidth = 1.8; ctx.stroke(reinosProy.tra); ctx.setLineDash([]);
+  // el nombre de cada reino, en versalitas espaciadas
+  ctx.globalAlpha = 1; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  // un rótulo por reino, en su trozo más grande
+  const mayor = new Map();
+  for (const r of reinosProy.p) { const n = nombreReino(r.f.properties), a = d3.geoPath(proj).area(r.f); if (!mayor.has(n) || a > mayor.get(n).a) mayor.set(n, { r, a }); }
+  for (const { r } of mayor.values()) {
+    const [x, y] = r.c; if (!isFinite(x) || !isFinite(y)) continue;
+    if (sinReino(r.f.properties)) continue;   // lo que la fuente no asigna a ningún reino: sin rótulo
+    // leído en la línea: el nombre tal cual (reino o provincia del vecindario); deducido: «Reino de Granada»
+    const txt = (reinoDeducido(r.f.properties) ? 'Reino de ' + nombreReino(r.f.properties).replace(/^reino de /i, '') : nombreReino(r.f.properties)).toUpperCase();
+    ctx.font = '700 11px "Instrument Sans", system-ui, sans-serif';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.5px';
+    ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineWidth = 3.5; ctx.strokeText(txt, x, y); ctx.fillStyle = tinta; ctx.fillText(txt, x, y);
+    if (reinoDeducido(r.f.properties)) { ctx.font = 'italic 500 10.5px "Instrument Sans", system-ui, sans-serif'; if ('letterSpacing' in ctx) ctx.letterSpacing = '0px'; ctx.strokeText('deducido', x, y + 13); ctx.fillStyle = '#4a4a4a'; ctx.fillText('deducido', x, y + 13); }
+  }
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  ctx.restore();
+}
+// al pasar el puntero: el reino y, si es deducido, su marca (se añade a la ficha breve de la unidad)
+let sondaReinos = null;
+function tipReino(x, y) {
+  if (!REINOS_OK || !activasEf().has('reinos') || !en1591() || !reinosProy.p.length) return '';
+  if (estado.nivel === 'termino') return '';   // los términos de 1591 ya traen su reino en la ficha breve (rn / rnd): no se repite
+  if (!sondaReinos) sondaReinos = document.createElement('canvas').getContext('2d');
+  const r = reinosProy.p.find(q => sondaReinos.isPointInPath(q.p, x, y));
+  if (!r) return '';
+  const p = r.f.properties || {};
+  if (sinReino(p)) return '<p class="t4-l t4-reino">Sin reino en la fuente de 1591</p>';
+  return reinoDeducido(p) ? `<p class="t4-l t4-reino">Reino de ${esc(nombreReino(p).replace(/^reino de /i, ''))}: ${esc(marcaReino(p))}</p>`
+    : `<p class="t4-l t4-reino">${esc(nombreReino(p))}: reino o provincia del vecindario de 1591 (leído en su línea)</p>`;
+}
+
+const FONDO = [['relieve', 'Relieve', 'relieve'], ['rios', 'Ríos', 'ríos'], ['altitud', 'Altitud', 'altitud'], ['lim_mun', 'Municipios', 'límites municipales'], ['lim_prov', 'Provincias', 'límites provinciales'], ['fronteras', 'Fronteras', 'fronteras históricas']];
+// «Fondo»: plegado, una línea («Fondo: límites provinciales»); abierto, interruptores pequeños para cualquier tema
+function pintaFondo() {
+  const el = hostFondo; if (!el) return;
+  const a = activasEf();
+  const rel = RELIEVE && RELIEVE.capas || {};
+  const hayRios = ficherosRios().length > 0;
+  const hay = { relieve: !!rel.relieve_sombreado, altitud: !!rel.altitud_tintas, rios: hayRios };
+  const on = id => (id === 'lim_prov' ? !a.has('sinprov') : a.has(id));
+  ultimo1591 = en1591();
+  const FONDO_V = REINOS_OK && ultimo1591 ? [...FONDO, ['reinos', 'Reinos y provincias', 'reinos y provincias del vecindario de 1591']] : FONDO;
+  const resumen = FONDO_V.filter(([id]) => on(id) && hay[id] !== false).map(x => x[2]);
+  const h = document.getElementById('v4-h-fondo');
+  if (h) { const r = h.querySelector('.v4-sec__res'); if (r) { r.textContent = resumen.length ? resumen.join(', ') : 'nada'; r.title = r.textContent; } }   // ronda v14: la cabecera dice «Fondo» y, plegada, lo que hay
+  const atrib = [a.has('relieve') && rel.relieve_sombreado ? rel.relieve_sombreado.atribucion : '', a.has('altitud') && rel.altitud_tintas ? rel.altitud_tintas.atribucion : '', a.has('rios') && hayRios ? ((ficherosRios()[0] || {}).atribucion || RIOS_ATRIB) : ''].filter(Boolean);
+  el.innerHTML = `${estado.vista === 'mapa' ? '' : '<p class="c4-nota">El fondo se ve en la vista Mapa.</p>'}
+    <div class="c4-fondo3" role="group" aria-label="Fondo del mapa">${FONDO_V.map(([id, nom, largo]) => `<button type="button" class="c4-fb" data-capa="${id}" aria-pressed="${on(id) && hay[id] !== false}"${hay[id] === false ? ' disabled' : ''} title="${esc(hay[id] === false ? `${largo}: próximamente` : largo.charAt(0).toUpperCase() + largo.slice(1))}"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">${ICONO_FONDO[id]}</svg><span>${esc(nom)}</span></button>`).join('')}</div>
+    ${a.has('rios') && hayRios ? `<div class="v4-campo c4-rios-campo"><p class="v4-campo__k" id="seg-rios-fondo">Ríos</p><div class="v4-seg c4-rios" role="group" aria-labelledby="seg-rios-fondo">${RIOS_NIVELES.map(n => `<button type="button" data-capa="${n.id}" aria-pressed="${a.has(n.id)}" title="${esc(n.rotulo)}">${esc({ 'rios:1-2': 'Grandes', 'rios:3': 'Medianos', 'rios:4': cargandoRios4 && a.has(n.id) ? 'Cargando…' : 'Menores' }[n.id])}</button>`).join('')}</div></div>` : ''}
+    ${a.has('altitud') && rel.altitud_tintas && rel.altitud_tintas.leyenda ? `<ul class="c4-alt">${rel.altitud_tintas.leyenda.map(l => `<li><i style="background:${l.color}"></i>${l.desde_m}–${l.hasta_m} m</li>`).join('')}</ul>` : ''}
+    ${atrib.length ? `<p class="c4-sub">${esc(atrib.join(' · '))}</p>` : ''}`;
+  el.querySelectorAll('[data-capa]:not([disabled])').forEach(b => b.addEventListener('click', () => conmuta(b.dataset.capa)));
+}
+// «Transporte»: todas las capas a la vez, con casillas; las fechadas siguen la barra de tiempo
+function pintaTrans() {
+  if (!host) return;
+  const a = activasEf();
+  const trans = (CAT && CAT.capas || []).filter(c => idsTransporte().includes(c.id));
+  const orden = ['calzad', 'camino', 'ciudades', 'ferrocarril_lin', 'estacion', 'jrc', 'carreteras', 'puerto', 'faro', 'verde'];
+  const pos = id => { const k = orden.findIndex(o => id.includes(o)); return k < 0 ? 99 : k; };
+  trans.sort((x, y) => pos(x.id) - pos(y.id));
+  const atrib = [...new Set(trans.filter(c => a.has(c.id)).map(c => c.atribucion).filter(Boolean))];
+  host.innerHTML = `${estado.vista === 'mapa' ? '' : '<p class="c4-nota">Las capas se ven en la vista Mapa.</p>'}
+    ${trans.length ? `<p class="c4-nota">${esc(NOTA_SIN_REVISAR)}</p><ul class="c4-lista c4-trans">${trans.map(c => item(c.id, ESTILO[c.id].nombre, '', { swatch: swatchDe(ESTILO[c.id]), titulo: revisionDe(c) })).join('')}</ul>
+      ${trans.some(c => a.has(c.id) && ESTILO[c.id].tiempo) ? `<p class="c4-nota">${esc(notaTiempo())}</p>` : ''}
+      ${atrib.length ? `<p class="c4-sub">${esc(atrib.join(' · '))}</p>` : ''}
+      ${(CAT.fuera || []).filter(x => !/\btra\d|ensayo/i.test(x)).length ? `<p class="c4-sub">No están: ${esc(CAT.fuera.filter(x => !/\btra\d|ensayo/i.test(x)).join(', '))}.</p>` : ''}
+      <p class="c4-nota c4-nota--juan">${esc(NOTA_TRANSPORTE)}</p>`
+      : '<p class="c4-nota">Llegarán cuando la base publique las capas.</p>'}`;
+  host.querySelectorAll('.c4-it[data-capa]:not([disabled])').forEach(b => b.addEventListener('click', () => conmuta(b.dataset.capa)));
+}
+// ---------- Transporte en la barra izquierda (ronda v11 de Juan: las capas se eligen en un solo sitio)
+// Cada capa es una casilla; varias a la vez. El indicador activo (año, cifra, leyenda) sigue a la última capa fechada
+// que se enciende (ferrocarril, carreteras del JRC) o se queda en el que está.
+const GRUPOS_T = [
+  ['Caminos históricos', 'capa_t_calzadas', [/calzad/]], ['Caminos históricos', 'capa_t_xviii', [/camino/, /ciudades|puertos?_xviii/]],
+  ['Ferrocarril', 'capa_t_ferrocarril', [/ferrocarril/, /estacion/]],
+  ['Carreteras', 'capa_t_jrc', [/jrc/]], ['Carreteras', 'capa_t_carreteras', [/carreteras?_hoy|carreteras_princ|carreteras_auton/]],
+  ['Costa', 'capa_t_costa', [/(^|_)puertos?($|_)(?!.*xviii)/, /faro/]],
+];
+export function itemsTransporte() {
+  if (!CAT) return null;
+  const a = activasEf();
+  const ids = idsTransporte();
+  const out = [];
+  for (const [grupo, ind, res] of GRUPOS_T) {
+    const mios = ids.filter(id => res.some(re => re.test(id)) && !(ind === 'capa_t_costa' && /xviii|ciudades/.test(id)) && !(ind !== 'capa_t_ferrocarril' && /estacion|ferrocarril/.test(id)));
+    let g = out.find(x => x.grupo === grupo);
+    if (!g) { g = { grupo, items: [] }; out.push(g); }
+    for (const id of mios) {
+      if (g.items.some(x => x.id === id)) continue;
+      const c = (CAT.capas || []).find(x => x.id === id) || {};
+      g.items.push({ id, ind, nombre: ESTILO[id].nombre.replace(/^Ferrocarril: (.)/, (m, c) => c.toUpperCase()), swatch: swatchDe(ESTILO[id]), on: a.has(id), badge: '', revision: revisionDe(c), fechada: !!ESTILO[id].tiempo, sub: c.anos || '' });
+    }
+  }
+  return out.filter(g => g.items.length);
+}
+export function conmutaTransporte(id, ind) {
+  const a = activas();
+  const pre = presetTrans();
+  if (pre && !idsTransporte().some(x => a.has(x))) pre.forEach(x => a.add(x));
+  const on = a.has(id);
+  if (on) a.delete(id); else a.add(id);
+  const quedan = idsTransporte().filter(x => a.has(x));
+  if (!quedan.length) { a.add(id); return; }   // siempre queda al menos una capa a la vista
+  // el indicador: el de la capa fechada que se enciende; si se apaga la suya, el de otra capa encendida
+  let nuevo = estado.ind;
+  if (!on && (ESTILO[id].tiempo || !/^capa_t_/.test(estado.ind || ''))) nuevo = ind;
+  if (on && TRANS[estado.ind] && !quedan.some(x => (idsDe(estado.ind) || []).includes(x))) {
+    const g = GRUPOS_T.find(([, i, res]) => quedan.some(x => res.some(re => re.test(x))));
+    if (g) nuevo = g[1];
+  }
+  setEstado({ capas: [...a], ...(nuevo !== estado.ind ? { ind: nuevo, vista: 'mapa' } : {}) }, { historial: true });
+}
+
+// leyenda de las capas encendidas, para debajo del mapa (mismo dibujo que en el mapa y la marca de reserva)
+export function leyendaCapas() {
+  if (estado.vista !== 'mapa' || !CAT) return '';
+  const a = activasEf();
+  const out = [];
+  for (const c of (CAT.capas || []).filter(x => idsTransporte().includes(x.id) && a.has(x.id))) {
+    const e = ESTILO[c.id];
+    const res = revisionDe(c) ? ` <small class="l4-herencia">${esc(revisionDe(c))}</small>` : '';
+    if (e.porTipo) for (const k of ['auto', 'multi', 'conv']) out.push(`<li>${lineaSVG(CARRETERA[k].trazo)}${esc(CARRETERA[k].rot)}${k === 'conv' ? res : ''}</li>`);
+    else if (e.porClase) for (const k of [1, 2]) out.push(`<li>${lineaSVG(JRC[k].trazo)}JRC, ${esc(JRC[k].rot)}${k === 2 ? res : ''}</li>`);
+    else out.push(`<li>${swatchDe(e)}${esc(e.nombre.replace(/^Ferrocarril: /, 'Ferrocarril, '))}${res}</li>`);
+    if (e.via && anioActual() != null) {
+      if (anioAnterior() != null) out.push(`<li>${lineaSVG(VIA_NUEVA)}abierto desde ${anioAnterior()}</li>`);
+      out.push(`<li>${lineaSVG(VIA_CERRADA)}cerrado antes de ${anioActual()}</li>`);
+    }
+  }
+  if (a.has('rios') && ficherosRios().length && estado.ind !== 'capa_rios') out.push(`<li>${lineaSVG([{ c: RIO_COLOR[2], w: 1.8 }])}ríos</li>`);
+  if (a.has('fronteras') && estado.ind !== 'capa_fronteras') out.push(`<li>${lineaSVG([{ c: '#1c221e', w: 0.9 }])}fronteras del corte</li>`);
+  if (a.has('lim_mun')) out.push(`<li>${lineaSVG([{ c: '#6b6b6b', w: 0.6 }])}límites municipales</li>`);
+  if (a.has('reinos') && REINOS_OK && en1591()) { out.push(`<li>${lineaSVG([{ c: '#101010', w: 2.1 }])}límite de reino o provincia del vecindario de 1591</li>`); out.push(`<li>${lineaSVG([{ c: '#101010', w: 1.8, dash: [6, 4] }])}reino deducido de la intendencia (sin línea en 1591)</li>`); }
+  return out.length ? `<ul class="l4-extra l4-capas">${out.join('')}</ul>` : '';
+}
+function anioActual() { const f = M.F[M.i]; const y = f ? +f.anio : NaN; return isFinite(y) ? y : null; }
+function notaTiempo() {
+  const y = anioActual();
+  return y == null ? 'Sin barra de tiempo: el ferrocarril y las carreteras del JRC se ven enteros, también lo que se cerró.'
+    : `Ferrocarril y carreteras del JRC: lo que existía en ${y}, según sus fechas de apertura y cierre o su año (la barra de tiempo los mueve).`;
+}
+
+// ---------------------------------------------------------------- carga
+async function cargaActivas() {
+  const a = activasEf();
+  if (a.has('rios')) cargaRios(a);
+  for (const id of a) {
+    if (id === 'relieve' || id === 'altitud') cargaImagen(id);
+    else if (ESTILO[id] && !datos.has(id)) {
+      const c = (CAT && CAT.capas || []).find(x => x.id === id);
+      if (!c) continue;
+      datos.set(id, { features: null });
+      const ruta = c.archivo ? (String(c.archivo).startsWith('capas/') ? c.archivo : 'capas/' + c.archivo) : 'capas/' + id + '.topo.json';
+      cargarSiHay(ruta).then(t => {
+        if (!t) return;
+        const o = t.objects[id] || t.objects[Object.keys(t.objects)[0]];
+        const fc = topojson.feature(t, o);
+        datos.set(id, { features: fc.features || [fc] });
+        mapa.repintar();
+      });
+    }
+  }
+}
+// los ficheros de ríos: los que no son del nivel 4 se cargan al encender la capa; el del 4, solo si se pide
+function esDeMenores(c) { return /menor|_4\b|n4|nivel_?4/i.test(c.id) || (Array.isArray(c.niveles) && c.niveles.length === 1 && +c.niveles[0] === 4); }
+function cargaRios(a) {
+  for (const c of ficherosRios()) {
+    const menores = esDeMenores(c);
+    if (menores && !a.has('rios:4')) continue;
+    if (datos.has(c.id)) continue;
+    datos.set(c.id, { features: null });
+    if (menores) { cargandoRios4 = true; pinta(); }
+    const ruta = c.archivo ? (String(c.archivo).startsWith('capas/') ? c.archivo : 'capas/' + c.archivo) : 'capas/' + c.id + '.topo.json';
+    cargarSiHay(ruta).then(t => {
+      if (menores) { cargandoRios4 = false; pinta(); }
+      if (!t) return;
+      const o = t.objects[c.id] || t.objects[Object.keys(t.objects)[0]];
+      const fc = topojson.feature(t, o);
+      datos.set(c.id, { features: fc.features || [fc], rios: true });
+      mapa.repintar();
+    });
+  }
+}
+function nivelesRios(a) { const s = new Set(); for (const n of RIOS_NIVELES) if (a.has(n.id)) n.niveles.forEach(v => s.add(v)); return s; }
+let riosVisibles = [];   // [{p: Path2D, props, nivel}] del último dibujo, para el cursor
+function dibujaRios(ctx, proj, a) {
+  const vis = nivelesRios(a);
+  riosVisibles = [];
+  for (const c of ficherosRios()) {
+    const d = datos.get(c.id);
+    if (!d || !d.features) continue;
+    const ts = trazos(c.id, d.features, proj);
+    // de menor a mayor: los grandes, encima
+    for (const nv of [4, 3, 2, 1]) {
+      if (!vis.has(nv)) continue;
+      ctx.save();
+      ctx.strokeStyle = RIO_COLOR[nv]; ctx.lineWidth = RIO_TRAZO[nv]; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      if (nv === 4) ctx.globalAlpha = 0.75;
+      for (const t of ts) {
+        const p = t.f.properties || {};
+        if (+p.nivel !== nv || !t.p) continue;
+        ctx.stroke(t.p);
+        riosVisibles.push({ p: t.p, props: p, nivel: nv, f: t.f });
+      }
+      ctx.restore();
+    }
+  }
+  // el río de la ficha abierta, resaltado (todos sus tramos)
+  const sel = rioSeleccionado();
+  if (sel) {
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const r of riosVisibles) if (mismoRio(r.props, sel)) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = RIO_TRAZO[r.nivel] + 5; ctx.stroke(r.p); }
+    for (const r of riosVisibles) if (mismoRio(r.props, sel)) { ctx.strokeStyle = '#007a3d'; ctx.lineWidth = RIO_TRAZO[r.nivel] + 2.2; ctx.stroke(r.p); }
+    ctx.restore();
+  }
+}
+// ---------- ficha del río (clic sobre una línea de río; tiene prioridad sobre el municipio)
+const rioSeleccionado = () => { const m = /^rio:(.+)$/.exec(String(estado.ficha || '')); if (!m) return null; for (const d of datos.values()) for (const f of d.features || []) if (String((f.properties || {}).codigo_dera) === m[1]) return f.properties; return null; };
+// los tramos de un mismo río (cortado por embalses) comparten nombre y longitud del río
+const mismoRio = (p, q) => p === q || (p.nombre && p.nombre === q.nombre && p.longitud_rio_km != null && p.longitud_rio_km === q.longitud_rio_km);
+function rioEn(x, y) {
+  if (!riosVisibles.length || !activasEf().has('rios')) return null;
+  if (!sondaCtx) sondaCtx = document.createElement('canvas').getContext('2d');
+  sondaCtx.lineWidth = 10;   // unos 5 px a cada lado
+  for (const r of [...riosVisibles].sort((p, q) => p.nivel - q.nivel)) if (sondaCtx.isPointInStroke(r.p, x, y)) return r;
+  return null;
+}
+function clicRio(x, y) {
+  const r = rioEn(x, y);
+  if (!r || r.props.codigo_dera == null) return false;
+  setEstado({ ficha: 'rio:' + r.props.codigo_dera, fn: '' });
+  return true;
+}
+// municipios de hoy que atraviesa: puntos de la línea dentro de cada recinto (cálculo del visor, no de la base)
+let MUNIS = null;
+async function municipiosDe(feats) {
+  if (!MUNIS) {
+    const t = await cargar('geo/municipios.topo.json');
+    MUNIS = topojson.feature(t, t.objects.municipios).features.map(f => ({ f, b: d3.geoBounds(f), c: f.properties.c, n: f.properties.n }));
+  }
+  const pts = [];
+  for (const f of feats) {
+    const g = f.geometry; if (!g) continue;
+    const lineas = g.type === 'MultiLineString' ? g.coordinates : [g.coordinates];
+    for (const l of lineas) for (let k = 0; k < l.length; k++) {
+      pts.push(l[k]);
+      if (k < l.length - 1) pts.push([(l[k][0] + l[k + 1][0]) / 2, (l[k][1] + l[k + 1][1]) / 2]);
+    }
+  }
+  const hay = new Map();
+  for (const p of pts) {
+    for (const m of MUNIS) {
+      if (p[0] < m.b[0][0] || p[0] > m.b[1][0] || p[1] < m.b[0][1] || p[1] > m.b[1][1]) continue;
+      if (d3.geoContains(m.f, p)) { hay.set(m.c, m.n); break; }
+    }
+  }
+  return [...hay].map(([c, n]) => ({ c, n })).sort((p, q) => p.n.localeCompare(q.n, 'es'));
+}
+const NIVEL_RIO = { 1: 'Guadalquivir (el único río de primera categoría de DERA)', 2: 'Río de más de 90 km dentro de Andalucía', 3: 'Río de 25 a 90 km dentro de Andalucía', 4: 'Río o arroyo menor' };
+export function esFichaRio() { return /^(rio|tr):/.test(String(estado.ficha || '')); }   // río o elemento de transporte
+export async function fichaRio(el) {
+  if (/^tr:/.test(String(estado.ficha || ''))) return fichaTransporte(el);
+  const p = rioSeleccionado();
+  if (!p) { el.innerHTML = '<p class="a2-small">Enciende la capa de ríos y pincha un río para ver su ficha.</p>'; return null; }
+  const feats = [];
+  for (const d of datos.values()) for (const f of d.features || []) if (f.properties && mismoRio(f.properties, p)) feats.push(f);
+  const meta = ficherosRios()[0] || {};
+  const km = v => (v == null ? '—' : `${(Math.round(+v * 10) / 10).toLocaleString('es-ES')} km`);
+  el.innerHTML = `<p class="v3fi-k">${esc(NIVEL_RIO[+p.nivel] || 'Río')}</p>
+    <p class="v3fi-v">${esc(km(p.longitud_rio_km))}</p>
+    <p class="a2-small">Longitud del río ${avisoLongitud() ? `<b title="${esc(avisoLongitud())}">solo dentro de Andalucía</b>` : 'solo dentro de Andalucía'}.</p>
+    <table class="r4-tabla">
+      <tr><th>Nivel</th><td>${esc(String(p.nivel ?? '—'))}</td></tr>
+      ${p.categoria_dera ? `<tr><th>Categoría DERA</th><td>${esc(p.categoria_dera)}</td></tr>` : ''}
+      <tr><th>Tramos con este nombre</th><td>${esc(String(p.tramos_mismo_nombre ?? feats.length))}</td></tr>
+      ${p.longitud_tramo_km != null ? `<tr><th>Este tramo</th><td>${esc(km(p.longitud_tramo_km))}</td></tr>` : ''}
+      <tr><th>Código DERA</th><td>${esc(String(p.codigo_dera ?? '—'))}</td></tr>
+    </table>
+    <h3 class="v3fi-h3">Municipios de hoy que atraviesa</h3>
+    <p class="a2-small">Cálculo del visor: recintos de hoy que contienen algún punto del trazado simplificado para la web. Puede faltar o sobrar algún municipio en las lindes.</p>
+    <div class="r4-muns"><p class="a2-loading">Calculando…</p></div>
+    <h3 class="v3fi-h3">Fuente</h3>
+    <p class="a2-small">${esc(meta.atribucion || RIOS_ATRIB)}</p>
+    ${meta.aviso ? `<p class="a2-small">${esc(meta.aviso)}</p>` : ''}`;
+  municipiosDe(feats).then(ms => {
+    const box = el.querySelector('.r4-muns'); if (!box) return;
+    box.innerHTML = ms.length ? `<p class="a2-small"><b>${ms.length}</b> ${ms.length === 1 ? 'municipio' : 'municipios'}</p><ul class="v3fi-muns">${ms.map(m => `<li><a href="#" data-ine="${esc(m.c)}">${esc(m.n)}</a></li>`).join('')}</ul>` : '<p class="a2-small">Ninguno (el trazado queda fuera de los recintos de hoy).</p>';
+    box.querySelectorAll('a[data-ine]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); setEstado({ mun: a.dataset.ine }); }));
+  }).catch(e => { console.error(e); const box = el.querySelector('.r4-muns'); if (box) box.innerHTML = '<p class="a2-small">No se pudo calcular.</p>'; });
+  return p.nombre || 'Río sin nombre en la capa';
+}
+let sondaCtx = null;
+function sondaRios(x, y) {
+  if (!riosVisibles.length || !activasEf().has('rios')) return null;
+  if (!sondaCtx) sondaCtx = document.createElement('canvas').getContext('2d');
+  sondaCtx.lineWidth = 7;
+  // los más importantes primero
+  const orden = [...riosVisibles].sort((p, q) => p.nivel - q.nivel);
+  for (const r of orden) {
+    if (!sondaCtx.isPointInStroke(r.p, x, y)) continue;
+    const p = r.props;
+    const km = p.longitud_rio_km;   // la del río entero (une los tramos cortados por embalses), en todos los niveles
+    const n = p.nombre || p.name || 'Río sin nombre en la capa';
+    return `<p class="t4-n">${esc(n)}</p>${km != null ? `<p class="t4-v">${esc(Math.round(+km).toLocaleString('es-ES'))} km</p><p class="t4-s">longitud del río</p>` : ''}<p class="t4-h">${esc(RIOS_ATRIB)} · longitud dentro de Andalucía</p>`;
+  }
+  return null;
+}
+
+function cargaImagen(id) {
+  if (imagenes.has(id)) return;
+  const meta = RELIEVE && RELIEVE.capas && RELIEVE.capas[id === 'relieve' ? 'relieve_sombreado' : 'altitud_tintas'];
+  if (!meta) return;
+  const img = new Image();
+  const x = { img, lim: meta.limites, listo: false, warp: null, clave: '' };
+  imagenes.set(id, x);
+  img.onload = () => { x.listo = true; mapa.repintar(); };
+  img.src = new URL('../../data/v2/geo/relieve/' + meta.fichero, import.meta.url).href;
+}
+
+// la imagen está en grados (EPSG:4326, rejilla regular): se reproyecta al mapa muestreando cada 2 px
+function reproyecta(x, proj, w, h) {
+  const clave = proj.scale() + '|' + proj.translate().join(',') + '|' + w + 'x' + h;
+  if (x.clave === clave && x.warp) return x.warp;
+  const { img, lim } = x;
+  const src = document.createElement('canvas');
+  src.width = img.naturalWidth; src.height = img.naturalHeight;
+  const sg = src.getContext('2d'); sg.drawImage(img, 0, 0);
+  const sd = sg.getImageData(0, 0, src.width, src.height).data;
+  const paso = 2, W = Math.ceil(w / paso), H = Math.ceil(h / paso);
+  const out = document.createElement('canvas'); out.width = W; out.height = H;
+  const og = out.getContext('2d'); const od = og.createImageData(W, H);
+  const dx = lim.east - lim.west, dy = lim.north - lim.south;
+  for (let j = 0; j < H; j++) {
+    for (let i = 0; i < W; i++) {
+      const ll = proj.invert([i * paso + paso / 2, j * paso + paso / 2]);
+      if (!ll) continue;
+      const sx = Math.floor((ll[0] - lim.west) / dx * src.width), sy = Math.floor((lim.north - ll[1]) / dy * src.height);
+      if (sx < 0 || sy < 0 || sx >= src.width || sy >= src.height) continue;
+      const s = (sy * src.width + sx) * 4, o = (j * W + i) * 4;
+      od.data[o] = sd[s]; od.data[o + 1] = sd[s + 1]; od.data[o + 2] = sd[s + 2]; od.data[o + 3] = sd[s + 3];
+    }
+  }
+  og.putImageData(od, 0, 0);
+  x.warp = out; x.clave = clave;
+  return out;
+}
+
+// Path2D de cada rasgo de una capa, una vez por proyección
+function trazos(id, feats, proj) {
+  const clave = id + '|' + proj.scale() + '|' + proj.translate().join(',');
+  if (cacheGeo.has(clave)) return cacheGeo.get(clave);
+  const gp = d3.geoPath(proj);
+  const out = feats.map((f, i) => { const linea = f.geometry && f.geometry.type !== 'Point' && f.geometry.type !== 'MultiPoint'; return { f, i, p: linea ? new Path2D(gp(f) || '') : null, b: linea ? gp.bounds(f) : null, xy: f.geometry && f.geometry.type === 'Point' ? proj(f.geometry.coordinates) : null }; });
+  for (const k of [...cacheGeo.keys()]) if (k.startsWith(id + '|')) cacheGeo.delete(k);
+  cacheGeo.set(clave, out);
+  return out;
+}
+
+// ---------------------------------------------------------------- dibujo (encima del mapa, en cada repintado)
+function visiblePorTiempo(e, p, y) {
+  if (!e.tiempo || y == null) return true;
+  if (e.tiempo === 'apertura') {
+    const ab = +p.anio_apertura || 0, ci = +p.anio_cierre || 0;
+    return (!ab || ab <= y) && (!ci || ci > y);
+  }
+  if (e.tiempo === 'existe') {
+    const anios = Object.keys(p).map(k => (/^existe_(\d{4})$/.exec(k) || [])[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
+    const a = anios.filter(v => v <= y).pop();
+    if (a == null) return false;
+    const v = p['existe_' + a];
+    return v === true || v === 'True' || v === 1 || v === '1';
+  }
+  return true;
+}
+function dibujar(ctx, path, proj) {
+  if (!proj || estado.vista !== 'mapa') return;
+  const a = activasEf();
+  if (!a.size) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = ctx.canvas.width / dpr, h = ctx.canvas.height / dpr;
+  // 1. altitud (opaca) y relieve (multiplica)
+  for (const id of ['altitud', 'relieve']) {
+    if (!a.has(id)) continue;
+    const x = imagenes.get(id);
+    if (!x || !x.listo) continue;
+    const warp = reproyecta(x, proj, Math.round(w), Math.round(h));
+    ctx.save();
+    if (id === 'relieve') { ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.38; } else ctx.globalAlpha = 0.9;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(warp, 0, 0, Math.round(w), Math.round(h));
+    ctx.restore();
+  }
+  // 2. fronteras históricas del corte vigente y el término del municipio elegido
+  if (a.has('fronteras')) fronteras(ctx, proj, true);
+  if (a.has('reinos') && REINOS_OK && en1591()) dibujaReinos(ctx, proj);
+  // 2b. ríos, por niveles
+  if (a.has('rios')) dibujaRios(ctx, proj, a);
+  // 3. transporte, recortado a Andalucía (las capas traen tramos de fuera): primero las líneas, luego los puntos
+  const y = anioActual();
+  const contorno = mapa.contorno();
+  puntosVisibles = []; lineasVisibles = [];
+  // en mapas pequeños (móvil), trazos y símbolos más finos: que se lea la red y no solo las estaciones
+  const k = Math.max(0.55, Math.min(1, w / 760));
+  ctx.save();
+  if (contorno) ctx.clip(contorno);
+  const ids = idsTransporte().filter(id => a.has(id) && datos.get(id) && datos.get(id).features);
+  const lineas = ids.filter(id => !ESTILO[id].punto), puntos = ids.filter(id => ESTILO[id].punto);
+  // de las más finas a las más gruesas: el ferrocarril, encima de todo
+  const peso = id => (/calzad|camino|verde/.test(id) ? 0 : /jrc|carretera/.test(id) ? 1 : 2);
+  const y0 = anioAnterior();
+  for (const id of lineas.sort((p, q) => peso(p) - peso(q))) {
+    const e = ESTILO[id];
+    const todos = trazos(id, datos.get(id).features, proj).filter(t => t.p);
+    const ts = todos.filter(t => visiblePorTiempo(e, t.f.properties || {}, y));
+    ctx.save(); ctx.lineJoin = 'round';
+    if (e.via && y != null) {
+      // la vía levantada, gris y a trazos; lo abierto desde el fotograma anterior, en verde
+      trazaCapas(ctx, todos.filter(t => { const p = t.f.properties || {}; const ab = anioCampo(p.anio_apertura), ci = anioCampo(p.anio_cierre); return ab && ab <= y && ci && ci <= y; }).map(t => t.p), VIA_CERRADA, k);
+      const nueva = t => { const ab = anioCampo((t.f.properties || {}).anio_apertura); return y0 != null && ab && ab > y0 && ab <= y; };
+      trazaCapas(ctx, ts.filter(t => !nueva(t)).map(t => t.p), e.trazo, k);
+      trazaCapas(ctx, ts.filter(nueva).map(t => t.p), VIA_NUEVA, k);
+    } else if (e.porTipo) {
+      for (const c of ['conv', 'multi', 'auto']) trazaCapas(ctx, ts.filter(t => claseCarretera(t.f.properties || {}) === c).map(t => t.p), CARRETERA[c].trazo, k);
+    } else if (e.porClase) {
+      for (const c of [2, 1]) trazaCapas(ctx, ts.filter(t => claseJRC(t.f.properties || {}, y) === c).map(t => t.p), JRC[c].trazo, k);
+    } else trazaCapas(ctx, ts.map(t => t.p), e.trazo || [{ c: e.color, w: 1.2 }], k);
+    ctx.restore();
+    for (const t of ts) lineasVisibles.push({ id, i: t.i, p: t.p, b: t.b, f: t.f });
+  }
+  for (const id of puntos) {
+    const e = ESTILO[id];
+    for (const t of trazos(id, datos.get(id).features, proj)) {
+      if (!t.xy) continue;
+      const p = t.f.properties || {};
+      if (!visiblePorTiempo(e, p, y)) continue;
+      simbolo(ctx, e, t.xy[0], t.xy[1], k);
+      puntosVisibles.push({ x: t.xy[0], y: t.xy[1], p, id, i: t.i, f: t.f });
+    }
+  }
+  // lo que está bajo el puntero y lo que tiene la ficha abierta: halo ámbar y, si es un punto, su nombre
+  for (const r of [resalte, trSeleccionado()]) if (r) dibujaResalte(ctx, r, k);
+  ctx.restore();
+}
+const claseJRC = (p, y) => { if (y == null) return 2; const an = Object.keys(p).map(c => (/^clase_(\d{4})$/.exec(c) || [])[1]).filter(Boolean).map(Number).filter(v => v <= y).sort((x1, x2) => x1 - x2); return an.length && +p['clase_' + an.pop()] === 1 ? 1 : 2; };
+// año del fotograma anterior (para marcar lo abierto desde entonces)
+function anioAnterior() { const f = M.F[M.i - 1]; const v = f ? +f.anio : NaN; return isFinite(v) ? v : null; }
+function dibujaResalte(ctx, r, k) {
+  ctx.save();
+  if (r.x == null && r.p instanceof Path2D) {
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(242, 183, 5, .55)'; ctx.lineWidth = 8 * k; ctx.stroke(r.p);
+    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2.2 * k; ctx.stroke(r.p);
+  } else if (r.x != null) {
+    const e = ESTILO[r.id];
+    ctx.beginPath(); ctx.arc(r.x, r.y, 7 * k, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(242, 183, 5, .45)'; ctx.fill();
+    simbolo(ctx, { ...e, r: Math.max(3.6, e.r * 1.9) }, r.x, r.y, k);
+    const nom = (r.p && (r.p.nombre || r.p.matricula)) || '';
+    if (nom) {
+      ctx.font = `600 ${(11.5 * Math.max(0.85, k)).toFixed(1)}px "Instrument Sans", system-ui, sans-serif`;
+      ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = 3.5; ctx.strokeText(nom, r.x + 8, r.y - 7);
+      ctx.fillStyle = '#101010'; ctx.fillText(nom, r.x + 8, r.y - 7);
+    }
+  }
+  ctx.restore();
+}
+function trazaCapas(ctx, paths, trazo, k = 1) {
+  if (!paths.length) return;
+  for (const t of trazo) {
+    ctx.strokeStyle = t.c; ctx.lineWidth = t.w * k; ctx.setLineDash((t.dash || []).map(v => v * k)); ctx.lineCap = t.cap || 'butt';
+    for (const p of paths) ctx.stroke(p);
+  }
+  ctx.setLineDash([]);
+}
+function simbolo(ctx, e, x, y, k = 1) {
+  const r = e.r * k;
+  ctx.save();
+  ctx.beginPath();
+  if (e.punto === 'estacion') { ctx.arc(x, y, Math.max(1.5, r), 0, 2 * Math.PI); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = e.color; ctx.stroke(); }
+  else if (e.punto === 'rombo') { ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fillStyle = e.color; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = '#ffffff'; ctx.stroke(); }
+  else if (e.punto === 'puerto') {
+    ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = e.color; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+    ctx.beginPath(); ctx.lineWidth = 1; ctx.moveTo(x, y - r * 0.6); ctx.lineTo(x, y + r * 0.45);
+    ctx.moveTo(x - r * 0.5, y + r * 0.05); ctx.quadraticCurveTo(x, y + r * 0.75, x + r * 0.5, y + r * 0.05); ctx.stroke();
+  } else if (e.punto === 'faro') { ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.85, y + r * 0.8); ctx.lineTo(x - r * 0.85, y + r * 0.8); ctx.closePath(); ctx.fillStyle = e.color; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#3a2a00'; ctx.stroke(); }
+  else { ctx.rect(x - r, y - r, 2 * r, 2 * r); ctx.fillStyle = e.color; ctx.fill(); }
+  ctx.restore();
+}
+// lo que hay de transporte bajo el puntero: primero un punto (estación, puerto, faro…) a menos de 6 px; si no, una línea
+let puntosVisibles = [], lineasVisibles = [], resalte = null, ultimo = { x: NaN, y: NaN, r: null };
+const anioCampo = v => { const n = +v; return isFinite(n) && n > 1000 ? n : null; };
+function elementoEn(x, y) {
+  if (x === ultimo.x && y === ultimo.y) return ultimo.r;
+  let r = null, d0 = 36;
+  for (const q of puntosVisibles) { const d = (q.x - x) ** 2 + (q.y - y) ** 2; if (d < d0) { d0 = d; r = q; } }
+  if (!r && lineasVisibles.length) {
+    if (!sondaCtx) sondaCtx = document.createElement('canvas').getContext('2d');
+    sondaCtx.lineWidth = 8;
+    for (let k = lineasVisibles.length - 1; k >= 0; k--) {
+      const l = lineasVisibles[k];
+      if (l.b && (x < l.b[0][0] - 5 || x > l.b[1][0] + 5 || y < l.b[0][1] - 5 || y > l.b[1][1] + 5)) continue;
+      if (sondaCtx.isPointInStroke(l.p, x, y)) { r = l; break; }
+    }
+  }
+  ultimo = { x, y, r };
+  const clave = r ? r.id + ':' + r.i : null;
+  if (clave !== (resalte ? resalte.id + ':' + resalte.i : null)) { resalte = r; requestAnimationFrame(() => mapa.repintar()); }
+  return r;
+}
+const CAMPOS = [['tipo_via', 'Ancho de vía'], ['tipo', 'Tipo'], ['jerarquia', 'Jerarquía'], ['clase', 'Clase'], ['certeza', 'Certeza'], ['periodo', 'Periodo'], ['tipo_puerto', 'Tipo de puerto'], ['municipio', 'Municipio'], ['provincia', 'Provincia']];
+const kmTxt = v => (isFinite(+v) && +v > 0 ? `${(Math.round(+v * 10) / 10).toLocaleString('es-ES')} km` : '');
+function datosDe(r) {
+  const p = r.f ? r.f.properties || {} : r.p || {}, e = ESTILO[r.id], c = (CAT && CAT.capas || []).find(z => z.id === r.id) || {};
+  const linea = r.x == null;
+  const singular = { 'Ferrocarril: líneas': 'Tramo de ferrocarril', 'Ferrocarril: estaciones': 'Estación', 'Calzadas romanas': 'Calzada romana', 'Caminos del siglo XVIII': 'Camino del siglo XVIII', 'Carreteras 1955-2012 (JRC)': 'Carretera (JRC)', 'Carreteras de hoy': 'Carretera', 'Puertos de hoy': 'Puerto', 'Faros': 'Faro', 'Ciudades y puertos del XVIII': 'Ciudad o puerto del XVIII' }[e.nombre] || e.nombre;
+  const titulo = p.nombre || p.matricula || singular;
+  const ab = anioCampo(p.anio_apertura), ci = anioCampo(p.anio_cierre);
+  const filas = [];
+  if (e.tiempo === 'apertura') { filas.push(['Apertura', ab ? String(ab) : 'sin fecha en la capa']); filas.push(['Cierre', ci ? String(ci) : 'sin fecha de cierre en la capa']); }
+  if (e.porClase) { const y = anioActual(); filas.push(['Clase', y != null ? `${claseJRC(p, y)} en ${y}` : '—']); }
+  for (const [k, t] of CAMPOS) if (p[k] != null && p[k] !== '' && String(p[k]) !== 'None') filas.push([t, String(p[k])]);
+  if (linea && kmTxt(p.longitud_km)) filas.push(['Longitud del tramo', kmTxt(p.longitud_km)]);
+  return { titulo, sub: titulo === singular ? e.nombre : singular, filas, fuente: c.atribucion || c.fuente || '', reserva: reservaDe(c), revision: revisionDe(c), ab, ci };
+}
+function sondaTransporte(x, y) {
+  const r = elementoEn(x, y); if (!r) return null;
+  const d = datosDe(r);
+  const anios = d.ab ? `abre en ${d.ab}${d.ci ? `, cierra en ${d.ci}` : ''}` : '';
+  const filas = d.filas.filter(([k]) => k !== 'Apertura' && k !== 'Cierre').slice(0, 4);
+  if (d.revision) filas.push(['Estado', d.revision]);
+  return `<p class="t4-n">${esc(d.titulo)}</p><p class="t4-s">${esc(d.sub)}</p>${anios ? `<p class="t4-v">${esc(anios)}</p>` : ''}${filas.map(([k, v]) => `<p class="t4-l">${esc(k)}: ${esc(v)}</p>`).join('')}${d.fuente ? `<p class="t4-l">Fuente: ${esc(d.fuente)}</p>` : ''}${d.reserva ? `<p class="t4-res">${esc(d.reserva)}</p>` : ''}<p class="t4-h">Pulsa para abrir su ficha</p>`;
+}
+function clicTransporte(x, y) {
+  const r = elementoEn(x, y);
+  if (!r) return false;
+  setEstado({ ficha: `tr:${r.id}:${r.i}`, fn: '' });
+  return true;
+}
+// el elemento con la ficha abierta (tr:<capa>:<índice>)
+function trSeleccionado() {
+  const m = /^tr:(.+):(\d+)$/.exec(String(estado.ficha || '')); if (!m) return null;
+  const id = m[1], i = +m[2];
+  return lineasVisibles.find(l => l.id === id && l.i === i) || puntosVisibles.find(q => q.id === id && q.i === i) || null;
+}
+function fichaTransporte(el) {
+  const m = /^tr:(.+):(\d+)$/.exec(String(estado.ficha || ''));
+  const d0 = m && datos.get(m[1]);
+  const f = d0 && d0.features && d0.features[+m[2]];
+  if (!f) { el.innerHTML = '<p class="a2-small">Enciende la capa en «Transporte» y pincha una línea o un punto para ver su ficha.</p>'; return null; }
+  const pt = f.geometry && f.geometry.type === 'Point';
+  const d = datosDe(pt ? { id: m[1], i: +m[2], f, x: 0 } : { id: m[1], i: +m[2], f });
+  el.innerHTML = `<p class="v3fi-k">${esc(d.sub)}</p>
+    <table class="r4-tabla">${d.filas.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table>
+    ${d.reserva ? `<p class="t4-res r4-res">${esc(d.reserva)}</p>` : ''}
+    ${d.fuente ? `<p class="a2-small">Fuente: ${esc(d.fuente)}</p>` : ''}
+    <p class="a2-small">Lo que se ve es la capa tal como llega; el visor no corrige ni completa sus fechas.</p>`;
+  return d.titulo;
+}
+
+// municipio de hoy elegido (ficha de un municipio, «Ficha del municipio» o primera unidad seleccionada que sea un INE)
+function munElegido() {
+  if (estado.mun && /^\d{5}$/.test(estado.mun)) return estado.mun;
+  const f = String(estado.ficha || '');
+  if (/^\d{5}$/.test(f)) return f;
+  const s = (estado.sel || []).find(x => /^\d{5}$/.test(String(x)));
+  return s || null;
+}
+const geoCortes = new Map();   // corte → {mesh, feats}
+function fronteras(ctx, proj, conMalla) {
+  const y = anioActual();
+  const corte = niveles.corteVigente(y == null ? 9999 : y);
+  let g = geoCortes.get(corte);
+  if (!g) {
+    geoCortes.set(corte, { cargando: true });
+    niveles.geometria('termino', y == null ? 9999 : y).then(geo => {
+      const obj = geo.topo.objects[geo.objeto];
+      geoCortes.set(corte, { mesh: topojson.mesh(geo.topo, obj, (p, q) => p !== q), topo: geo.topo, obj, paths: new Map() });
+      mapa.repintar();
+    }).catch(() => {});
+    return;
+  }
+  if (g.cargando) return;
+  const clave = proj.scale() + '|' + proj.translate().join(',');
+  if (g.clave !== clave) { g.clave = clave; g.malla = new Path2D(d3.geoPath(proj)(g.mesh) || ''); g.paths = new Map(); }
+  ctx.save();
+  if (conMalla && hayEstados(g.topo)) dibujaBordes(ctx, proj, g.topo, { color: token('--v4-tinta') || '#1c221e', ancho: 0.8, alfa: 0.7 });   // por estado del límite
+  else if (conMalla) {
+    ctx.strokeStyle = token('--v4-tinta') || '#1c221e'; ctx.globalAlpha = 0.7; ctx.lineWidth = 0.8; ctx.lineJoin = 'round';
+    ctx.stroke(g.malla);
+    ctx.globalAlpha = 1;
+  }
+  const ine = munElegido();
+  if (ine) {
+    if (!g.paths.has(ine)) {
+      const geom = g.obj.geometries.find(x => (x.properties && x.properties.pz || []).map(String).includes(String(ine)));
+      g.paths.set(ine, geom ? new Path2D(d3.geoPath(proj)(topojson.feature(g.topo, geom)) || '') : null);
+    }
+    const p = g.paths.get(ine);
+    if (p) {
+      ctx.fillStyle = 'rgba(163, 65, 42, .14)'; ctx.fill(p);
+      ctx.strokeStyle = token('--a2-accent') || '#a3412a'; ctx.lineWidth = 2.2; ctx.stroke(p);
+    }
+  }
+  ctx.restore();
+}
+
+
+// ---------------------------------------------------------------- capas como indicador (protagonistas del mapa)
+// Un indicador «capa_*» pinta los municipios en un gris muy claro y deja la capa encima, con su leyenda y su fuente.
+function capaProtagonista({ id, tema, grupo, rotulo, periodo, fotogramas, leyenda, fuentesTexto, avisos, ayuda, cifra }) {
+  let F = [];
+  return {
+    id, tema, grupo, rotulo, titulo: rotulo, kicker: grupo, periodo, unidad: '', capaBase: true,
+    niveles: ['municipio'], nivel_nativo: 'municipio', agregacion: 'no', fuentes: [],
+    async cargar() {
+      if (!CAT) [CAT, RELIEVE] = await Promise.all([cargarSiHay('capas/capas.json'), cargarSiHay('geo/relieve/capas.json'), niveles.cortes()]);
+      F = (await fotogramas()).map(f => ({ hito: true, avisos: (avisos && avisos()) || [], fuentes: [], fuentesTexto: (fuentesTexto && fuentesTexto()) || [], nota: '', ...f }));
+    },
+    fotogramas: () => F,
+    temporal: () => F.every(f => isFinite(+f.anio)),
+    relleno: () => () => ({ color: tema === 'transporte' ? '#fbfaf6' : (token('--a2-nivel') || '#efefef') }),
+    leyenda: () => leyenda(),
+    cifra: (i) => (cifra ? cifra(F[i]) : null),
+    serieAndalucia: () => (cifra && F.length > 2 ? F.map((f, i) => { const c = cifra(f); return { i, v: c ? c.n : null }; }) : null),
+    detalle: (i, c, d) => ({ titulo: (d && d.n) || c, sub: '', valor: '', sinClase: true, lineas: [ayuda || 'Pincha para abrir la ficha del municipio'] }),
+    hayEstimado: () => false,
+    ritmo: () => (F.length > 20 ? 520 : 1400),
+    claveReservas: null,
+  };
+}
+const relMeta = k => (RELIEVE && RELIEVE.capas && RELIEVE.capas[k]) || {};
+registrarIndicador(capaProtagonista({
+  id: 'capa_relieve', tema: 'geografia', grupo: 'Capas del territorio', rotulo: 'Relieve sombreado', periodo: 'hoy',
+  fotogramas: async () => [{ clave: 'hoy', anio: 'hoy', etiqueta: 'Hoy', corto: 'hoy' }],
+  leyenda: () => ({ tipo: 'categorias', titulo: 'Relieve sombreado', items: [], nota: relMeta('relieve_sombreado').que_es || '' }),
+  fuentesTexto: () => [relMeta('relieve_sombreado').atribucion || 'IGN, MDT200'],
+}));
+registrarIndicador(capaProtagonista({
+  id: 'capa_altitud', tema: 'geografia', grupo: 'Capas del territorio', rotulo: 'Altitud', periodo: 'hoy',
+  fotogramas: async () => [{ clave: 'hoy', anio: 'hoy', etiqueta: 'Hoy', corto: 'hoy' }],
+  leyenda: () => ({ tipo: 'categorias', titulo: 'Altitud (m)', items: (relMeta('altitud_tintas').leyenda || []).map(l => ({ color: l.color, etiqueta: `${l.desde_m.toLocaleString('es-ES')}–${l.hasta_m.toLocaleString('es-ES')} m` })), nota: relMeta('altitud_tintas').que_es || '' }),
+  fuentesTexto: () => [relMeta('altitud_tintas').atribucion || 'IGN, MDT200'],
+}));
+registrarIndicador(capaProtagonista({
+  id: 'capa_rios', tema: 'geografia', grupo: 'Capas del territorio', rotulo: 'Ríos', periodo: 'hoy',
+  fotogramas: async () => [{ clave: 'hoy', anio: 'hoy', etiqueta: 'Hoy', corto: 'hoy' }],
+  leyenda: () => ({ tipo: 'categorias', titulo: 'Ríos, por niveles', items: [1, 2, 3, 4].map(n => ({ color: RIO_COLOR[n], etiqueta: ['Guadalquivir', 'más de 90 km', 'de 25 a 90 km', 'ríos y arroyos menores'][n - 1] })), nota: 'Pasa el cursor por un río para ver su nombre y su longitud.' }),
+  fuentesTexto: () => [(ficherosRios()[0] || {}).atribucion || RIOS_ATRIB],
+  avisos: () => (avisoLongitud() ? [{ tipo: 'nota', texto: avisoLongitud() }] : []),
+  ayuda: 'Pasa el cursor por un río para ver su nombre',
+}));
+registrarIndicador(capaProtagonista({
+  id: 'capa_fronteras', tema: 'fronteras', grupo: 'Fronteras de cada año', rotulo: 'Fronteras de cada año',
+  fotogramas: async () => (await niveles.cortes()).map(c => ({ clave: c, anio: c === 'hoy' ? 2026 : +c, etiqueta: c === 'hoy' ? 'Hoy' : String(c), corto: c === 'hoy' ? 'hoy' : String(c) })),
+  leyenda: () => ({ tipo: 'categorias', titulo: 'Términos de la fecha', items: [{ color: '#101010', etiqueta: 'límite entre términos' }, { color: '#e5c1b8', etiqueta: 'término del municipio con la ficha abierta' }], nota: 'Geometría histórica reconstruida uniendo recintos de hoy: no es el límite histórico observado, y cada línea dice su fiabilidad. 1752 y 1787: límites supuestos, en revisión.' }),
+  fuentesTexto: () => ['Instituto de Estadística y Cartografía de Andalucía, delimitaciones territoriales; INE, alteraciones de los municipios'],
+  avisos: () => [{ tipo: 'candidata', texto: INSIGNIAS.candidata }],
+}));
+// niveles de ríos cuando los ríos son el indicador (la barra derecha los ofrece)
+export const RIOS_OPCIONES = RIOS_NIVELES;
+export function nivelesRiosActivos() { return RIOS_NIVELES.filter(n => activasEf().has(n.id)).map(n => n.id); }
+export function conmutaNivelRios(id) {
+  const a = activas();
+  const ef = activasEf();
+  for (const n of RIOS_NIVELES) if (ef.has(n.id)) a.add(n.id);
+  a.has(id) ? a.delete(id) : a.add(id);
+  setEstado({ capas: [...a] });
+}
+void cargar;
+
+
+// ---------------------------------------------------------------- tema «Transporte» (ronda v7): capas protagonistas
+const capasCat = ind => (CAT && CAT.capas || []).filter(c => (idsDe(ind) || []).includes(c.id));
+async function featsDe(id) {
+  const c = (CAT && CAT.capas || []).find(x => x.id === id); if (!c) return [];
+  if (datos.has(id) && datos.get(id).features) return datos.get(id).features;
+  const ruta = c.archivo ? (String(c.archivo).startsWith('capas/') ? c.archivo : 'capas/' + c.archivo) : 'capas/' + id + '.topo.json';
+  const t = await cargarSiHay(ruta); if (!t) return [];
+  const fc = topojson.feature(t, t.objects[id] || t.objects[Object.keys(t.objects)[0]]);
+  datos.set(id, { features: fc.features || [fc] });
+  return datos.get(id).features;
+}
+const transLeyenda = ind => () => ({ tipo: 'capas', titulo: 'Transporte', items: [], nota: [...new Set(capasCat(ind).map(c => c.rotulo))].join(' · ') });
+const transFuentes = ind => () => [...new Set(capasCat(ind).map(c => c.atribucion).filter(Boolean))];
+const transAvisos = ind => () => [...new Set(capasCat(ind).map(c => c.rotulo))].map(r => ({ tipo: /candidata/i.test(r) ? 'candidata' : 'revision', texto: r }));
+const unFot = (etiqueta) => async () => [{ clave: 'unico', anio: etiqueta, etiqueta, corto: etiqueta }];
+const fmtKm = n => `${Math.round(n).toLocaleString('es-ES')}`;
+// km «abiertos» un año: suma de longitud_km de la capa (cálculo del visor sobre la capa heredada)
+let KM = { ferro: null, jrc: null };
+const kmEn = (feats, vis) => feats.reduce((s, f) => s + (vis(f.properties || {}) ? (+(f.properties || {}).longitud_km || 0) : 0), 0);
+const T = (ind, rotulo, grupo, extra) => registrarIndicador(capaProtagonista({ id: ind, tema: 'transporte', grupo, rotulo,
+  leyenda: transLeyenda(ind), fuentesTexto: transFuentes(ind), avisos: transAvisos(ind), ayuda: 'Capa de transporte; pincha para la ficha del municipio', ...extra }));
+T('capa_t_calzadas', 'Calzadas romanas', 'Caminos históricos', { periodo: 'época romana', fotogramas: unFot('Calzadas') });
+T('capa_t_xviii', 'Caminos y puertos del XVIII', 'Caminos históricos', { periodo: '1750–1799', fotogramas: unFot('Siglo XVIII') });
+T('capa_t_ferrocarril', 'Ferrocarril', 'Ferrocarril', {
+  periodo: 'por año de apertura',
+  fotogramas: async () => {
+    const ids = idsDe('capa_t_ferrocarril') || [];
+    const lin = ids.find(id => /lin/.test(id)) || ids[0];
+    const fs = lin ? await featsDe(lin) : [];
+    for (const id of ids) await featsDe(id);
+    KM.ferro = fs;
+    const abre = fs.map(f => +(f.properties || {}).anio_apertura).filter(y => y > 1000);
+    const y0 = abre.length ? Math.floor(Math.min(...abre) / 5) * 5 : 1850;
+    const out = [];
+    for (let y = y0; y <= 2025; y += 5) out.push(y);
+    if (out[out.length - 1] !== 2025) out.push(2025);
+    return out.map(y => ({ clave: String(y), anio: y, etiqueta: String(y), corto: String(y) }));
+  },
+  cifra: f => { if (!KM.ferro || !isFinite(+f.anio)) return null; const y = +f.anio; const n = kmEn(KM.ferro, p => { const ab = +p.anio_apertura || 0, ci = +p.anio_cierre || 0; return ab && ab <= y && (!ci || ci > y); }); return { valor: fmtKm(n), unidad: 'km de vía abierta', etiqueta: 'suma de longitud_km de la capa heredada (cálculo del visor)', n }; },
+});
+T('capa_t_jrc', 'Carreteras 1955-2012 (JRC)', 'Carreteras', {
+  periodo: '1955–2012',
+  fotogramas: async () => {
+    const id = (idsDe('capa_t_jrc') || [])[0];
+    const fs = id ? await featsDe(id) : [];
+    KM.jrc = fs;
+    const anios = new Set();
+    for (const f of fs) for (const k of Object.keys(f.properties || {})) { const m = /^existe_(\d{4})$/.exec(k); if (m) anios.add(+m[1]); }
+    return [...anios].sort((a, b) => a - b).map(y => ({ clave: String(y), anio: y, etiqueta: String(y), corto: String(y) }));
+  },
+  cifra: f => { if (!KM.jrc || !isFinite(+f.anio)) return null; const y = +f.anio; const n = kmEn(KM.jrc, p => { const v = p['existe_' + y]; return v === true || v === 'True' || v === 1 || v === '1'; }); return { valor: fmtKm(n), unidad: 'km de red troncal', etiqueta: 'suma de longitud_km de la capa heredada (cálculo del visor)', n }; },
+});
+T('capa_t_carreteras', 'Carreteras de hoy', 'Carreteras', { periodo: 'hoy', fotogramas: unFot('Hoy') });
+T('capa_t_costa', 'Puertos y faros', 'Costa', { periodo: 'hoy', fotogramas: unFot('Hoy') });

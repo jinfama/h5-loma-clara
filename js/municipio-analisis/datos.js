@@ -1,0 +1,181 @@
+// datos.js — lectura de los ficheros del Atlas para el análisis del municipio. Solo lee; nunca rellena ni interpola.
+// Un valor null es «sin dato» y sigue siendo null en todo el recorrido.
+
+const RAIZ = 'data/v2/';
+const memo = new Map();
+
+export function json(ruta) {
+  if (!memo.has(ruta)) {
+    memo.set(ruta, fetch(RAIZ + ruta).then(r => {
+      if (!r.ok) throw new Error(`No se pudo leer (${r.status})`);
+      return r.json();
+    }));
+  }
+  return memo.get(ruta);
+}
+
+export async function catalogo() {
+  const c = await json('visor/indicadores.json');
+  if (!c._porId) c._porId = new Map(c.indicadores.map(x => [x.id, x]));
+  return c._porId;
+}
+
+export async function valores(ind, nivel = 'municipio') {
+  const d = await json(`visor/valores/${ind}__${nivel}.json`);
+  if (!d._pos) {
+    d._pos = new Map(d.ids.map((x, i) => [String(x), i]));
+    d._ka = new Map(d.anios.map((a, k) => [+a, k]));
+  }
+  return d;
+}
+
+// cifra de una unidad en un año: { a, v, f } (v null si no hay)
+export function celda(d, id, anio) {
+  const j = d._pos.get(String(id)), k = d._ka.get(+anio);
+  if (j == null || k == null) return { a: +anio, v: null, f: '.' };
+  const v = d.v[k][j];
+  return { a: +anio, v: v == null ? null : v, f: v == null ? '.' : ((d.f || [])[k] || '')[j] || '.' };
+}
+
+export function serie(d, id) {
+  const j = d._pos.get(String(id));
+  if (j == null) return [];
+  return d.anios.map((a, k) => {
+    const v = d.v[k][j];
+    return { a: +a, v: v == null ? null : v, f: v == null ? '.' : ((d.f || [])[k] || '')[j] || '.' };
+  });
+}
+
+// aviso de la celda (clave), si lo hay
+export function avisoDe(d, id, anio) {
+  if (!d.avisos) return null;
+  if (!d._av) { d._av = new Map(); for (const [k, j, c] of d.avisos) d._av.set(`${k}|${j}`, c); }
+  const c = d._av.get(`${d._ka.get(+anio)}|${d._pos.get(String(id))}`);
+  return c || null;
+}
+
+// por qué una celda está vacía: su código y, en las palabras de la base, su texto
+export function codigoMotivo(d, id, anio) {
+  if (!d.mot) return '';
+  if (!d._mot) { d._mot = new Map(); for (const [k, j, c] of d.mot) d._mot.set(`${k}|${j}`, c); }
+  return d._mot.get(`${d._ka.get(+anio)}|${d._pos.get(String(id))}`) || '';
+}
+export function motivoDe(d, id, anio) {
+  const c = codigoMotivo(d, id, anio);
+  return c ? limpia((d.motivos || {})[c] || '') : '';
+}
+
+// todos los avisos de una celda y, de ellos, el de resultado parcial con su texto
+export function avisosDe(d, id, anio) {
+  if (!d.avisos) return [];
+  if (!d._avs) { d._avs = new Map(); for (const [k, j, c] of d.avisos) { const q = `${k}|${j}`; if (!d._avs.has(q)) d._avs.set(q, []); d._avs.get(q).push(c); } }
+  return d._avs.get(`${d._ka.get(+anio)}|${d._pos.get(String(id))}`) || [];
+}
+export function avisoParcial(d, id, anio) {
+  const c = avisosDe(d, id, anio).find(x => String(x).startsWith('parcial_'));
+  return c ? limpia((d.avisos_textos || {})[c] || 'Resultado parcial.') : '';
+}
+
+// el aviso en palabras llanas: lo que dice la base, sin su vocabulario interno
+export function avisoLlano(d, clave) {
+  if (!clave) return '';
+  if (clave === 'cociente_unidad' || clave === 'unidad') return 'La fuente da esta cifra para un grupo de municipios que lo incluye; no es solo de este.';
+  if (clave === 'reparto') return 'Cifra repartida de la de un grupo de municipios que lo incluye.';
+  if (clave === 'no_existia') return 'Aún no existía como municipio: la cifra es la estimada para su término de hoy.';
+  const t = (d.avisos_textos || {})[clave] || '';
+  return limpia(t);
+}
+
+// quita de un texto de la base los códigos internos y su vocabulario
+export function limpia(t) {
+  return String(t || '')
+    .replace(/\s*\((?:decisión firmada[^)]*)?AND-[A-Z0-9-]+[^)]*\)/g, '')
+    .replace(/\s*\bAND-[A-Z]+-[0-9A-Z-]+\b/g, '')
+    .replace(/unidad(es)? estable(s)?/gi, 'grupo de municipios')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ').trim();
+}
+
+// ---------------------------------------------------------------- cuándo no fue municipio propio
+// Las fichas del INE marcan en su propia cita «@» (aparece) y «#» (desaparece). Se usan solo las relaciones aceptadas
+// y con intervalo de censos; se añaden los años que la base avisa como «no existía» en el empleo.
+export const ACEPTADA = new Set(['aceptada', 'aceptada_sin_uso', 'aceptada_por_firma']);
+export function existencia(hist, empleo, ine) {
+  const ev = [];
+  for (const r of (hist && hist.rel) || []) {
+    if (!ACEPTADA.has(r.e) || r.h == null || r.d == null) continue;
+    for (const seg of String(r.c || '').split('||')) {
+      const m = /^\s*\[ficha (\d{5})\]\s*(\S)/.exec(seg);
+      if (m && m[1] === ine && (m[2] === '@' || m[2] === '#')) ev.push({ s: m[2], d: +r.d, h: +r.h, r });
+    }
+  }
+  ev.sort((a, b) => a.h - b.h || (a.s === '#' ? -1 : 1));
+  const deFusion = ev.filter(e => e.s === '@' && e.r.t === 'fusion');
+  for (const e of deFusion) ev.splice(ev.indexOf(e), 1);
+  // año exacto del cambio, si la fecha de efecto o la norma lo dan y cae entre los dos censos
+  const exacto = e => {
+    const t = String(e.r.f || (e.r.norma && e.r.norma.fecha) || '');
+    const y = /^\d{4}/.test(t) ? +t.slice(0, 4) : null;
+    return y != null && y > e.d && y <= e.h ? y : null;
+  };
+  const finHueco = e => { const y = exacto(e); return y != null ? y - 1 : e.h - 1; };
+  const iniHueco = e => { const y = exacto(e); return y != null ? y : e.d + 1; };
+  const huecos = [];
+  if (ev.length && ev[0].s === '@') huecos.push({ desde: 1842, hasta: finHueco(ev[0]), sale: null, vuelve: ev[0] });
+  ev.forEach((e, i) => {
+    if (e.s !== '#') return;
+    const sig = ev.slice(i + 1).find(x => x.s === '@') || null;
+    huecos.push({ desde: iniHueco(e), hasta: sig ? finHueco(sig) : 2025, sale: e, vuelve: sig });
+  });
+  if (!ev.length && !deFusion.length && empleo && empleo.avisos) {
+    const j = empleo._pos.get(String(ine));
+    const anios = empleo.avisos.filter(x => x[1] === j && x[2] === 'no_existia').map(x => +empleo.anios[x[0]]).filter(a => a >= 1842).sort((a, b) => a - b);
+    for (const a of anios) {
+      if (huecos.some(h => a >= h.desde && a <= h.hasta)) continue;
+      const ult = huecos.find(h => h.hasta === a - 1 && !h.sale && !h.vuelve);
+      if (ult) ult.hasta = a; else huecos.push({ desde: a, hasta: a, sale: null, vuelve: null });
+    }
+  }
+  huecos.sort((a, b) => a.desde - b.desde);
+  let fusion = null;
+  if (deFusion.length) {
+    const e = deFusion[0], y = exacto(e);
+    fusion = { anio: y != null ? y : e.h, exacta: y != null, d: e.d, h: e.h, nombres: [...new Set(deFusion.map(x => x.r.x && x.r.x.n).filter(Boolean))] };
+  }
+  return { huecos: huecos.filter(h => h.hasta >= h.desde), fuera: a => huecos.some(h => a >= h.desde && a <= h.hasta), fusion };
+}
+
+// a qué municipio pertenecía en un corte anterior a 1842 (si iba dentro de otro)
+export function dentroDe(hist, ine, corte) {
+  for (const p of (hist && hist.pt) || []) {
+    const d = +p[0], h = p[1] === 'hoy' ? 9999 : +p[1];
+    if (corte >= d && corte <= h) return p[2] != null && String(p[2]) !== ine ? p[3] : null;
+  }
+  return null;
+}
+
+// corte transversal de un indicador (o una media de varios años) para los 785
+const memoT = new Map();
+export function transversal(rasgo, ids) {
+  const k = `${rasgo.id}@${rasgo.media ? rasgo.media.join('-') : rasgo.a}`;
+  if (!memoT.has(k)) memoT.set(k, leeTransversal(rasgo, ids));
+  return memoT.get(k);
+}
+async function leeTransversal(rasgo, ids) {
+  const d = await valores(rasgo.id);
+  const out = new Array(ids.length).fill(null), marcas = new Array(ids.length).fill('.');
+  ids.forEach((id, i) => {
+    if (rasgo.media) {
+      const [a0, a1] = rasgo.media;
+      let s = 0, n = 0, tot = 0;
+      for (let a = a0; a <= a1; a++) { tot++; const c = celda(d, id, a); if (c.v != null) { s += c.v; n++; } }
+      if (n === tot) { out[i] = s / n; marcas[i] = '3'; }
+    } else {
+      const c = celda(d, id, rasgo.a);
+      out[i] = c.v; marcas[i] = c.f;
+    }
+  });
+  return { v: out, f: marcas, d };
+}
+
+export const CENSOS = [1857, 1860, 1877, 1887, 1897, 1900, 1910, 1920, 1930, 1940, 1950, 1960, 1970, 1981, 1991, 2001, 2011, 2021];

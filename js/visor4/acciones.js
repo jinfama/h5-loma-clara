@@ -1,0 +1,243 @@
+import { esCategorico, escalaCategorica } from '../visor3/escala.js';
+import { INSIGNIAS } from '../atlas2/leyenda.js';
+// acciones.js — botones de abajo a la derecha: copiar enlace, descargar datos (CSV con la fuente original y la marca
+// de cada cifra), PNG de lo que se ve, reiniciar la vista y pantalla completa.
+
+/* global d3 */
+import { estado, setEstado } from '../visor3/estado.js';
+import * as datos from '../visor3/datos.js';
+import * as niveles from '../visor3/niveles.js';
+import { nombreFuente } from '../atlas2/fuentes.js';
+import { token } from '../atlas2/fmt.js';
+import { difFrente, medidaFrente, refAndalucia, notaRef } from '../visor3/frente.js';
+import { marcaMinimo } from '../visor3/minimo1752.js';   // minimo1752
+
+const $ = (s, el = document) => el.querySelector(s);
+const MARCA = { I: 'interpolación del Atlas (no es un dato)', 0: 'observado', 3: 'calculado de originales', 1: 'estimado', 4: 'parcialmente estimado', 5: 'suma parcial', 2: 'con reserva o en revisión', '.': 'sin dato' };
+let H = null;   // {aviso, irA, M, mapa, rotNivel, nativo}
+
+export function montarAcciones(h) {
+  H = h;
+  $('#v4-acciones').addEventListener('click', e => {
+    const b = e.target.closest('[data-accion]'); if (!b) return;
+    const a = b.dataset.accion;
+    if (a === 'enlace') copiarEnlace();
+    if (a === 'png' && H.par && H.par.activo()) { H.par.imagen({ svgAImagen, baja, tok: token, aviso: H.aviso }).catch(err => { console.error(err); H.aviso('No se ha podido sacar la imagen.'); }); return; }
+    // una vista puede dar su propio CSV (`exportar`) y su propia imagen (`imagen`) o el texto del pie (`fuentePNG`)
+    const va = H.vista ? H.vista() : null, vd = va && va.def;
+    if (a === 'datos' && vd && typeof vd.exportar === 'function') Promise.resolve(vd.exportar(va.ctx)).catch(err => { console.error(err); H.aviso('No se han podido preparar los datos.'); });
+    else if (a === 'png' && vd && typeof vd.imagen === 'function') Promise.resolve(vd.imagen(va.ctx)).catch(err => { console.error(err); H.aviso('No se ha podido sacar la imagen.'); });
+    else if (a === 'datos') descargarDatos().catch(err => { console.error(err); H.aviso('No se han podido preparar los datos.'); });
+    else if (a === 'png') imagen().catch(err => { console.error(err); H.aviso('No se ha podido sacar la imagen.'); });
+    else if (a === 'reiniciar') reiniciar();
+    else if (a === 'pantalla') pantalla();
+  });
+  document.addEventListener('fullscreenchange', () => {
+    const b = $('[data-accion="pantalla"] span:last-child');
+    if (b) b.textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
+  });
+}
+
+async function copiarEnlace() {
+  const url = location.href;
+  try { await navigator.clipboard.writeText(url); H.aviso('Enlace copiado: abre esta misma vista.'); }
+  catch (e) { prompt('Copia este enlace:', url); }
+}
+
+function reiniciar() {
+  setEstado({ sel: [], comp: [], facet: '', esc: '', obs: false, indice: false, eje: '', ficha: '', fn: '', vel: 1, nivel: H.nativo() }, { historial: true });
+  setTimeout(() => { if (H.M.F.length) H.irA(H.M.F.length - 1, { fade: false }); }, 60);
+  H.aviso('Vista reiniciada: unidad territorial propia del indicador y sin selección.');
+}
+
+function pantalla() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => H.aviso('El navegador no deja poner la pantalla completa.'));
+}
+
+// ---------------------------------------------------------------- CSV
+const cel = s => { const t = String(s == null ? '' : s); return /[",\n;]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+async function descargarDatos() {
+  const ent = datos.indicador(estado.ind);
+  if (!ent) return;
+  const nivel = estado.nivel;
+  const d = await datos.valores(estado.ind, nivel);
+  if (!d) { H.aviso(`No hay cifras de «${ent.rotulo}» por ${H.rotNivel(nivel).toLowerCase()}: la fuente no las da a este nivel.`); return; }
+  H.aviso('Preparando el CSV…');
+  // «Frente a Andalucía»: la cifra de Andalucía de ese año y la diferencia, en columnas aparte
+  const conFrente = estado.ver === 'and' && !ent.mensual;
+  const dAnd = conFrente ? await datos.valoresSiHay(estado.ind, 'andalucia').catch(() => null) : null;
+  const filas = [['indicador', 'rotulo', 'nivel', 'anio', 'id', 'nombre', 'valor', 'unidad', 'procedencia', 'pe_estimado', 'suma_parcial_n_con_dato', 'suma_parcial_n_total', 'confianza', 'motivo_o_reserva', 'fuente_original', 'interpolado_atlas', ...(conFrente ? ['andalucia', `frente_a_andalucia_${{ puntos: 'puntos', razon: 'pct', dif: 'diferencia' }[medidaFrente(ent)]}`, 'nota_frente'] : [])].join(',')];
+  if (ent.mensual) {
+    for (const per of Object.keys(d.periodos || {})) for (const vr of ['tmed', 'prec']) {
+      const m = (d[vr] || {})[per] || [];
+      (d.ids || []).forEach((id, k) => (m[k] || []).forEach((v, mes) => filas.push([ent.id, cel(`${vr} ${per} mes ${mes + 1}`), nivel, cel((d.periodos[per] || []).join('-')), cel(id), '', v ?? '', (d.unidades || {})[vr] || '', v == null ? 'sin dato' : 'observado', '', '', '', '', '', cel((ent.fuentes || []).map(nombreFuente).join(' | '))].join(','))));
+    }
+  } else {
+    const anios = d.anios || Object.keys(d.por_anio || {});
+    const CATEG = esCategorico(ent) ? escalaCategorica(ent) : null;   // categórico: el nombre de la categoría
+    const nombres = new Map();
+    for (const a of anios) {
+      if (datos.esVarianteNoElegida(d, a)) continue;   // 2019: solo la variante elegida (abril o noviembre)
+      const c = datos.corteDe(d, a); if (!c) continue;
+      const g = await niveles.geometria(nivel, a).catch(() => null);
+      const nom = id => {
+        const k = (g ? g.clave : nivel) + '|' + id;
+        if (!nombres.has(k)) { const p = g && g.props.get(String(id)); nombres.set(k, p ? (p.mf || p.n || '') : ''); }
+        return nombres.get(k);
+      };
+      const fu = ((d.fuentes_anio || {})[String(a)] || ent.fuentes || []);
+      const fuTxt = cel((Array.isArray(fu) ? fu : [fu]).map(nombreFuente).join(' | '));
+      const rA = conFrente ? refAndalucia(dAnd ? datos.corteDe(dAnd, a) : null, !!estado.obs, { ind: ent.id, anio: a }) : null, vAnd = rA ? rA.v : null;
+      const notaA = rA ? cel(rA.motivo || (notaRef(rA) ? `cifra de Andalucía: ${notaRef(rA)}` : '')) : '';
+      c.ids.forEach((id, k) => {
+        const v = c.v[k], f = (c.f || '')[k] || (v == null ? '.' : '0');
+        const mot = c.mot.get(k), res = c.res.get(k);
+        const por = [res ? res.rotulo : mot ? (c.textoMotivo(mot) || mot) : '', v == null ? '' : marcaMinimo(ent.id, nivel, a, id)].filter(Boolean).join(' · ');   // minimo1752
+        const x = c.extra ? c.extra(k) : {};
+        filas.push([ent.id, cel(ent.rotulo), nivel, cel((ent.etiquetas_anio || {})[String(a)] ?? a), cel(id), cel(nom(id)), v == null || f === 'I' ? '' : CATEG ? cel(CATEG.formato(v)) : v, cel(ent.unidad || ''), MARCA[v == null ? '.' : f] || '', x.pe ?? '', x.parcial ? x.parcial.n ?? '' : '', x.parcial ? x.parcial.m ?? '' : '', x.q || '', cel(por), fuTxt, f === 'I' ? v : '', ...(conFrente ? [vAnd ?? '', (() => { const d = difFrente(ent, v, vAnd); return d == null ? '' : Math.round(d * 100) / 100; })(), notaA] : [])].join(','));
+      });
+    }
+  }
+  // «Todo interpolado»: los años sin cifra de la base, con la interpolación del Atlas en su propia columna (no es un dato)
+  if (estado.interp && !ent.mensual && !esCategorico(ent)) {
+    const base = new Set((d.anios || Object.keys(d.por_anio || {})).map(a => String(a).slice(0, 4)));
+    for (const y of datos.aniosAtlas(d)) {
+      if (base.has(String(y))) continue;
+      const c = datos.corteDe(d, y); if (!c) continue;
+      c.ids.forEach((id, k) => {
+        const v = c.v[k]; if (v == null) return;
+        const r = new Array(16).fill('');
+        r[0] = ent.id; r[1] = cel(ent.rotulo); r[2] = nivel; r[3] = y; r[4] = cel(id); r[7] = cel(ent.unidad || ''); r[8] = cel(MARCA.I); r[15] = Math.round(v * 100) / 100;
+        filas.push(r.join(','));
+      });
+    }
+  }
+  const nota = `# Atlas Histórico de Andalucía · ${ent.rotulo} · ${H.rotNivel(nivel)}. Una casilla vacía es «sin dato», no un cero. ${INSIGNIAS.candidata}.`;
+  baja(new Blob(['﻿' + nota + '\n' + filas.join('\n')], { type: 'text/csv;charset=utf-8' }), `${ent.id}__${nivel}.csv`);
+  H.aviso(`CSV listo: ${(filas.length - 1).toLocaleString('es-ES')} filas.`);
+}
+function baja(blob, nombre) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+// ---------------------------------------------------------------- PNG
+const PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-opacity', 'opacity', 'font-family', 'font-size', 'font-weight', 'text-anchor', 'dominant-baseline', 'display', 'visibility'];
+function svgAImagen(svg) {
+  const r = svg.getBoundingClientRect();
+  const copia = svg.cloneNode(true);
+  const orig = [svg, ...svg.querySelectorAll('*')], dest = [copia, ...copia.querySelectorAll('*')];
+  orig.forEach((el, k) => {
+    const cs = getComputedStyle(el);
+    dest[k].setAttribute('style', PROPS.map(p => `${p}:${cs.getPropertyValue(p)}`).join(';'));
+  });
+  copia.setAttribute('width', r.width); copia.setAttribute('height', r.height);
+  copia.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const txt = new XMLSerializer().serializeToString(copia);
+  return new Promise((ok, mal) => {
+    const img = new Image();
+    img.onload = () => ok({ img, r });
+    img.onerror = mal;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(txt);
+  });
+}
+async function imagen() {
+  const escena = $('#v4-escena');
+  const re = escena.getBoundingClientRect();
+  const lienzo = escena.querySelector('canvas.m4-canvas');
+  const svgs = [...escena.querySelectorAll('svg')].filter(s => { const r = s.getBoundingClientRect(); return r.width > 80 && r.height > 60 && !s.closest('.m4-hero'); });
+  if (!lienzo && !svgs.length) { H.aviso('Esta vista no tiene imagen: usa «Descargar datos».'); return; }
+  const cab = 78, pie = 46, dpr = 2;
+  const W = Math.round(re.width), Hh = Math.round(re.height) + cab + pie;
+  const cv = document.createElement('canvas');
+  cv.width = W * dpr; cv.height = Hh * dpr;
+  const g = cv.getContext('2d');
+  g.scale(dpr, dpr);
+  const tinta = token('--v4-tinta') || '#1d231f', tinta3 = token('--v4-tinta-3') || '#6d736d';
+  const serif = '"Syne", "Arial Black", sans-serif', sans = '"Instrument Sans", system-ui, sans-serif';
+  g.fillStyle = token('--v4-papel') || '#f8f6f0'; g.fillRect(0, 0, W, Hh);
+  // título
+  g.fillStyle = tinta3; g.font = `600 11px ${sans}`;
+  g.fillText(($('#v4-titulo-k').textContent || '').toUpperCase(), 24, 26);
+  g.fillStyle = tinta; g.font = `800 24px ${serif}`;
+  g.fillText($('#v4-titulo-h').textContent || '', 24, 54);
+  g.fillStyle = tinta3; g.font = `400 13px ${sans}`;
+  g.fillText($('#v4-titulo-s').textContent || '', 24, 71);
+  g.fillStyle = token('--v4-linea') || '#d8d2c4'; g.fillRect(0, cab - 1, W, 1);
+  g.save(); g.translate(0, cab);
+  if (lienzo) {
+    g.drawImage(lienzo, 0, 0, re.width, re.height);
+    // el bloque del año y la cifra de Andalucía, en el mismo sitio y con la misma letra que en pantalla
+    for (const el of escena.querySelectorAll('.m4-anio, .m4-corte, .m4-and__k, .m4-and__n, .m4-and__u, .m4-and__l')) {
+      const t = (el.textContent || '').trim(); if (!t || el.closest('[hidden]')) continue;
+      const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+      g.fillStyle = cs.color; g.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      g.textBaseline = 'middle';
+      g.fillText(cs.textTransform === 'uppercase' ? t.toUpperCase() : t, r.left - re.left, r.top - re.top + r.height / 2);
+    }
+    g.textBaseline = 'alphabetic';
+    const linea = escena.querySelector('.m4-and');
+    if (linea && !linea.hidden) { const r = linea.getBoundingClientRect(); g.fillStyle = token('--v4-linea-2') || '#c6bdaa'; g.fillRect(r.left - re.left, r.top - re.top, 1, r.height); }
+    const spark = escena.querySelector('.m4-sparkbox:not([hidden]) .m4-spark');
+    if (spark) { try { const { img, r } = await svgAImagen(spark); g.drawImage(img, r.left - re.left, r.top - re.top, r.width, r.height); } catch (e) { console.error(e); } }
+    leyendaEnLienzo(g, 24, re.height - 64, Math.min(320, re.width - 48));
+  }
+  for (const s of svgs) {
+    try { const { img, r } = await svgAImagen(s); g.drawImage(img, r.left - re.left, r.top - re.top, r.width, r.height); } catch (e) { console.error(e); }
+  }
+  g.restore();
+  // pie: fuente original y procedencia de la imagen
+  const va = H.vista ? H.vista() : null;
+  // la vista puede decir la fuente de su imagen (Análisis: la de X y la de Y)
+  const fuV = va && va.def && typeof va.def.fuentePNG === 'function' ? va.def.fuentePNG(va.ctx) : null;
+  const fu = fuV || [...document.querySelectorAll('#v4-fuente .v4-fu__n')].map(x => x.textContent).join(' · ');
+  g.fillStyle = token('--v4-linea') || '#d8d2c4'; g.fillRect(0, Hh - pie, W, 1);
+  g.fillStyle = tinta3; g.font = `400 11px ${sans}`;
+  recorta(g, `Fuente original: ${fu || 'sin identificar'}`, 24, Hh - pie + 18, W - 48);
+  g.fillText(`Atlas Histórico de Andalucía · ${location.href.split('#')[0]}`, 24, Hh - pie + 34);
+  const ent = datos.indicador(estado.ind);
+  cv.toBlob(b => { if (b) { baja(b, `${ent ? ent.id : 'visor'}__${estado.nivel}${estado.anio != null ? '__' + estado.anio : ''}.png`); H.aviso('Imagen PNG lista.'); } }, 'image/png');
+}
+function recorta(g, t, x, y, w) {
+  let s = t;
+  while (s.length > 10 && g.measureText(s).width > w) s = s.slice(0, -2);
+  g.fillText(s === t ? s : s + '…', x, y);
+}
+function leyendaEnLienzo(g, x, y, w) {
+  const u = H.mapa.ultimaLeyenda(); if (!u || !u.spec) return;
+  const { spec } = u;
+  const tinta = token('--v4-tinta') || '#1d231f';
+  g.fillStyle = 'rgba(248,246,240,.92)'; g.fillRect(x - 10, y - 22, Math.max(w, 560) + 20, 74);
+  g.fillStyle = tinta; g.font = '600 11px "Instrument Sans", sans-serif';
+  const ent = datos.indicador(estado.ind);
+  recorta(g, `${ent && ent.unidad ? ent.unidad : ''}${spec.log ? ' · escala logarítmica' : ''}` || spec.titulo || '', x, y - 8, w);
+  if (spec.tipo === 'continua' && spec.escala) {
+    const s = spec.escala, dom = s.domain(), a = dom[0], b = dom[dom.length - 1];
+    for (let i = 0; i < w; i++) {
+      const t = i / (w - 1);
+      const v = spec.log ? Math.exp(Math.log(a) + t * (Math.log(b) - Math.log(a))) : a + t * (b - a);
+      g.fillStyle = s(v); g.fillRect(x + i, y, 1.5, 12);
+    }
+    g.fillStyle = tinta; g.font = '400 10px "Instrument Sans", sans-serif';
+    const fmt = spec.formato || String;
+    const ticks = spec.ticks || s.ticksRedondos || [a, b];
+    for (const v of ticks) {
+      const t = spec.log ? (Math.log(v) - Math.log(a)) / (Math.log(b) - Math.log(a)) : (v - a) / (b - a);
+      if (t < 0 || t > 1) continue;
+      const tx = fmt(v), tw = g.measureText(tx).width;
+      g.fillRect(x + t * w, y + 12, 1, 4);
+      g.fillText(tx, Math.min(x + w - tw, Math.max(x, x + t * w - tw / 2)), y + 28);
+    }
+  }
+  // lo que hay en el mapa además del color, dicho en una línea
+  const p = u.pres || {}, otras = [];
+  if (p.est) otras.push('rayado: estimado');
+  if (p.res) otras.push('puntos ocres: con reserva o en revisión');
+  if (p.nd) otras.push('gris cruzado: sin dato (no es cero)');
+  if (p.sn) otras.push('rayas sueltas: sin dato a este nivel');
+  if (otras.length) { g.fillStyle = token('--v4-tinta-3') || '#6c726c'; g.font = '400 10.5px "Instrument Sans", sans-serif'; recorta(g, otras.join(' · '), x, y + 44, Math.max(w, 560)); }
+  void d3;
+}

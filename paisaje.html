@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cambio en el paisaje · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Compara con una cortina dos fotos aéreas o dos mapas de usos del suelo de un mismo municipio andaluz, desde 1956.">
+  <meta name="theme-color" content="#101010">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/visor4.css">
+  <link rel="stylesheet" href="css/paisaje.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+  <script type="module" src="js/paisaje/paisaje.js"></script>
+  <script type="module" src="js/visor4/rail-pagina.js"></script>
+</head>
+<body class="v4 pz4">
+<div class="v4-app pz-app4">
+
+  <!-- la barra de temas del visor: de aquí se va a cualquier tema sin volver atrás -->
+  <nav class="v4-rail" id="v4-rail" aria-label="Temas">
+    <a class="v4-marca" href="index.html" title="Portada del Atlas Histórico de Andalucía">
+      <span class="v4-marca__sello" aria-hidden="true"></span>
+      <span class="v4-marca__txt">Atlas <br>Histórico<br>de Andalucía</span>
+    </a>
+    <a class="v4-rail__todos" href="visor.html#todos" title="Buscar entre todos los indicadores, con filtros por tema y por escala"><span data-icono="buscar"></span><span class="v4-rail__todos-t">Todos los indicadores</span></a>
+    <ul class="v4-temas" id="v4-temas" role="list"></ul>
+    <div class="v4-rail__pie">
+      <a class="v4-rail__btn v4-rail__info" href="info.html" title="Cobertura, cómo se hace, fuentes, equipo, publicaciones y contacto"><span data-icono="info"></span><span>Info</span></a>
+    </div>
+  </nav>
+
+  <div class="pz-centro">
+    <header class="pz-top">
+      <button class="pz-temas" id="pz-temas" type="button" aria-controls="v4-rail" aria-expanded="false"><span data-icono="menu"></span><span>Temas</span></button>
+      <div class="pz-titulo">
+        <p class="pz-titulo__k">Análisis y visualizaciones · Paisaje</p>
+        <h1 class="pz-titulo__h">Cambio en el paisaje</h1>
+        <p class="pz-titulo__s">Fotos aéreas y mapas de usos del suelo de un municipio, desde 1956</p>
+      </div>
+      <nav class="pz-menu" aria-label="Atlas"><a class="pz-volver" href="visor.html">Visor</a><a class="pz-volver" href="info.html">Info</a></nav>
+    </header>
+
+    <div class="pz-app">
+      <aside class="pz-panel" aria-label="Qué comparar">
+        <p class="pz-intro">Elige un municipio y dos momentos. Arrastra la cortina para ver qué ha cambiado.</p>
+
+        <label class="pz-campo pz-campo--mun">
+          <span>Municipio</span>
+          <input id="pz-mun" type="search" list="pz-munis" autocomplete="off" spellcheck="false" placeholder="Escribe un nombre">
+          <datalist id="pz-munis"></datalist>
+        </label>
+        <p class="pz-error-mun" id="pz-error-mun" role="alert" hidden></p>
+
+        <div class="pz-lados">
+          <fieldset class="pz-lado">
+            <legend>Izquierda</legend>
+            <label class="pz-campo"><span>Ver</span><select id="pz-a-tipo"></select></label>
+            <label class="pz-campo"><span>Año</span><select id="pz-a-anio"></select></label>
+          </fieldset>
+          <fieldset class="pz-lado">
+            <legend>Derecha</legend>
+            <label class="pz-campo"><span>Ver</span><select id="pz-b-tipo"></select></label>
+            <label class="pz-campo"><span>Año</span><select id="pz-b-anio"></select></label>
+          </fieldset>
+        </div>
+        <button class="pz-boton" id="pz-cambiar" type="button">Intercambiar lados</button>
+
+        <div class="pz-notas" id="pz-notas" role="status"></div>
+
+        <details class="pz-leyenda" id="pz-leyenda">
+          <summary>Leyenda de colores</summary>
+          <div id="pz-leyenda-cuerpo"></div>
+        </details>
+
+        <button class="pz-boton pz-boton--fuerte" id="pz-cifras" type="button">Ver cifras del municipio</button>
+        <p class="pz-pista">Las cifras sí usan las mismas clases en todos los años, pero son del municipio entero.</p>
+      </aside>
+
+      <main class="pz-main">
+        <div class="pz-marco" id="pz-marco">
+          <div id="pz-mapa" role="application" aria-label="Mapa comparado del municipio"></div>
+
+          <div class="pz-chip pz-chip--a" id="pz-chip-a"></div>
+          <div class="pz-chip pz-chip--b" id="pz-chip-b"></div>
+          <div class="pz-aviso pz-aviso--a" id="pz-aviso-a" role="alert" hidden></div>
+          <div class="pz-aviso pz-aviso--b" id="pz-aviso-b" role="alert" hidden></div>
+
+          <div class="pz-cortina" id="pz-cortina">
+            <div class="pz-cortina__tirador" id="pz-tirador" role="slider" tabindex="0"
+                 aria-label="Posición de la cortina" aria-orientation="horizontal"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6 3 12l6 6M15 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+            </div>
+          </div>
+          <div class="pz-fallo" id="pz-fallo" role="alert" hidden></div>
+        </div>
+        <footer class="pz-creditos" id="pz-creditos" aria-label="Procedencia de lo que se ve"></footer>
+      </main>
+    </div>
+  </div>
+</div>
+
+<dialog class="pz-dialogo" id="pz-dialogo" aria-labelledby="pz-dialogo-t">
+  <div class="pz-dialogo__cab">
+    <h2 id="pz-dialogo-t">Usos del suelo del municipio</h2>
+    <button class="pz-boton" id="pz-dialogo-cerrar" type="button">Cerrar</button>
+  </div>
+  <div id="pz-dialogo-cuerpo"></div>
+</dialog>
+</body>
+</html>

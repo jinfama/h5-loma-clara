@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Análisis del municipio · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Retrato histórico de cada municipio de Andalucía: su población, su tierra, su trabajo, su voto, su clima y su geografía, con las cifras de las fuentes.">
+  <meta name="theme-color" content="#0f3b2c">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/paginas6.css">
+  <link rel="stylesheet" href="css/municipio-analisis.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+</head>
+<body class="p6 ma">
+  <nav class="p6-nav" aria-label="Atlas">
+    <a class="p6-marca" href="index.html"><span class="p6-sello" aria-hidden="true"></span>Atlas Histórico de Andalucía</a>
+    <ul>
+      <li><a href="visor.html">Visor</a></li>
+      <li><a href="info.html">Info</a></li>
+    </ul>
+  </nav>
+  <main id="ma-raiz"><p class="ma-cargando">Leyendo el municipio…</p></main>
+  <div id="ma-tip" class="ma-tip" role="status" hidden></div>
+  <script type="module" src="js/municipio-analisis/main.js"></script>
+</body>
+</html>

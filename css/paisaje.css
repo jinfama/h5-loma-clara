@@ -1,0 +1,207 @@
+/* paisaje.html · comparador de fotos aéreas y mapas de usos del suelo.
+   Juan, 23-nov-2026: el mismo aspecto y la misma navegación que el visor. La página carga css/visor4.css (barra de temas,
+   letras, colores, controles) y aquí solo va lo suyo, con las fichas del visor. */
+:root {
+  --pz-papel: var(--v4-papel);
+  --pz-panel: var(--v4-panel-2);
+  --pz-tinta: var(--v4-tinta);
+  --pz-tinta-2: var(--v4-tinta-2);
+  --pz-tinta-3: var(--v4-tinta-3);
+  --pz-linea: var(--v4-linea);
+  --pz-linea-2: var(--v4-linea-2);
+  --pz-alerta: #8f2d1f;
+  --pz-alerta-fondo: #fbeee9;
+  --pz-acento: #2fa36b;   /* el verde de «Análisis y visualizaciones» */
+}
+
+/* distribución: la barra del visor a la izquierda; a la derecha, la página */
+.pz4 .pz-app4 { grid-template-rows: minmax(0, 1fr); }
+.pz-centro { grid-column: 2 / -1; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--v4-papel); }
+.pz4 a.v4-tema, .pz4 a.v4-rail__todos { text-decoration: none; }
+
+/* cabecera, como la del visor */
+.pz-top { display: flex; align-items: flex-end; gap: 10px 20px; flex: none; padding: 16px 22px 13px; border-bottom: var(--v4-regla, 2px solid #101010); background: var(--v4-papel); }
+.pz-titulo { min-width: 0; flex: 1 1 auto; }
+.pz-titulo__k { display: flex; align-items: center; gap: 8px; margin: 0; font: 600 10.5px/1.2 var(--v4-sans); letter-spacing: .11em; text-transform: uppercase; color: var(--v4-tinta-3); }
+.pz-titulo__k::before { content: ""; width: 10px; height: 10px; background: var(--pz-acento); flex: none; }
+.pz-titulo__h { margin: 5px 0 3px; font: 800 clamp(24px, 1.2rem + .9vw, 34px)/1.05 var(--v4-serif); letter-spacing: -.01em; color: var(--v4-tinta); }
+.pz-titulo__s { margin: 0; font: 500 12.5px/1.3 var(--v4-sans); color: var(--v4-tinta-2); }
+.pz-menu { margin-left: auto; display: flex; gap: 0; align-self: center; }
+.pz4 .pz-volver { display: inline-flex; align-items: center; height: var(--v4-h, 28px); padding: 0 12px; margin-left: -1px; border: 1px solid var(--v4-tinta); background: var(--v4-papel); color: var(--v4-tinta); font: 600 12px var(--v4-sans); text-decoration: none; white-space: nowrap; }
+.pz4 .pz-volver:hover { box-shadow: inset 0 -3px 0 var(--pz-acento); }
+.pz-temas { display: none; }
+
+.pz-app { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+.pz-panel {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px 18px;
+  background: var(--v4-papel); border-right: 1px solid var(--v4-linea); overflow-y: auto;
+}
+.pz-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.pz-intro { margin: 0; font-size: 13px; line-height: 1.45; color: var(--v4-tinta-2); }
+
+/* controles: los del visor (borde negro, esquinas cuadradas, alto único) */
+.pz-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pz-campo > span { font: 600 10.5px/1.2 var(--v4-sans); letter-spacing: .11em; text-transform: uppercase; color: var(--v4-tinta-3); }
+.pz-campo input, .pz-campo select {
+  width: 100%; height: 32px; padding: 0 8px;
+  border: 1px solid var(--v4-tinta); border-radius: 0;
+  background: var(--v4-papel); color: var(--v4-tinta); font: 500 13px var(--v4-sans);
+}
+.pz-campo input:focus, .pz-campo select:focus { outline: 2px solid var(--pz-acento); outline-offset: -2px; }
+.pz-lado select { padding: 0 4px; font-size: 12.5px; }
+.pz-error-mun { margin: -6px 0 0; color: var(--pz-alerta); font-size: 12.5px; }
+.pz-lados { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.pz-lado {
+  display: grid; grid-template-columns: .88fr 1.12fr; gap: 8px; min-width: 0; margin: 0; padding: 8px 0 0;
+  border: 0; border-top: 2px solid var(--v4-tinta); border-radius: 0; background: none;
+}
+.pz-lado legend { padding: 0 8px 0 0; font: 800 13px/1.2 var(--v4-sans); color: var(--v4-tinta); }
+.pz-boton {
+  height: 32px; padding: 0 12px; cursor: pointer;
+  border: 1px solid var(--v4-tinta); border-radius: 0;
+  background: var(--v4-papel); color: var(--v4-tinta); font: 600 12.5px var(--v4-sans);
+}
+.pz-boton:hover { box-shadow: inset 0 -3px 0 var(--pz-acento); }
+.pz-boton--fuerte { background: var(--v4-tinta); color: var(--v4-papel); }
+.pz-boton--fuerte:hover { background: #2a2a2a; box-shadow: inset 0 -3px 0 var(--pz-acento); }
+.pz-pista { margin: -6px 0 0; font-size: 12px; color: var(--v4-tinta-3); }
+
+.pz-notas { display: flex; flex-direction: column; gap: 6px; }
+.pz-notas:empty { display: none; }
+.pz-nota {
+  margin: 0; padding: 7px 9px; font-size: 12.5px; line-height: 1.4;
+  background: var(--v4-panel-2); border-left: 3px solid var(--v4-tinta-3);
+}
+.pz-nota--fuerte { background: var(--pz-alerta-fondo); border-left-color: var(--pz-alerta); }
+
+.pz-leyenda { border: 1px solid var(--v4-tinta); border-radius: 0; background: var(--v4-papel); }
+.pz-leyenda summary { min-height: 32px; padding: 7px 10px; cursor: pointer; font: 600 12.5px var(--v4-sans); }
+.pz-leyenda[open] summary { border-bottom: 1px solid var(--v4-linea); }
+#pz-leyenda-cuerpo { padding: 0 10px 10px; font-size: 12.5px; }
+#pz-leyenda-cuerpo h3 { margin: 8px 0 4px; font: 700 12.5px var(--v4-sans); }
+#pz-leyenda-cuerpo img { display: block; max-width: 100%; height: auto; background: #fff; }
+
+/* mapa */
+.pz-marco { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--v4-panel-2); }
+#pz-mapa {
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(45deg, #ededea 0 8px, #e4e4e0 8px 16px);
+  font: inherit;
+}
+.leaflet-container { font-family: var(--v4-sans); }
+.pz4 .leaflet-bar { border: 1px solid var(--v4-tinta); box-shadow: none; }
+.pz4 .leaflet-bar a { width: 30px; height: 30px; line-height: 28px; color: var(--v4-tinta); border-bottom-color: var(--v4-tinta); font: 600 18px/28px var(--v4-sans); }
+.pz4 .leaflet-bar a:hover { background: var(--v4-panel-2); }
+.pz-borde { pointer-events: none; }
+/* los mapas de usos llegan algo transparentes: sobre blanco se ven con los colores de su leyenda */
+.pz-es-usos .leaflet-tile { background: #fff; }
+
+.pz-chip {
+  position: absolute; top: 10px; z-index: 810; max-width: calc(50% - 34px);
+  padding: 4px 9px; border-radius: 0; pointer-events: none;
+  background: rgba(16, 16, 16, .9); color: #fff; font: 700 12.5px/1.3 var(--v4-sans);
+}
+.pz-chip small { display: block; font-weight: 500; font-size: 11px; opacity: .85; }
+.pz-chip--a { left: 54px; }
+.pz-chip--b { right: 10px; text-align: right; }
+
+.pz-aviso {
+  position: absolute; bottom: 12px; z-index: 815; width: min(340px, calc(50% - 22px));
+  padding: 8px 10px; border-radius: 0; font-size: 12.5px; line-height: 1.35;
+  background: var(--pz-alerta-fondo); color: var(--pz-alerta);
+  border: 1px solid var(--pz-alerta); box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+}
+.pz-aviso--a { left: 10px; }
+.pz-aviso--b { right: 10px; }
+.pz-aviso button {
+  display: block; margin-top: 5px; height: 28px; padding: 0 10px; cursor: pointer;
+  border: 1px solid var(--pz-alerta); border-radius: 0; background: #fff; color: var(--pz-alerta);
+  font: 600 12px var(--v4-sans);
+}
+
+.pz-fallo {
+  position: absolute; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center;
+  padding: 24px; text-align: center; background: var(--v4-panel-2); color: var(--pz-alerta); font-weight: 600;
+}
+.pz-fallo[hidden] { display: none; }
+
+/* cortina: raya blanca y tirador cuadrado negro */
+.pz-cortina {
+  position: absolute; top: 0; bottom: 0; left: 50%; z-index: 805; width: 3px; margin-left: -1.5px;
+  background: #fff; box-shadow: 0 0 0 1px rgba(16, 16, 16, .55); pointer-events: none;
+}
+.pz-cortina__tirador {
+  position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid #fff; border-radius: 0; background: var(--v4-tinta); color: #fff;
+  cursor: ew-resize; pointer-events: auto; touch-action: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+}
+.pz-cortina__tirador:hover { background: #2a2a2a; }
+.pz4 .pz-cortina__tirador:focus-visible { outline: 3px solid var(--pz-acento); outline-offset: 2px; }
+
+/* créditos: siempre visibles */
+.pz-creditos {
+  flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px;
+  padding: 7px 14px; background: var(--v4-papel); border-top: 1px solid var(--v4-linea);
+  font-size: 11.5px; line-height: 1.38; color: var(--v4-tinta-2);
+}
+.pz-creditos p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pz-creditos b { color: var(--v4-tinta); }
+
+/* cifras */
+.pz-dialogo {
+  width: min(860px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 18px;
+  border: 2px solid var(--v4-tinta); border-radius: 0; background: var(--v4-papel); color: var(--v4-tinta);
+  font: 400 13.5px/1.45 var(--v4-sans);
+}
+.pz-dialogo::backdrop { background: rgba(16, 16, 16, .45); }
+.pz-dialogo__cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 2px solid var(--v4-tinta); }
+.pz-dialogo h2 { margin: 0; font: 800 20px/1.15 var(--v4-serif); }
+.pz-dialogo p { margin: 8px 0; font-size: 13px; }
+.pz-tabla-marco { overflow-x: auto; border: 1px solid var(--v4-linea); border-radius: 0; }
+.pz-tabla { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.pz-tabla th, .pz-tabla td { padding: 6px 9px; border-bottom: 1px solid var(--v4-linea); text-align: right; white-space: nowrap; }
+.pz-tabla th:first-child, .pz-tabla td:first-child { position: sticky; left: 0; background: var(--v4-papel); text-align: left; white-space: normal; min-width: 150px; }
+.pz-tabla thead th { background: var(--v4-panel-2); font-weight: 700; }
+.pz-tabla thead th:first-child { background: var(--v4-panel-2); }
+.pz-tabla .pz-corte { border-left: 3px solid var(--pz-alerta); }
+.pz-tabla small { display: block; font-weight: 400; color: var(--pz-alerta); }
+.pz-sin { color: var(--v4-tinta-3); font-size: 12px; }
+
+/* esquinas cuadradas en todo, también en lo de Leaflet */
+.pz4 select, .pz4 input, .pz4 button, .pz4 textarea, .pz4 fieldset, .pz4 details, .pz4 summary,
+.pz4 .leaflet-bar, .pz4 .leaflet-bar a, .pz4 .leaflet-control-layers, .pz4 .leaflet-popup-content-wrapper, .pz4 .leaflet-tooltip { border-radius: 0 !important; }
+
+/* pantallas medianas: el panel, más estrecho */
+@media (max-width: 1239.98px) { .pz-app { grid-template-columns: 270px minmax(0, 1fr); } }
+
+/* móvil: la barra de temas se abre con «Temas», como en el visor; el mapa arriba y los controles debajo */
+@media (max-width: 759.98px) {
+  body.pz4 { overflow: auto; height: auto; }
+  .pz4 .pz-app4 { height: auto; min-height: 100dvh; }
+  .pz-centro { grid-column: 1 / -1; }
+  .pz-top { position: sticky; top: 0; z-index: 30; align-items: center; gap: 8px; padding: 8px 12px; }
+  .pz-temas { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; height: 44px; min-width: 44px; padding: 0 10px; border: 1px solid var(--v4-tinta); background: var(--v4-papel); color: var(--v4-tinta); font: 600 12px var(--v4-sans); }
+  .pz-temas .i4 { width: 18px; height: 18px; }
+  .pz-titulo__k { font-size: 9.5px; }
+  .pz-titulo__h { font-size: 19px; margin: 3px 0 0; }
+  .pz-titulo__s { display: none; }
+  .pz-menu { display: none; }
+  .pz-app { display: flex; flex-direction: column; }
+  .pz-panel { order: 2; border-right: 0; border-top: 2px solid var(--v4-tinta); overflow: visible; }
+  .pz-main { order: 1; }
+  .pz-marco { flex: none; height: 62svh; min-height: 340px; }
+  .pz-creditos { grid-template-columns: 1fr; }
+  .pz-campo input, .pz-campo select, .pz-boton, .pz-leyenda summary { min-height: 44px; }
+  .pz-aviso { width: calc(50% - 14px); padding: 6px 7px; font-size: 11.5px; }
+  .pz-aviso--a { left: 6px; }
+  .pz-aviso--b { right: 6px; }
+  .pz-tabla { min-width: 540px; font-size: 12px; }
+  .pz-tabla th:first-child, .pz-tabla td:first-child { min-width: 116px; }
+  .pz-tabla th, .pz-tabla td { padding: 5px 6px; }
+  .pz-chip { font-size: 11.5px; padding: 3px 7px; }
+  .pz-chip--a { left: 48px; max-width: calc(50% - 52px); }
+  .pz-chip--b { right: 6px; max-width: calc(50% - 10px); }
+  .pz4 .leaflet-bar a { width: 40px; height: 40px; line-height: 38px; }
+}

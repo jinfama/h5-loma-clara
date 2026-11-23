@@ -1,0 +1,226 @@
+// Atlas Histórico de Andalucía · «Cómo se hace»: escenas de los pasos 1 a 3 (fuentes, extraer, unidades).
+import { d3, COLOR, N, esc, vis, txt, tip, ejeX, ajusta } from './util.js';
+
+// ---------- Paso 1: de dónde salen los datos ----------------------------------------------------------------------------
+const GRUPOS = D => {
+  const usos = D.olivar.map(p => p.y).filter(y => y >= 1956);
+  return [
+    { id: 'fuente', rot: 'Extraído de una fuente histórica', color: COLOR.fuente, filas: [
+      { n: 'Vecindario de la Corona de Castilla, 1591', y: [1591] },
+      { n: 'Catastro de Ensenada, 1750-1754', span: [1750, 1754] },
+      { n: 'Censo Ganadero, 1752', y: [1752] },
+      { n: 'Censo de Floridablanca, 1787', y: [1787] },
+      { n: 'Reseña geográfica y estadística, 1888', y: [1888] },
+      { n: 'Junta Consultiva Agronómica, 1891', y: [1891] },
+      { n: 'Nomenclátor, 1900', y: [1900] },
+      { n: 'Tomos de ocupación de los censos, 1950-1970', y: [1950, 1960, 1970] },
+    ] },
+    { id: 'tomado', rot: 'Tomado de otros trabajos o de internet', color: COLOR.tomado, filas: [
+      { n: 'Censos de población del INE, 1842-2021', y: D.censos },
+      { n: 'Padrón continuo del INE, 1996-2025', span: [1996, 2025] },
+      { n: 'Series homogéneas (Goerlich y otros), 1900-2011', span: [1900, 2011] },
+      { n: 'Mapas de usos del suelo (Junta), 1956-2020', y: usos },
+      { n: 'Clima en rejilla (CSIC), 1916-2020', span: [1916, 2020] },
+      { n: 'Ferrocarril (Esteban-Oliver y Martí-Henneberg), 1848-2023', span: [1848, 2023] },
+    ] },
+    { id: 'estimado', rot: 'Estimado aquí', color: COLOR.estimado, filas: [
+      { n: 'Habitantes a partir de vecinos, 1591 y 1752', y: [1591, 1752] },
+      { n: 'Reparto entre los municipios de hoy', y: D.conReparto },
+      { n: 'Años entre dos censos (interpolación)', span: [1843, 2025] },
+      { n: 'Empleo de los años sin dato (modelo)', span: [1842, 2025] },
+    ] },
+  ];
+};
+
+function marcas(g, f, x, y, gr) {
+  const est = gr.id === 'estimado';
+  if (f.span) {
+    g.append('rect').attr('x', x(f.span[0])).attr('y', y - 4)
+      .attr('width', Math.max(4, x(f.span[1]) - x(f.span[0]))).attr('height', 8)
+      .attr('fill', est ? 'url(#ch-trama-est)' : gr.color)
+      .attr('stroke', est ? gr.color : 'none');
+  }
+  (f.y || []).forEach(a => {
+    if (gr.id === 'tomado') {
+      g.append('rect').attr('x', x(a) - 3.5).attr('y', y - 3.5).attr('width', 7).attr('height', 7).attr('fill', gr.color);
+    } else {
+      g.append('circle').attr('cx', x(a)).attr('cy', y).attr('r', 4)
+        .attr('fill', est ? '#fff' : gr.color).attr('stroke', gr.color).attr('stroke-width', est ? 2 : 0);
+    }
+  });
+}
+
+export const fuentes = {
+  id: 'fuentes', titulo: 'De dónde salen los datos',
+  fuente: () => 'Fuentes citadas en el registro del Atlas; cada marca es un año o periodo con cifras. Dibujo propio.',
+  alt: s => ['', 'Línea del tiempo de las fuentes históricas de las que se extraen cifras.',
+    'Línea del tiempo de los datos ya publicados por otros.',
+    'Línea del tiempo de lo que se estima en el Atlas.',
+    'Las tres procedencias juntas en una línea del tiempo de 1591 a 2025.'][s],
+  dibuja({ g, w, h, D }) {
+    const grupos = GRUPOS(D);
+    const x = d3.scaleLinear([1580, 2030], [6, w - 8]);
+    const yEje = h - 22;
+    const eje = g.append('g');
+    ejeX(eje, x, yEje, [1600, 1700, 1800, 1900, 2000]);
+
+    grupos.forEach((gr, ig) => {
+      const c = vis(g.append('g'), ig + 1, ig + 1);
+      ajusta(txt(c, 6, 17, gr.rot, 't-tit'), w - 14);
+      const paso = Math.min(84, (yEje - 34) / gr.filas.length);
+      gr.filas.forEach((f, i) => {
+        const yt = 34 + i * paso;
+        const fila = c.append('g');
+        txt(fila, 6, yt + 11, f.n, 't-sec').style('fill', COLOR.tinta);
+        fila.append('line').attr('class', 'g-rej').attr('x1', 6).attr('x2', w - 8).attr('y1', yt + 24).attr('y2', yt + 24);
+        marcas(fila, f, x, yt + 24, gr);
+        fila.append('rect').attr('class', 'ch-hit').attr('x', 0).attr('y', yt).attr('width', w).attr('height', paso);
+        tip(fila.select('.ch-hit').datum(f), d => `<b>${esc(d.n)}</b>${esc(gr.rot)}`);
+      });
+    });
+
+    const res = vis(g.append('g'), 4, 4);
+    const altura = (yEje - 20) / 3;
+    grupos.forEach((gr, ig) => {
+      const y0 = 8 + ig * altura;
+      ajusta(txt(res, 6, y0 + 16, gr.rot, 't-tit'), w - 14);
+      const ym = y0 + altura * .56;
+      res.append('line').attr('class', 'g-rej').attr('x1', 6).attr('x2', w - 8).attr('y1', ym).attr('y2', ym);
+      gr.filas.forEach(f => marcas(res, f, x, ym, gr));
+    });
+  },
+};
+
+// ---------- Paso 2: extraer --------------------------------------------------------------------------------------------
+export const extraer = {
+  id: 'extraer', titulo: 'Extraer',
+  fuente: s => (s < 4
+    ? 'Censo de Floridablanca (1787), transcripción antigua sin revisar. Hoja dibujada a partir de sus cifras; no reproduce la página original.'
+    : 'Censo de Floridablanca (1787), transcripción antigua sin revisar. Se conserva el total impreso, sin corregir.'),
+  alt: (s, D) => [
+    '', 'Hoja dibujada con cinco lugares de 1787 y sus varones, mujeres y total.',
+    `La línea de Marchena pasa a una fila de la tabla: ${D.t.m87v} varones, ${D.t.m87m} mujeres, ${D.t.m87t} en total.`,
+    `Comprobación: ${D.t.m87v} más ${D.t.m87m} es ${D.t.m87t}.`,
+    `Cuadrícula de ${D.t.n87} unidades: la suma cuadra en ${D.t.n87ok} y no en ${D.t.n87mal}.`][s],
+  dibuja({ g, w, h, D, compacto }) {
+    // la hoja dibujada
+    const hoja = vis(g.append('g'), 1, 3);
+    const apilado = compacto || w < 640;
+    const hw = apilado ? w : Math.min(w * .54, 500);
+    const hh = apilado ? Math.min(h * .57, 230) : Math.min(h - 8, 360);
+    const hy = apilado ? 0 : Math.max(0, (h - hh) / 2);
+    hoja.append('rect').attr('x', 1).attr('y', hy + 1).attr('width', hw - 2).attr('height', hh - 2)
+      .attr('fill', COLOR.papel).attr('stroke', '#cbbf9f');
+    txt(hoja, hw / 2, hy + 26, 'CENSO DE 1787', 't-papelt', 'middle');
+    const col = [hw * .06, hw * .60, hw * .77, hw * .94];
+    const y0 = hy + 52;
+    ['Varones', 'Mujeres', 'Total'].forEach((c, i) => txt(hoja, col[i + 1], y0, c, 't-papel', 'end').style('font-style', 'italic'));
+    hoja.append('line').attr('x1', col[0]).attr('x2', col[3]).attr('y1', y0 + 6).attr('y2', y0 + 6).attr('stroke', '#7c7158');
+    const paso = Math.min(52, (hh - 76) / D.hoja.length);
+    const iM = D.hoja.findIndex(u => u.k === D.m87.k);
+    vis(hoja.append('rect').attr('x', col[0] - 6).attr('y', y0 + 12 + iM * paso)
+      .attr('width', col[3] - col[0] + 12).attr('height', paso - 2).attr('fill', '#fff')
+      .attr('stroke', COLOR.fuente).attr('stroke-width', 2), 2, 3);
+    D.hoja.forEach((u, i) => {
+      const y = y0 + 12 + i * paso + paso / 2 + 3;
+      txt(hoja, col[0], y, u.n, 't-papel');
+      [u.var, u.muj, u.tot].forEach((v, j) => txt(hoja, col[j + 1], y, N(v), 't-papel', 'end'));
+    });
+
+    // la fila de la tabla
+    const tx = apilado ? 0 : hw + 28, tw = apilado ? w : w - tx;
+    const ty = apilado ? hh + 12 : Math.max(10, h / 2 - 72);
+    const tabla = vis(g.append('g'), 2, 3);
+    if (!apilado) {
+      const yM = y0 + 12 + iM * paso + paso / 2;
+      tabla.append('path').attr('d', `M${hw + 2},${yM} L${tx - 4},${ty + 38}`).attr('fill', 'none').attr('stroke', COLOR.fuente).attr('stroke-width', 2);
+    }
+    const cc = [0, tw * .47, tw * .72, tw - 2];
+    ['Lugar', 'Varones', 'Mujeres', 'Total'].forEach((c, i) => txt(tabla, tx + cc[i], ty + 12, c, 't-eje', i ? 'end' : 'start'));
+    tabla.append('line').attr('class', 'g-base').attr('x1', tx).attr('x2', tx + tw).attr('y1', ty + 19).attr('y2', ty + 19);
+    txt(tabla, tx, ty + 42, D.m87.n, 't-num');
+    [D.m87.var, D.m87.muj, D.m87.tot].forEach((v, i) => txt(tabla, tx + cc[i + 1], ty + 42, N(v), 't-num', 'end'));
+    tabla.append('line').attr('class', 'g-rej').attr('x1', tx).attr('x2', tx + tw).attr('y1', ty + 52).attr('y2', ty + 52);
+
+    // la suma
+    const suma = vis(g.append('g'), 3, 3);
+    ajusta(txt(suma, tx, ty + 92, `${N(D.m87.var)} + ${N(D.m87.muj)} = ${N(D.m87.tot)}`, 't-gran'), tw - 2);
+    ajusta(txt(suma, tx, ty + 114, '✓ La suma coincide con el total de la fuente', 't-rot'), tw - 2).style('fill', COLOR.fuente);
+
+    // la cuadrícula
+    const red = vis(g.append('g'), 4, 4);
+    const altoLista = apilado ? 76 : 92;
+    const altoCua = h - altoLista - 28;
+    const n = D.u87.length;
+    let lado = Math.floor(Math.sqrt((w * altoCua) / n));
+    let cols = Math.floor(w / lado), filas = Math.ceil(n / cols);
+    while (filas * lado > altoCua && lado > 3) { lado -= 1; cols = Math.floor(w / lado); filas = Math.ceil(n / cols); }
+    txt(red, 0, 15, `${D.t.n87ok} de ${D.t.n87} unidades cuadran`, 't-tit');
+    const hueco = lado > 6 ? 1.5 : 1;
+    red.append('g').attr('transform', 'translate(0,26)').selectAll('rect').data(D.u87).join('rect')
+      .attr('x', (_, i) => (i % cols) * lado)
+      .attr('y', (_, i) => Math.floor(i / cols) * lado)
+      .attr('width', lado - hueco).attr('height', lado - hueco)
+      .attr('fill', d => (d.ok ? '#bfd9c9' : COLOR.mal))
+      .call(tip, d => `<b>${esc(d.n)}</b>${N(d.var)} + ${N(d.muj)} = ${N(d.var + d.muj)}; total ${N(d.tot)}${d.ok ? '' : ' (no cuadra)'}`);
+    const yL = 26 + filas * lado + 18;
+    ajusta(txt(red, 0, yL, `✕ ${D.t.n87mal} no cuadran (suma de varones y mujeres frente al total impreso)`, 't-rot'), w - 2).style('fill', COLOR.mal);
+    const colL = apilado ? w / 2 : w / 4;
+    D.mal87.forEach((u, i) => {
+      const cx = apilado ? (i % 2) * colL : i * colL;
+      const cy = yL + 17 + (apilado ? Math.floor(i / 2) * 26 : 0);
+      txt(red, cx, cy, u.n, 't-rot');
+      txt(red, cx, cy + 13, `${N(u.var + u.muj)} / ${N(u.tot)}`, 't-sec');
+    });
+  },
+};
+
+// ---------- Paso 3: armonizar unidades ----------------------------------------------------------------------------------
+export const unidades = {
+  id: 'unidades', titulo: 'Armonizar unidades',
+  fuente: s => (s < 4
+    ? 'Censo de 1591 (vecindario de la Corona de Castilla), edición del INE. Habitantes: estimación del Atlas.'
+    : 'Censo de 1591, edición del INE; Catastro de Ensenada, transcripción y edición del INE. Habitantes: estimación del Atlas.'),
+  alt: (s, D) => ['', `Marchena en 1591: ${D.t.m91v} vecinos.`,
+    `Multiplicados por 4: ${D.t.m91h} habitantes estimados.`,
+    `Horquilla de ${D.t.m91min} a ${D.t.m91max} habitantes.`,
+    `Marchena en 1752: ${D.t.m52v} vecinos y ${D.t.m52h} habitantes estimados.`,
+    `Menos vecinos en 1752 que en 1591, pero más habitantes estimados.`][s],
+  dibuja({ g, w, h, D, compacto }) {
+    const x = d3.scaleLinear([0, 10500], [8, w - 8]);
+    const pie = 56, alto = (h - pie - 12) / 2;
+    const bar = compacto ? 13 : 24;
+    const eje = g.append('g');
+    ejeX(eje, x, h - pie, [0, 2000, 4000, 6000, 8000, 10000].map(v => v));
+    eje.selectAll('text').text(function () { return N(+d3.select(this).text()); });
+
+    const fila = (y0, a, b, datos) => {
+      const c = vis(g.append('g'), a, 99);
+      txt(c, 8, y0 + 16, datos.tit, 't-tit');
+      const yV = y0 + Math.max(26, alto * .17);
+      txt(c, x(datos.vec) + 7, yV + bar - 3, `${N(datos.vec)} vecinos (fuente)`, 't-rot');
+      c.append('rect').attr('x', x(0)).attr('y', yV).attr('width', x(datos.vec) - x(0)).attr('height', bar).attr('fill', COLOR.fuente);
+      const yH = yV + bar + Math.max(22, alto * .17);
+      const hb = vis(c.append('g'), b, 99);
+      txt(hb, x(0), yH - 6, datos.etq, 't-rot');
+      hb.append('rect').attr('x', x(0)).attr('y', yH).attr('width', x(datos.hab) - x(0)).attr('height', bar)
+        .attr('fill', 'url(#ch-trama-est)').attr('stroke', COLOR.estimado).attr('stroke-width', 1.5)
+        .call(tip, () => `<b>${N(datos.hab)} habitantes</b>estimación, no cifra de la fuente`);
+      return { c, yH };
+    };
+
+    const a = fila(4, 1, 2, { tit: '1591', vec: D.m91.vec, hab: D.m91.hab, etq: `× 4 = ${N(D.m91.hab)} habitantes (estimados)` });
+    const hq = vis(a.c.append('g'), 3, 99);
+    const yq = a.yH + bar / 2;
+    hq.append('line').attr('x1', x(D.m91.min)).attr('x2', x(D.m91.max)).attr('y1', yq).attr('y2', yq).attr('stroke', COLOR.tinta).attr('stroke-width', 2);
+    [D.m91.min, D.m91.max].forEach(v => hq.append('line').attr('x1', x(v)).attr('x2', x(v)).attr('y1', yq - 9).attr('y2', yq + 9).attr('stroke', COLOR.tinta).attr('stroke-width', 2));
+    txt(hq, x(D.m91.min), a.yH + bar + 15, `${N(D.m91.min)} (× 3,75)`, 't-sec', 'end');
+    txt(hq, x(D.m91.max), a.yH + bar + 15, `${N(D.m91.max)} (× 4,5)`, 't-sec', 'end').attr('dx', 0).attr('dy', compacto ? 13 : 0);
+
+    const b = fila(4 + alto, 4, 4, { tit: '1752', vec: D.u52.vec, hab: D.u52.hab, etq: `${N(D.u52.hab)} habitantes (estimados): unos ${D.t.m52k} por vecino` });
+    ajusta(txt(b.c, x(0), b.yH + bar + 15, 'Para 1752 la base no da horquilla', 't-sec'), w - 16);
+
+    const nota = vis(g.append('g'), 5, 5);
+    txt(nota, x(0), h - 8, `De 1591 a 1752: −${D.t.dVec} vecinos, +${D.t.dHab} habitantes estimados`, 't-rot').style('fill', COLOR.estimado).style('font-weight', 700);
+  },
+};

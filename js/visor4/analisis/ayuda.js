@@ -1,0 +1,309 @@
+// ayuda.js — explicación de cada análisis en llano (botón «¿Qué es esto?» de la cabecera, panel lateral), tarjeta de
+// bienvenida la primera vez y textos de las «i» de los controles. Encargo de Juan (21-nov-2026): «En análisis, por
+// favor, meter explicación o botón de explicación». Los ejemplos son preguntas con indicadores del Atlas; no llevan
+// cifras, para no enseñar ninguna que no salga del análisis que se tiene delante.
+
+import { h, cerrarI } from './comun.js';
+
+// ---------------------------------------------------------------- textos
+const TRAMPAS = [
+  ['Años distintos', 'cada variable puede ir con su año (o con la media de un periodo). Entonces se comparan territorios, no momentos: que los municipios con más rendimiento en 1752 tengan más lluvia «normal» no dice que la lluvia cambiara el rendimiento. Se avisa siempre.'],
+  ['Correlación no es causalidad', 'que dos cifras vayan juntas no dice que una cause la otra: puede haber una tercera detrás (la altitud, una ciudad cerca, la época).'],
+  ['Falacia ecológica', 'son cifras de territorios, no de personas. Que los municipios con más olivar tengan menos densidad no dice nada de cada vecino.'],
+  ['Unidades de distinto tamaño', 'sin ponderar, un pueblo de 300 habitantes pesa lo mismo que una capital. En dispersión y regresión se puede ponderar por habitantes o por superficie (Ajustes).'],
+  ['Cifras estimadas o interpoladas', 'la base las calcula, no las mide (por ejemplo, una recta entre dos censos). Se ven más claras o rayadas, se cuentan debajo del gráfico y se pueden quitar en Ajustes.'],
+  ['Pocas unidades', 'con ocho provincias casi cualquier cosa puede salir por azar. Mira cuántas unidades entran y la p antes de sacar conclusiones.'],
+];
+const P = ['p', 'qué probable sería ver una relación así de fuerte si en realidad no hubiera ninguna. Por debajo de 0,05 se suele llamar «significativa»; no dice si es grande ni si es importante.'];
+const R = ['r (Pearson)', 'de −1 a 1. Cerca de 1, suben juntas; cerca de −1, cuando una sube la otra baja; cerca de 0, no van en línea recta.'];
+const RHO = ['ρ (Spearman)', 'como r, pero con el puesto de cada unidad (la primera, la segunda…): le afectan menos los extremos.'];
+const N = ['Unidades', 'cuántas entran en la cuenta: las que tienen todas las cifras y pasan los filtros. Debajo del gráfico se dice cuántas quedan fuera y por qué.'];
+
+export const EXPLICA = {
+  disp: {
+    rotulo: 'Dispersión',
+    pregunta: '¿Van juntas dos cifras de un territorio a otro? Por ejemplo: ¿los municipios con más olivar tenían más, o menos, densidad de población en 1956?',
+    leer: [
+      'Cada punto es una unidad (un municipio, un partido judicial o una provincia) en el año elegido: X en horizontal, Y en vertical. Los rótulos de los ejes son botones para cambiar de indicador; ⇄ los intercambia.',
+      'Color: la provincia. Tamaño, si lo eliges: un tercer indicador (el área de cada bola es proporcional a su cifra; la leyenda dice cuánto es cada tamaño).',
+      'La recta es la que mejor resume la nube (mínimos cuadrados); la banda, por dónde podría ir esa recta con un 95 % de confianza. Cuanto más estrecha, más clara la tendencia.',
+      'Bola clara con borde: cifra estimada. Cuadrado: suma parcial. Anillo de puntos ocres: cifra con reserva. Se rotulan las unidades que más se apartan de la recta.',
+      '▶ mueve los puntos año a año, con el año grande de fondo.',
+      'En «Ejes y logaritmos», el eje solo cambia cómo se ve; el cálculo con logaritmo cambia r, la pendiente y cómo se leen, y se dice en el título.',
+      'Cada variable lleva su «Año» junto a su nombre: el del análisis, uno fijo (candado) o la media de un periodo. Si no comparten años, Y marca el año y las demás van al suyo más cercano; el título y los ejes lo dicen.',
+    ],
+    cifras: [R,
+      ['R²', 'qué parte de las diferencias de Y entre unidades acompaña a las de X en línea recta (0,25 es un 25 %).'],
+      ['Pendiente', 'cuánto cambia Y, de media, por cada unidad más de X (en log-log, en qué porcentaje cambia Y si X sube un 1 %).'],
+      N, P, RHO,
+      ['IC 95 %', 'el recorrido razonable de r o de la pendiente: si no incluye el 0, la relación difícilmente es casualidad.'],
+    ],
+  },
+  biv: {
+    rotulo: 'Mapa bivariante',
+    pregunta: '¿Dónde coinciden las dos cifras altas, o las dos bajas? Por ejemplo: ¿en qué zonas había a la vez mucho olivar y mucha población en 1956, y dónde una sin la otra?',
+    leer: [
+      'Cada unidad se clasifica en tercios de X (bajo, medio, alto) y en tercios de Y: nueve combinaciones, nueve colores.',
+      'Oscuro: alto en las dos. Gris claro: bajo en las dos. Rosa: solo Y alta. Turquesa: solo X alta.',
+      'La leyenda cuadrada dice cuántas unidades caen en cada casilla; al pasar por una, el mapa deja solo esas.',
+      'Rayado: alguna de sus cifras es estimada. Gris muy claro: fuera del filtro o sin dato.',
+    ],
+    cifras: [R,
+      ['En la diagonal', 'qué parte de las unidades tiene X e Y en el mismo tercio. Si no tuvieran nada que ver, sería un tercio (33 %).'],
+      N, RHO,
+      ['En esquinas opuestas', 'cuántas tienen una cifra en el tercio alto y la otra en el bajo.'],
+    ],
+  },
+  moran: {
+    rotulo: 'Moran',
+    pregunta: '¿Se parecen las vecinas? Por ejemplo: ¿el olivar de 1956 se concentra en municipios que lindan entre sí, o está repartido como al azar?',
+    leer: [
+      'Vecinas son las unidades que comparten un tramo de límite.',
+      'En el mapa, rojo: cifra alta rodeada de vecinas altas; azul: baja entre bajas; naranja: alta entre bajas; celeste: baja entre altas. Gris: nada que destacar.',
+      'Solo se colorean las que superan el umbral elegido en Ajustes (p < 0,05 por defecto).',
+      'En «Más estadísticos»: el reparto de I al barajar las cifras al azar (la raya es el I real) y el diagrama de Moran (cada unidad frente a la media de sus vecinas).',
+    ],
+    cifras: [
+      ['I de Moran', 'de −1 a 1 más o menos. Positivo: las vecinas se parecen; cerca de 0: como al azar; negativo: altas y bajas se alternan.'],
+      ['p (999 permutaciones)', 'se barajan las cifras entre las unidades 999 veces; p es la parte de esas barajas que da un I tan grande como el real.'],
+      ['z', 'cuántas desviaciones típicas se aparta el I real de lo que da el azar.'],
+      N,
+    ],
+    trampas: [['Muchas pruebas a la vez', 'con cientos de unidades, algunas salen «significativas» por puro azar (al 5 %, una de cada veinte). El aviso dice cuántas; el umbral «FDR 5 %» lo corrige.']],
+  },
+  matriz: {
+    rotulo: 'Matriz',
+    pregunta: '¿Qué indicadores van juntos, de muchos a la vez? Por ejemplo: densidad, olivar, empleo agrario y regadío en los municipios en 1991.',
+    leer: [
+      'Cada casilla es la correlación de dos indicadores, en siete clases: azul si van juntos, almagre si cuando uno sube el otro baja; cuanto más intenso, más fuerte.',
+      'En negrita, p < 0,05. Al pasar por una casilla, cuántas unidades tienen las dos cifras.',
+      'Pinchar una casilla abre su dispersión.',
+    ],
+    cifras: [R, RHO,
+      ['Unidades por casilla', 'cada casilla usa las unidades con esas dos cifras: puede cambiar de una casilla a otra.'],
+    ],
+    trampas: [['Muchas parejas', 'con ocho indicadores hay 28 parejas: alguna saldrá «significativa» por azar.']],
+  },
+  reg: {
+    rotulo: 'Regresión',
+    pregunta: '¿Cuánto se asocia Y con cada X, con las demás quietas? Por ejemplo: ¿el peso del empleo agrario en 1991 tiene que ver con la altitud, con la distancia a la costa o con la lluvia, cada una por su lado?',
+    leer: [
+      'La tabla: una fila por X, con su coeficiente, su error típico, t, p, el intervalo del 95 %, el β tipificado y el VIF. La constante es lo que daría el modelo con todas las X a cero.',
+      '«Cuánto pesa cada X»: los β tipificados con su intervalo; en negro, los que tienen p < 0,05. Si la raya cruza el 0, esa X podría no tener nada que ver.',
+      'El mapa de residuos: rojo, Y real por debajo de lo que da el modelo; azul, por encima; gris claro, cerca. Si los colores se agrupan, falta algo con geografía.',
+      'Si sobra alto: los residuos frente a lo que da el modelo. Si se abren en abanico, el error no es igual en todas partes.',
+    ],
+    cifras: [
+      ['Coeficiente', 'cuánto cambia Y, de media, con una unidad más de esa X, dejando las demás quietas.'],
+      ['Error típico e IC 95 %', 'cuánto podría moverse el coeficiente por azar; el intervalo es su recorrido razonable.'],
+      P,
+      ['β tipificado', 'el coeficiente en desviaciones típicas: sirve para comparar X medidas en unidades distintas.'],
+      ['VIF', 'si pasa de 5, esa X se parece mucho a otras y su coeficiente por separado es poco fiable.'],
+      ['R² ajustado', 'qué parte de las diferencias de Y explican las X juntas, descontado lo que sumaría cualquier X al azar.'],
+      ['I de Moran de los residuos', 'si los errores del modelo se agrupan en el espacio; si lo hacen, las p de la tabla son demasiado optimistas.'],
+    ],
+  },
+  tiempo: {
+    rotulo: 'En el tiempo',
+    pregunta: '¿Se mueven juntas dos series a lo largo de los años, o una se adelanta a la otra? Por ejemplo: la temperatura media y la sequía (SPI-12) de Andalucía en el siglo XX.',
+    leer: [
+      'Arriba, las dos series en desviaciones típicas, para ponerlas en un mismo eje: 0 es su media; +1, una desviación por encima.',
+      'Abajo, la correlación con X adelantada o retrasada unos años (desfase). Gris: dentro de lo que daría el azar (±1,96/√n).',
+      'La serie es de Andalucía o de la unidad que elijas en el panel.',
+    ],
+    cifras: [
+      ['r en el mismo año', 'la correlación de las dos series año a año (ver r en Dispersión).'],
+      ['Desfase', '+2 es X de un año frente a Y dos años después; −2, al revés.'],
+      ['Desfase más fuerte', 'el desfase con la r más alejada de 0, y esa r.'],
+      ['Años', 'cuántos años tienen las dos cifras.'],
+    ],
+    trampas: [['Correlación espuria', 'dos series que crecen con el tiempo salen muy correlacionadas aunque no tengan nada que ver. «Diferencias» (en Ajustes) compara el cambio de un dato al siguiente, sin la tendencia.']],
+  },
+  panel: {
+    rotulo: 'Panel',
+    pregunta: 'Si cambia X dentro de un mismo sitio, ¿cambia también Y? Por ejemplo: cuando la densidad de un municipio sube de un censo a otro, ¿baja el peso de su empleo agrario?',
+    leer: [
+      'La tabla pone en columnas seis maneras de estimar lo mismo. Cada casilla: el coeficiente con estrellas (*** p < 0,01, ** p < 0,05, * p < 0,1) y su error típico entre paréntesis. Pincha una columna para leerla.',
+      '«Coeficientes e intervalos»: cada modelo con su intervalo del 95 %; si casi todos caen al mismo lado del 0, el resultado es firme.',
+      '«Lo común de cada año»: lo que sube o baja a la vez en todas las unidades, descontadas las X.',
+      'Si sobra alto, «la nube que mide el modelo»: los datos tal como los ve el modelo elegido; la pendiente de su recta es el coeficiente, y se nombran los puntos que más tiran de ella.',
+    ],
+    cifras: [
+      ['MCO agrupado', 'todas las observaciones juntas, como si no hubiera unidades ni años.'],
+      ['Efectos fijos de unidad', 'compara cada unidad consigo misma a lo largo del tiempo: lo que es propio y fijo de cada una (suelo, clima, historia) deja de contar.'],
+      ['Efectos fijos de año', 'quita lo común a todas las unidades en cada año (una crisis, un cambio en el censo).'],
+      ['Doble efecto fijo', 'las dos cosas a la vez. Es el que se lee por defecto.'],
+      ['Primeras diferencias', 'compara el cambio de X con el cambio de Y entre dos fechas seguidas de una misma unidad.'],
+      ['Efectos aleatorios', 'un punto medio entre comparar unidades y comparar años; solo vale si el contraste de Hausman no lo rechaza.'],
+      ['Hausman (p)', 'si es menor que 0,05, los efectos aleatorios no casan con los fijos: fíate más de los fijos.'],
+      ['R² dentro, entre y total', 'qué parte explica el modelo de los cambios dentro de cada unidad, de las diferencias entre unidades y del total.'],
+      ['Errores agrupados', 'admiten que los años de una misma unidad se parecen entre sí (si no, las p salen demasiado optimistas).'],
+    ],
+    trampas: [
+      ['X que no cambian', 'las que son fijas en el tiempo (la altitud) desaparecen con los efectos de unidad: el modelo las «absorbe» y lo dice.'],
+      ['Años interpolados', 'parte del cambio de cada unidad sería una recta entre dos datos de fuente, no una medida. Mejor sin interpolados (Ajustes).'],
+    ],
+  },
+};
+
+// ---------------------------------------------------------------- textos de las «i» de los controles
+export const INFO = {
+  ponderar: 'Sin ponderar, un pueblo de 300 habitantes pesa lo mismo que Sevilla. Por habitantes, pesan más las unidades con más gente; por superficie, las más extensas. Cambia la recta y la r; ninguna opción es «la buena»: depende de la pregunta.',
+  ventana: 'Si X e Y no tienen cifra el mismo año, cada una toma la del año más cercano dentro de la ventana (±2: hasta dos años antes o después). Más ancha, entran más unidades, pero se comparan años distintos; se avisa con ⚠.',
+  interpolados: 'Años sin dato de fuente que la base rellena con una recta entre los dos datos más cercanos. Sirven para seguir la tendencia, pero no son medidas: cuentan como estimadas.',
+  estimadas: 'Cifras que la base calcula en vez de tomarlas tal cual de una fuente (por ejemplo, repartiendo un total). Entran y se cuentan; «Excluir» deja solo las observadas.',
+  umbral: 'Con 785 municipios se hacen 785 pruebas: al 5 %, unas 39 saldrían «significativas» por puro azar. p < 0,01 es más exigente; «FDR 5 %» se ajusta al número de pruebas para que, de las que se marcan, como mucho un 5 % sean falsas alarmas.',
+  errores: 'El error típico dice cuánto podría moverse el coeficiente por azar. Agrupados por unidad (recomendado): admiten que un municipio se parece a sí mismo de un año a otro. Robustos: que unas unidades varían más que otras. Clásicos: suponen que nada de eso pasa y suelen ser demasiado optimistas.',
+  equilibrado: 'Equilibrado: solo las unidades con cifra en todos los años del panel (más comparables, pero entran menos). Todas: también las que tienen huecos.',
+  modelo: 'Efectos fijos de unidad: cada unidad se compara consigo misma a lo largo del tiempo, y lo que es propio y fijo de cada una (suelo, clima, historia) deja de contar. De año: se quita lo común a todas en cada año. Doble: las dos cosas. «¿Qué es esto?» explica los seis.',
+  eje: 'Cambia solo cómo se ve: con eje logarítmico, cada paso multiplica (1, 10, 100…), útil cuando hay unidades muy grandes y muy pequeñas. r, la pendiente y p no se mueven. Lo que tenga cero o negativo no se puede dibujar en ese eje, pero sigue en el cálculo.',
+  calculo: 'Usa el logaritmo (base 10) de la cifra para calcular. Los resultados cambian y se leen de otra forma: en porcentajes en vez de en unidades. Las unidades con cero o negativo quedan fuera y se cuentan: no se les suma nada para que quepan.',
+  coeficiente: 'Pearson mide si van juntas en línea recta. Spearman, si van juntas en el orden (la de más X, ¿es también la de más Y?); le afectan menos los extremos.',
+  series: 'Dos series que crecen con el tiempo salen muy correlacionadas aunque no tengan nada que ver. En diferencias se compara el cambio de un dato al siguiente, sin la tendencia.',
+  desfases: 'Cuántos años de adelanto o de retraso se prueban: con +2, X de un año frente a Y dos años después.',
+  media: 'Para cada unidad, la media de sus cifras en los años del periodo (por ejemplo, la precipitación «normal» de 1961-1990). Solo se calcula si la unidad tiene cifra en al menos el 80 % de esos años; si no, queda sin dato y se cuenta. Si alguna de esas cifras es estimada, la media cuenta como estimada.',
+  anio: 'Cada variable puede ir con su año: el del análisis (lo que marca la línea de tiempo), uno fijo (candado) o la media de un periodo. Con años distintos se compara entre territorios, no en el tiempo, y se avisa.',
+};
+
+// ---------------------------------------------------------------- panel lateral «¿Qué es esto?»
+const A = { panel: null, boton: null, tarjeta: null, modo: '', volver: null, alMas: null };
+const lista = xs => h('ul', { class: 'an-ex__l' }, ...xs.map(x => h('li', {}, x)));
+const defs = xs => h('dl', { class: 'an-ex__d' }, ...xs.flatMap(([t, d]) => [h('dt', {}, t), h('dd', {}, d)]));
+
+function contenido(id) {
+  const e = EXPLICA[id] || EXPLICA.disp;
+  return [
+    h('p', { class: 'an-ex__k' }, '¿Qué es esto? · ', e.rotulo),
+    h('h2', { class: 'an-ex__t' }, 'Qué pregunta responde'),
+    h('p', { class: 'an-ex__p' }, e.pregunta),
+    h('h2', { class: 'an-ex__t' }, 'Cómo leer el gráfico'),
+    lista(e.leer),
+    h('h2', { class: 'an-ex__t' }, 'Qué significa cada cifra'),
+    defs(e.cifras),
+    h('h2', { class: 'an-ex__t' }, 'Cuidado con'),
+    defs([...(e.trampas || []), ...TRAMPAS]),
+    h('p', { class: 'an-ex__mas' }, h('button', { type: 'button', class: 'an-ex__ir', onclick: () => { const f = A.alMas; cerrarExplicacion(); if (f) f(); } }, 'Ver «Más estadísticos» en los resultados ▸')),
+  ];
+}
+/** Abre (o actualiza) el panel con la explicación del análisis «id». alMas: abrir «Más estadísticos». */
+export function abrirExplicacion(id, { alMas } = {}) {
+  A.modo = id; A.alMas = alMas || null;
+  if (!A.panel) {
+    A.volver = document.activeElement;
+    const cuerpo = h('div', { class: 'an-ex__cuerpo' });
+    A.panel = h('aside', { class: 'an-ex', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'an-ex-titulo', tabindex: '-1' },
+      h('div', { class: 'an-ex__cab' }, h('p', { class: 'an-ex__h', id: 'an-ex-titulo' }, 'Explicación'),
+        h('button', { type: 'button', class: 'an-ex__x', 'aria-label': 'Cerrar la explicación', onclick: () => cerrarExplicacion() }, '✕')),
+      cuerpo);
+    A.panel.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cerrarExplicacion(); } });
+    document.body.append(A.panel);
+    if (A.boton) A.boton.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => A.panel && A.panel.focus());
+  }
+  A.panel.querySelector('.an-ex__cuerpo').replaceChildren(...contenido(id));
+  A.panel.querySelector('.an-ex__cuerpo').scrollTop = 0;
+}
+export function cerrarExplicacion() {
+  if (!A.panel) return;
+  A.panel.remove(); A.panel = null;
+  if (A.boton) A.boton.setAttribute('aria-expanded', 'false');
+  const v = A.volver; A.volver = null;
+  if (v && v.isConnected && v.focus) v.focus();
+}
+export const explicacionAbierta = () => !!A.panel;
+
+// ---------------------------------------------------------------- botón de la cabecera
+/** Pone «¿Qué es esto?» en la cabecera del armazón, junto a «← Volver a los mapas» (hasta que el armazón tenga hueco
+ *  para botones de modo: PETICIONES_API.md). Si no encuentra la cabecera, lo deja al principio de «sobra». */
+export function ponerBoton(alPulsar, sobra) {
+  quitarBoton();
+  const b = h('button', { type: 'button', class: 'v4-cab__btn an-ex-btn', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', title: 'Qué hace este análisis, cómo leerlo y con qué tener cuidado', onclick: alPulsar },
+    h('span', { class: 'an-i an-i--cab', 'aria-hidden': 'true' }, 'i'), h('span', {}, '¿Qué es esto?'));
+  const ref = document.getElementById('v4-salir-modo');
+  if (ref && ref.parentNode) ref.parentNode.insertBefore(b, ref);
+  else if (sobra) { b.classList.add('an-ex-btn--suelto'); sobra.prepend(b); }
+  A.boton = b;
+  return b;
+}
+export function quitarBoton() { if (A.boton) { A.boton.remove(); A.boton = null; } }
+
+// ---------------------------------------------------------------- bienvenida (solo la primera vez)
+const CLAVE = 'atlas-analisis-bienvenida-v1';
+const leerVisto = () => { try { return window.localStorage.getItem(CLAVE) === '1'; } catch (e) { return false; } };
+const marcarVisto = () => { try { window.localStorage.setItem(CLAVE, '1'); } catch (e) { /* sin almacenamiento: se verá otra vez la próxima */ } };
+let vistaEnEstaCarga = false;
+/** Tarjeta de tres líneas la primera vez que se entra en Análisis. */
+export function bienvenida(verExplicacion) {
+  if (vistaEnEstaCarga || leerVisto() || A.tarjeta) return;
+  vistaEnEstaCarga = true;
+  const cerrar = () => { marcarVisto(); if (A.tarjeta) { A.tarjeta.remove(); A.tarjeta = null; } };
+  A.tarjeta = h('div', { class: 'an-hola', role: 'dialog', 'aria-label': 'Bienvenida al análisis' },
+    h('p', { class: 'an-hola__t' }, 'Esto es Análisis: relaciona dos o más indicadores del Atlas en el espacio y en el tiempo.'),
+    h('p', { class: 'an-hola__p' }, 'Elige a la izquierda qué hacer, la Y y la X. Cada análisis trae su explicación en «¿Qué es esto?», arriba.'),
+    h('p', { class: 'an-hola__p' }, 'Recuerda: que dos cifras vayan juntas no quiere decir que una cause la otra.'),
+    h('div', { class: 'an-hola__b' },
+      h('button', { type: 'button', class: 'an-btn an-btn--fuerte', onclick: () => { cerrar(); verExplicacion(); } }, 'Ver explicación'),
+      h('button', { type: 'button', class: 'an-btn', onclick: cerrar }, 'Cerrar')));
+  A.tarjeta.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
+  document.body.append(A.tarjeta);
+  const b = A.boton && A.boton.getBoundingClientRect();
+  if (b && b.width) { A.tarjeta.style.top = `${Math.round(b.bottom + 10)}px`; A.tarjeta.style.right = `${Math.max(12, Math.round(window.innerWidth - b.right))}px`; }
+}
+
+// ---------------------------------------------------------------- «Fuentes»: botón de la cabecera y recuadro flotante
+const F = { boton: null, pop: null, items: () => [], nombre: i => String(i) };
+function fueraF(e) { if (F.pop && !F.pop.contains(e.target) && !F.boton.contains(e.target)) cerrarFuentes(); }
+function teclaF(e) { if (e.key === 'Escape' && F.pop) { const b = F.boton; cerrarFuentes(); if (b) b.focus(); } }
+function contenidoFuentes() {
+  const items = F.items() || [];
+  return [
+    h('p', { class: 'an-fu__k' }, 'Fuentes originales'),
+    ...items.map(q => h('section', { class: 'an-fu__v' },
+      h('h3', {}, q.t, q.a != null && q.a !== '' ? h('small', {}, ` ${q.a}`) : null),
+      h('ul', {}, ...(q.ids && q.ids.length ? q.ids.map(i => h('li', {}, h('a', { href: `fuentes.html#f-${encodeURIComponent(i)}` }, F.nombre(i))))
+        : [h('li', {}, q.txt || 'Fuente sin identificar')])))),
+    h('p', { class: 'an-fu__mas' }, h('a', { href: 'fuentes.html#fuentes' }, 'Ver todas las fuentes →')),
+  ];
+}
+function colocaFuentes() {
+  if (!F.pop || !F.boton) return;
+  const r = F.boton.getBoundingClientRect(), ancho = F.pop.offsetWidth;
+  const x = Math.max(8, Math.min(r.right - ancho, window.innerWidth - ancho - 8)), y = Math.round(r.bottom + 6);
+  F.pop.style.left = `${Math.round(x)}px`; F.pop.style.top = `${y}px`; F.pop.style.maxHeight = `${Math.max(180, window.innerHeight - y - 12)}px`;
+}
+export function cerrarFuentes() {
+  if (!F.pop) return;
+  F.pop.remove(); F.pop = null;
+  if (F.boton) F.boton.setAttribute('aria-expanded', 'false');
+  document.removeEventListener('pointerdown', fueraF, true); document.removeEventListener('keydown', teclaF, true);
+  window.removeEventListener('resize', colocaFuentes);
+}
+function abrirFuentes() {
+  cerrarI();
+  F.pop = h('div', { class: 'an-fu', role: 'dialog', 'aria-label': 'Fuentes originales', tabindex: '-1' },
+    h('button', { type: 'button', class: 'an-fu__x', 'aria-label': 'Cerrar las fuentes', onclick: () => cerrarFuentes() }, '✕'),
+    h('div', { class: 'an-fu__c' }, ...contenidoFuentes()));
+  document.body.append(F.pop);
+  colocaFuentes();
+  F.boton.setAttribute('aria-expanded', 'true');
+  document.addEventListener('pointerdown', fueraF, true); document.addEventListener('keydown', teclaF, true);
+  window.addEventListener('resize', colocaFuentes);
+  F.pop.focus({ preventScroll: true });
+}
+/** Si el recuadro está abierto y cambia el análisis o el año, cambia con ellos. */
+export function refrescaFuentes() { if (F.pop) { F.pop.querySelector('.an-fu__c').replaceChildren(...contenidoFuentes()); colocaFuentes(); } }
+/** items() → [{t: nombre, a: año o periodo, ids: fuentes, txt: si no hay ids}]; nombre(id) → nombre de la fuente. */
+export function ponerBotonFuentes(items, nombre) {
+  quitarFuentes();
+  F.items = items; F.nombre = nombre;
+  F.boton = h('button', { type: 'button', class: 'v4-cab__btn an-fu-btn', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', title: 'De dónde sale cada cifra de este análisis', onclick: () => (F.pop ? cerrarFuentes() : abrirFuentes()) }, 'Fuentes');
+  if (A.boton && A.boton.parentNode) A.boton.parentNode.insertBefore(F.boton, A.boton);
+  else { const ref = document.getElementById('v4-salir-modo'); if (ref && ref.parentNode) ref.parentNode.insertBefore(F.boton, ref); }
+}
+function quitarFuentes() { cerrarFuentes(); if (F.boton) { F.boton.remove(); F.boton = null; } }
+
+/** Al salir del modo: fuera todo lo que se puso en el documento. */
+export function quitarAyuda() {
+  quitarFuentes(); cerrarExplicacion(); quitarBoton(); cerrarI();
+  if (A.tarjeta) { A.tarjeta.remove(); A.tarjeta = null; }
+}

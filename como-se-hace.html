@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cómo se hace · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Cómo se construyen las series del Atlas Histórico de Andalucía en seis pasos, con ejemplos reales: de dónde salen los datos, cómo se extraen, cómo se armonizan unidades y fronteras, cómo se rellenan los huecos y cómo leer cada cifra.">
+  <meta name="theme-color" content="#0f3b2c">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/paginas6.css">
+  <link rel="stylesheet" href="css/como-se-hace.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+  <script type="module" src="js/como-se-hace/main.js"></script>
+</head>
+<body class="p6 ch">
+  <nav class="p6-nav" id="ch-nav" aria-label="Atlas">
+    <a class="p6-marca" href="index.html"><span class="p6-sello" aria-hidden="true"></span>Atlas Histórico de Andalucía</a>
+    <ul>
+      <li><a href="visor.html">Visor</a></li>
+      <li><a href="info.html" aria-current="true">Info</a></li>
+    </ul>
+  </nav>
+
+  <main id="main">
+    <div class="p6-wrap ch-wrap">
+      <header class="p6-cab ch-cab">
+        <p class="p6-pre">Metodología</p>
+        <h1>Cómo se hace</h1>
+        <p class="p6-lede">Las series del Atlas no existen como tales en ningún archivo: se construyen. Se sacan cifras de
+          documentos muy distintos, se ponen en la misma unidad y en el mismo territorio, y se dice qué falta. Baja por la
+          página y sigue el proceso en seis pasos, siempre con cifras reales del propio Atlas.</p>
+        <ul class="ch-tres" aria-label="Las tres procedencias de una cifra">
+          <li><i class="ch-m ch-m--fuente" aria-hidden="true"></i><span><b>Extraído</b> de una fuente histórica</span></li>
+          <li><i class="ch-m ch-m--tomado" aria-hidden="true"></i><span><b>Tomado</b> de otros trabajos o de internet</span></li>
+          <li><i class="ch-m ch-m--estimado" aria-hidden="true"></i><span><b>Estimado</b> aquí, y dicho como tal</span></li>
+        </ul>
+      </header>
+    </div>
+
+    <noscript><p class="p6-aviso ch-aviso">Esta página necesita JavaScript para leer las cifras y dibujar los gráficos.</p></noscript>
+    <p class="p6-aviso ch-aviso" id="ch-error" role="alert" hidden>No se han podido cargar las cifras del Atlas. Recarga la página; sin ellas no se muestra ningún ejemplo.</p>
+
+    <div class="ch-relato" id="ch-relato">
+      <div class="ch-lienzo" id="ch-lienzo">
+        <div class="ch-lienzo__cab">
+          <p class="ch-lienzo__tit"><span id="ch-num">Paso 1 de 6</span> <b id="ch-titulo">De dónde salen los datos</b></p>
+          <ol class="ch-prog" id="ch-prog" aria-label="Pasos">
+            <li><a href="#fuentes" title="De dónde salen los datos">1</a></li>
+            <li><a href="#extraer" title="Extraer">2</a></li>
+            <li><a href="#unidades" title="Armonizar unidades">3</a></li>
+            <li><a href="#fronteras" title="Armonizar fronteras">4</a></li>
+            <li><a href="#huecos" title="Rellenar huecos">5</a></li>
+            <li><a href="#leer" title="Leer cada cifra">6</a></li>
+          </ol>
+        </div>
+        <figure class="ch-fig" id="ch-fig" role="img" aria-label="Cargando el gráfico">
+          <svg id="ch-svg" class="ch-svg" aria-hidden="true"></svg>
+          <div id="ch-html" class="ch-html"></div>
+          <p class="ch-cargando" id="ch-cargando">Leyendo las cifras del Atlas…</p>
+        </figure>
+        <p class="ch-fuente" id="ch-fuente"></p>
+      </div>
+
+      <div class="ch-texto" id="ch-texto">
+
+        <section class="ch-cap" id="fuentes" data-cap="0" aria-labelledby="h-fuentes">
+          <article class="ch-paso" data-sub="1">
+            <div class="ch-tarjeta">
+              <p class="ch-pre">Paso 1</p>
+              <h2 id="h-fuentes">De dónde salen los datos</h2>
+              <p><b class="ch-k ch-k--fuente">Lo extraído.</b> Buena parte del Atlas sale de documentos históricos: el
+                vecindario de 1591, el Catastro de Ensenada, el Censo de Floridablanca, la Reseña de 1888, el Nomenclátor de 1900.
+                De ellos, o de sus ediciones y transcripciones, las cifras pasan a una tabla.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="2">
+            <div class="ch-tarjeta">
+              <p><b class="ch-k ch-k--tomado">Lo tomado.</b> Otra parte ya estaba publicada en digital: las cifras municipales
+                de los censos en la web del INE, los mapas de usos del suelo de la Junta, las rejillas de clima del CSIC o las
+                series homogéneas de población de Goerlich y sus colegas. No se vuelven a extraer: se toman y se cita a quien las hizo.</p>
+              <p class="ch-nota">Entre las fuentes que hoy enseña el Atlas no hay anuarios estadísticos: el de estadística forestal está en la
+                base, pero aún no se puede publicar.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="3">
+            <div class="ch-tarjeta">
+              <p><b class="ch-k ch-k--estimado">Lo estimado.</b> Y donde ningún documento da la cifra que hace falta, se estima:
+                los habitantes a partir de los vecinos, los años entre dos censos, el reparto de una cifra entre los municipios de
+                hoy o el empleo de los años sin dato. Nada de esto es un dato de la fuente, y la ficha de cada cifra lo dice.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="4">
+            <div class="ch-tarjeta">
+              <p><b>Tres cosas que no se mezclan.</b> Una misma serie puede pasar por las tres. Por eso cada cifra conserva de dónde
+                viene. El registro del Atlas tiene <span data-n="nFuentes">…</span> entradas, y se puede consultar en
+                <a href="fuentes.html">Fuentes</a>.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="ch-cap" id="extraer" data-cap="1" aria-labelledby="h-extraer">
+          <article class="ch-paso" data-sub="1">
+            <div class="ch-tarjeta">
+              <p class="ch-pre">Paso 2</p>
+              <h2 id="h-extraer">Extraer</h2>
+              <p><b>De la página a la tabla.</b> Tomemos el Censo de Floridablanca, de 1787. Para cada lugar da los varones, las
+                mujeres y el total. Aquí, cinco lugares de la actual provincia de Sevilla.</p>
+              <p class="ch-nota">La hoja es un dibujo nuestro con las cifras reales. No reproduce la página original.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="2">
+            <div class="ch-tarjeta">
+              <p><b>Cada línea, una fila.</b> Marchena: <span data-n="m87v">…</span> varones, <span data-n="m87m">…</span> mujeres y
+                <span data-n="m87t">…</span> personas. La tabla guarda la cifra como viene, sin redondear ni corregir.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="3">
+            <div class="ch-tarjeta">
+              <p><b>La prueba de la suma.</b> Como la fuente trae también el total, se puede comprobar:
+                <span data-n="m87v">…</span> + <span data-n="m87m">…</span> = <span data-n="m87t">…</span>. Cuadra.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="4">
+            <div class="ch-tarjeta">
+              <p><b>Cuando no cuadra, se dice.</b> De las <span data-n="n87">…</span> unidades de 1787 con las tres cifras, la suma cuadra en
+                <span data-n="n87ok">…</span>. En <span data-n="n87mal">…</span> no: en Torrox, <span data-n="txV">…</span> +
+                <span data-n="txM">…</span> son <span data-n="txS">…</span>, y el total impreso dice <span data-n="txT">…</span>.
+                No se corrige: se conserva el total impreso y queda el aviso.</p>
+              <p class="ch-nota"><b>Qué prueba y qué no.</b> Estas cifras vienen de una transcripción antigua que no se ha revisado
+                contra el original. Que la suma cuadre dice que son coherentes entre sí; no garantiza que sean las de la página ni
+                que una persona las haya cotejado. Lo leído a máquina, con reconocimiento de texto o un asistente de IA, tampoco se
+                presenta como cotejado.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="ch-cap" id="unidades" data-cap="2" aria-labelledby="h-unidades">
+          <article class="ch-paso" data-sub="1">
+            <div class="ch-tarjeta">
+              <p class="ch-pre">Paso 3</p>
+              <h2 id="h-unidades">Armonizar unidades</h2>
+              <p><b>Un vecino no es una persona.</b> En 1591 no se contaban personas sino vecinos, algo parecido a hogares.
+                Marchena tenía <span data-n="m91v">…</span>. Esa es la cifra de la fuente.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="2">
+            <div class="ch-tarjeta">
+              <p><b>Para hablar de habitantes hay que multiplicar.</b> El Atlas usa 4 habitantes por vecino:
+                <span data-n="m91v">…</span> × 4 = <span data-n="m91h">…</span>. Esto ya no es un dato: es una estimación.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="3">
+            <div class="ch-tarjeta">
+              <p><b>Por eso lleva horquilla.</b> Nadie sabe cuántas personas había exactamente en cada hogar. Con 3,75 por vecino
+                saldrían <span data-n="m91min">…</span>; con 4,5, <span data-n="m91max">…</span>. Lo honesto es leerlo como un
+                intervalo, no como un recuento.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="4">
+            <div class="ch-tarjeta">
+              <p><b>En 1752 el factor es otro.</b> El Catastro de Ensenada da <span data-n="m52v">…</span> vecinos y la base publica
+                <span data-n="m52h">…</span> habitantes estimados: unos <span data-n="m52k">…</span> habitantes por vecino.</p>
+              <p class="ch-nota"><b>Para 1752 la base no da horquilla.</b> Solo trae esta cifra de habitantes, que sigue siendo
+                una estimación.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="5">
+            <div class="ch-tarjeta">
+              <p><b>Lo que el factor puede engañar.</b> Entre 1591 y 1752, Marchena pierde <span data-n="dVec">…</span> vecinos
+                y, sin embargo, gana <span data-n="dHab">…</span> habitantes estimados. Esa subida la pone el factor, no la
+                fuente. Por eso el Atlas no une estas dos fechas con una línea.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="ch-cap" id="fronteras" data-cap="3" aria-labelledby="h-fronteras">
+          <article class="ch-paso" data-sub="1">
+            <div class="ch-tarjeta">
+              <p class="ch-pre">Paso 4</p>
+              <h2 id="h-fronteras">Armonizar fronteras</h2>
+              <p><b>Los municipios cambian de forma.</b> En el censo de 1981, Dalías es un solo municipio de
+                <span data-n="d81">…</span> habitantes, cuyo término llega hasta el mar.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="2">
+            <div class="ch-tarjeta">
+              <p><b>1982: se parte en dos.</b> Un <a href="https://www.boe.es/boe/dias/1982/09/11/pdfs/A24643-24643.pdf" rel="noopener" target="_blank">Real Decreto</a>
+                separa los núcleos de Dalías y Celín como municipio nuevo, con el nombre de Dalías. El resto del antiguo término es
+                hoy El Ejido.</p>
+              <p class="ch-nota">El INE lo anota al revés: El Ejido como el municipio que se segrega de Dalías. Las dos lecturas
+                describen la misma partición.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="3">
+            <div class="ch-tarjeta">
+              <p><b>Desde entonces, dos cifras.</b> El censo de 1991 ya cuenta por separado: Dalías,
+                <span data-n="d91d">…</span> habitantes; El Ejido, <span data-n="d91e">…</span>.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="4">
+            <div class="ch-tarjeta">
+              <p><b>¿Cuántos vivían en 1981 en lo que hoy es El Ejido?</b> El censo no lo dice. Para llevar la cifra a los límites de
+                hoy se reparte con la proporción de las series homogéneas de Goerlich y sus colegas:
+                <span data-n="pd">…</span> para Dalías y <span data-n="pe">…</span> para El Ejido.
+                <span data-n="d81d">…</span> + <span data-n="d81e">…</span> = <span data-n="d81">…</span>. El total es del censo; las
+                dos partes son estimadas.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="5">
+            <div class="ch-tarjeta">
+              <p><b>La serie entera, en los límites de hoy.</b> El borde superior es la cifra del censo. La división interior, hasta
+                1981, es el reparto; desde 1991 es observada. Antes de 1900 no hay proporción propia y se mantiene la de ese año.</p>
+              <p class="ch-nota">El término antiguo se dibuja uniendo los recintos de hoy: no es el límite histórico observado.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="ch-cap" id="huecos" data-cap="4" aria-labelledby="h-huecos">
+          <article class="ch-paso" data-sub="1">
+            <div class="ch-tarjeta">
+              <p class="ch-pre">Paso 5</p>
+              <h2 id="h-huecos">Rellenar huecos</h2>
+              <p><b>Los censos no son anuales.</b> Marchena tiene <span data-n="nC">…</span> cifras de censo entre 1842 y 2021. Solo
+                esos puntos vienen de la fuente.</p>
+              <p class="ch-nota">El de 1842 no es un recuento: el INE advierte que se hizo «por el procedimiento de imputaciones».</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="2">
+            <div class="ch-tarjeta">
+              <p><b>Entre dos censos, un hueco.</b> Acerquémonos. En 1910 Marchena tiene <span data-n="c1910">…</span> habitantes y en
+                1920, <span data-n="c1920">…</span>. De los nueve años de en medio no hay ninguna cifra.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="3">
+            <div class="ch-tarjeta">
+              <p><b>Interpolar es trazar una recta.</b> Se une un censo con el siguiente y se lee cada año sobre la línea. En 1915
+                sale <span data-n="y1915">…</span>. Es una estimación razonable, no un recuento: si una epidemia golpeó en 1918, esta
+                línea no la recoge.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="4">
+            <div class="ch-tarjeta">
+              <p><b>Así, toda la serie.</b> De los <span data-n="nA">…</span> años de Marchena, <span data-n="nE">…</span> son
+                estimados. Desde 1996, casi todos los años siguen el crecimiento del padrón anual del INE, ajustado a los censos, en lugar de una recta.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="5">
+            <div class="ch-tarjeta">
+              <p><b>Las series se empalman.</b> Ninguna fuente cubre tres siglos. El olivar de Marchena empieza en el Catastro de
+                Ensenada (<span data-n="o52">…</span> ha), sigue con las estadísticas de finales del XIX y con los mapas de la Junta
+                desde 1956, y llega a 2020 con otro sistema (<span data-n="o20">…</span> ha). Cambiar de fuente es lo normal en una
+                serie histórica: no corta la línea.</p>
+              <p class="ch-nota">Parte de la diferencia entre dos fuentes puede ser de leyenda y de método, no de uso.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="6">
+            <div class="ch-tarjeta">
+              <p><b>Lo que no se interpola es un cambio de contenido.</b> En 2020, la clase «olivar» pasa a incluir el olivar regado,
+                que hasta 2007 iba en frutales. La línea sigue de <span data-n="o07">…</span> a <span data-n="o20">…</span> ha, con una
+                marca en 2020, pero ese tramo no se rellena año a año: el antes y el después no cuentan lo mismo, y la diferencia no
+                se puede leer sin más como olivos nuevos.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="7">
+            <div class="ch-tarjeta">
+              <p><b>Tampoco se interpola la población entre 1591 y 1752.</b> Marchena tiene <span data-n="m91h">…</span> habitantes
+                estimados en 1591 y <span data-n="m52h">…</span> en 1752, pero en esos <span data-n="gap91">…</span> años no hay
+                ninguna cifra, y las dos salen de factores distintos. Una recta inventaría una evolución que nadie midió: se deja
+                el hueco.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="ch-cap" id="leer" data-cap="5" aria-labelledby="h-leer">
+          <article class="ch-paso" data-sub="1">
+            <div class="ch-tarjeta">
+              <p class="ch-pre">Paso 6</p>
+              <h2 id="h-leer">Leer cada cifra</h2>
+              <p><b>Cuatro clases de cifra.</b> Una cifra puede ser observada, estimada, una suma parcial o, sencillamente,
+                no existir. En el visor, el puntero y la ficha del municipio dicen siempre cuál es.</p>
+              <p class="ch-nota">El visor distingue además lo calculado a partir de originales y lo que está en revisión o con
+                reserva. Las poblaciones de 1752 y 1787 están pendientes de la aceptación de conjunto del responsable de la base.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="2">
+            <div class="ch-tarjeta">
+              <p><b>Sin dato no es cero.</b> En 1591, <span data-n="nSin">…</span> de los <span data-n="nMun">…</span> municipios de hoy
+                no tienen cifra. En <span data-n="nGr">…</span> es porque ese censo no cubrió el reino de Granada; los demás
+                se fundaron después, van juntos en una línea con otros o no tienen línea propia. En el reino de Granada vivía gente:
+                lo que falta es el recuento.</p>
+            </div>
+          </article>
+          <article class="ch-paso" data-sub="3">
+            <div class="ch-tarjeta">
+              <p><b>Y una suma con huecos no es un total.</b> Sumar lo que hay en 1591 da <span data-n="and91">…</span> habitantes
+                estimados, pero solo con <span data-n="nCon">…</span> de <span data-n="nMun">…</span> municipios. El visor lo rotula
+                como suma parcial para que nadie lo lea como la población de Andalucía.</p>
+              <p class="ch-cta"><a href="visor.html?ind=poblacion_hab&amp;nivel=municipio&amp;vista=lineas&amp;sel=41060">Ver Marchena en el visor</a>
+                <a href="cobertura.html">Qué hay y desde cuándo</a></p>
+            </div>
+          </article>
+        </section>
+      </div>
+    </div>
+
+    <div class="p6-wrap">
+      <section class="ch-tabla" aria-labelledby="h-tabla">
+        <details>
+          <summary id="h-tabla">Todas las cifras de esta página, con su fuente</summary>
+          <p class="p6-nota">Se leen, al abrir la página, de los mismos datos que usa el visor.</p>
+          <div class="p6-tablawrap"><table class="p6-tabla" id="ch-tabla"></table></div>
+        </details>
+      </section>
+      <footer class="p6-pie">
+        <p><a href="visor.html">Visor</a> · <a href="cobertura.html">Cobertura</a> · <a href="fuentes.html">Fuentes</a> · <a href="equipo.html">Equipo</a></p>
+      </footer>
+    </div>
+  </main>
+  <div class="ch-tip" id="ch-tip" role="status" hidden></div>
+  <svg width="0" height="0" class="ch-defs" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="ch-trama" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="6" height="6" fill="#ececec"/><rect width="1.6" height="6" fill="#8c8c8c"/>
+      </pattern>
+      <pattern id="ch-trama-est" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="6" height="6" fill="#f8e6d0"/><rect width="1.6" height="6" fill="#c46f14"/>
+      </pattern>
+    </defs>
+  </svg>
+</body>
+</html>

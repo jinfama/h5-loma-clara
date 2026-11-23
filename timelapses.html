@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <script>
+    // timelapses.html pasa al visor único (CONTRATO_VISOR_UNICO.md): se lleva al estado equivalente de visor.html
+    (function () {
+      var q = new URLSearchParams(location.search), t = q.get('tema'), v = q.get('vista'), a = q.get('anio');
+      var def = { poblacion: 'densidad', tierra: 'olivar', cosechas: 'est', ganado: 'ovino', clima: 't', trabajo: 'agricultura' };
+      var p = new URLSearchParams();
+      if (t === 'fronteras') { p.set('ind', 'fronteras'); p.set('nivel', 'termino'); }
+      else if (t && def[t]) p.set('ind', t + '.' + (v || def[t]));
+      if (a) p.set('anio', a);
+      var s = p.toString();
+      location.replace('visor.html' + (s ? '?' + s : ''));
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Timelapses · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Piezas cortas animadas sobre Andalucía: población, tierra, cosechas, ganado, clima y trabajo, municipio a municipio, con su fuente original en cada fotograma.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/atlas2.css">
+  <link rel="stylesheet" href="css/timelapses.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+</head>
+<body class="a2 tl">
+<main id="main">
+
+  <!-- ============ Galería ============ -->
+  <section id="galeria" class="tl-gal" aria-labelledby="tl-gal-title">
+    <div class="a2-wrap">
+      <header class="tl-gal__head">
+        <p class="a2-kicker">Timelapses</p>
+        <h1 id="tl-gal-title">Andalucía, <span class="tl-hl">fotograma a&nbsp;fotograma</span></h1>
+        <p class="a2-lede">Piezas cortas que se reproducen solas: la gente, la tierra, lo que daba, el ganado, el clima y el
+          trabajo, municipio a municipio. Cada fotograma dice de qué fuente sale, lo estimado lleva trama y lo que no se
+          sabe se pinta en gris, nunca como un cero.</p>
+      </header>
+      <ul class="tl-claves" aria-label="Cómo leer los mapas">
+        <li><i class="tl-sw tl-sw--obs" aria-hidden="true"></i><span><b>Liso</b>: la cifra que da la fuente.</span></li>
+        <li><i class="tl-sw tl-sw--est" aria-hidden="true"></i><span><b>Rayado</b>: estimado (repartido, interpolado o imputado).</span></li>
+        <li><i class="tl-sw a2-trama-sindato" aria-hidden="true"></i><span><b>Gris cruzado</b>: sin dato. No es un cero.</span></li>
+        <li><span class="a2-badge a2-badge--revision">En revisión</span><span>1752 y 1787, pendientes de firma.</span></li>
+      </ul>
+      <div id="tl-grid" class="tl-grid" aria-live="polite"></div>
+      <footer class="tl-gal__foot">
+        <p>Las imágenes de las tarjetas son decorativas: la silueta de los 785 municipios de hoy con los colores de cada
+          tema, sin datos. Los datos se descargan al abrir cada timelapse.</p>
+        <p id="tl-version" class="a2-mono"></p>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ============ Reproductor ============ -->
+  <section id="player" class="tl-player" hidden aria-labelledby="tl-title">
+    <div class="tl-stage">
+      <header class="tl-head">
+        <a href="timelapses.html" id="tl-back" class="tl-back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 5.3 8 12l6.7 6.7 1.4-1.4L10.8 12l5.3-5.3z"/></svg>
+          Todos los timelapses</a>
+        <p id="tl-kicker" class="a2-kicker"></p>
+        <h1 id="tl-title" class="tl-title"></h1>
+        <p id="tl-lede" class="tl-lede"></p>
+        <div id="tl-vistas" class="a2-seg tl-vistas" role="group" aria-label="Qué se mide" hidden></div>
+      </header>
+
+      <div class="tl-hero" aria-live="polite">
+        <div id="tl-year" class="tl-year">—</div>
+        <div id="tl-fig" class="tl-fig">
+          <div class="tl-fig__n"><span id="tl-fig-v" class="tl-fig__v"></span> <span id="tl-fig-u" class="tl-fig__u"></span></div>
+          <div id="tl-fig-l" class="tl-fig__l"></div>
+        </div>
+        <p id="tl-cargando" class="a2-loading" hidden></p>
+        <svg id="tl-spark" class="tl-spark" aria-hidden="true" preserveAspectRatio="none"></svg>
+        <div id="tl-avisos" class="tl-avisos"></div>
+        <div id="tl-reserva" class="tl-reserva" hidden></div>
+      </div>
+
+      <div class="tl-mapwrap">
+        <div class="tl-mapbox a2-map">
+          <canvas id="tl-canvas" role="img" aria-label="Mapa animado de los municipios de Andalucía"></canvas>
+          <div id="tl-frase" class="tl-frase" aria-live="polite"></div>
+        </div>
+        <div id="tl-frase-m" class="tl-frase tl-frase-m" aria-hidden="true"></div>
+        <div id="tl-legend" class="tl-legend"></div>
+      </div>
+
+      <aside class="tl-side" aria-label="Leyenda y fuente">
+        <div class="tl-srcbox">
+          <p class="a2-panel__title">Fuente original</p>
+          <p id="tl-fuente" class="tl-fuente"></p>
+          <p id="tl-nota" class="tl-nota" hidden></p>
+        </div>
+        <div class="tl-links">
+          <a id="tl-visor" class="a2-btn" href="visor.html">Ver en el visor
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6z"/></svg></a>
+          <button id="tl-share" class="a2-btn" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 13.4a1 1 0 0 1 0-1.4l3.5-3.5a3 3 0 1 1 4.2 4.2l-2 2-1.4-1.4 2-2a1 1 0 1 0-1.4-1.4l-3.5 3.5a1 1 0 0 1-1.4 0zm2.8-2.8a1 1 0 0 1 0 1.4l-3.5 3.5a3 3 0 1 1-4.2-4.2l2-2 1.4 1.4-2 2a1 1 0 1 0 1.4 1.4l3.5-3.5a1 1 0 0 1 1.4 0z"/></svg>
+            <span>Compartir</span></button>
+        </div>
+        <details id="tl-frases-box" class="tl-frases-box">
+          <summary>Momentos clave</summary>
+          <ol id="tl-frases" class="tl-frases"></ol>
+        </details>
+      </aside>
+
+      <div class="tl-transport" role="group" aria-label="Controles de reproducción">
+        <div class="tl-btns">
+          <button id="tl-prev" class="tl-ctl" type="button" aria-label="Fotograma anterior">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+          <button id="tl-play" class="tl-ctl tl-ctl--play" type="button" aria-label="Reproducir" aria-pressed="false">
+            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg></button>
+          <button id="tl-next" class="tl-ctl" type="button" aria-label="Fotograma siguiente">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
+        </div>
+        <div class="tl-track">
+          <canvas id="tl-pista" class="tl-pista" aria-hidden="true"></canvas>
+          <input id="tl-range" class="tl-range" type="range" min="0" max="1" step="1" value="0">
+          <div id="tl-marks" class="tl-marks"></div>
+        </div>
+        <div id="tl-speed" class="a2-seg tl-speed" role="group" aria-label="Velocidad">
+          <button type="button" data-v="0.5" aria-pressed="false">0,5×</button>
+          <button type="button" data-v="1" aria-pressed="true">1×</button>
+          <button type="button" data-v="2" aria-pressed="false">2×</button>
+          <button type="button" data-v="4" aria-pressed="false">4×</button>
+        </div>
+      </div>
+    </div>
+    <p class="tl-keys a2-small">Teclado: espacio reproduce o pausa · flechas, fotograma a fotograma · Esc vuelve a la galería.</p>
+  </section>
+
+</main>
+<script type="module" src="js/timelapses/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+// tiempo.js — modo «En el tiempo»: dos series de una misma unidad (Andalucía o una unidad elegida), en desviaciones
+// típicas para verlas en un solo eje, y su correlación con desfases (X en t frente a Y en t + L), en niveles o en
+// diferencias. Avisa de la correlación espuria entre series con tendencia y de los años interpolados.
+
+/* global d3 */
+import * as X from './cruce.js';
+import * as E from './estadistica.js';
+import * as AN from './anios.js';
+import * as EL from './escala.js';
+import { seccionLog, resumenLog, conLog, ConLog } from './ejes.js';
+import { h, esc, num, r2, pTxt, entero, valorTxt, corto, nombreMin, marcaTxt, seg, csv } from './comun.js';
+import { INFO } from './ayuda.js';
+import { yPorDefecto, panelXY } from './dispersion.js';
+
+const TI = { ultimo: null };
+const COL = ['#101010', '#2a5a85'];
+
+function unidad(S) {
+  const n = S.A.aniv;
+  const fija = n === 'municipio' || n === 'provincia' || n === 'pj1888';
+  const u = fija && S.A.aud ? S.A.aud : '';
+  return { id: u || 'AND', nivel: u ? n : 'andalucia', fija };
+}
+
+const logsDe = S => new Set((S.A.alg || '').split(',').filter(Boolean));
+
+export const tiempo = {
+  plan(S) {
+    const x = S.A.ax, u = unidad(S);
+    const y = yPorDefecto(S, x, S.nivelDatos());
+    if (!y) return { error: 'No hay otro indicador para comparar.' };
+    for (const id of [x, y]) { const e = S.ctx.datos.indicador(id); if (X.fijo(e)) return { error: `«${corto(e)}» es una cifra fija (un rasgo de hoy): no tiene serie en el tiempo. Elige otro indicador.` }; }
+    return { ids: [x, y], ancla: y, tiempo: false, nivel: u.nivel };
+  },
+  resumenUnidad(S) { const u = unidad(S); return u.id === 'AND' ? 'Andalucía' : TI.nombreU || u.id; },
+  titulo(S) {
+    const u = unidad(S), y = S.vars[1] && S.vars[1].ent, x = S.vars[0] && S.vars[0].ent;
+    return x && y ? { t: `${ConLog(y, logsDe(S).has(y.id))} y ${conLog(x, logsDe(S).has(x.id))} en el tiempo`, s: `${u.id === 'AND' ? 'Andalucía' : TI.nombreU || u.id} · Y: ${corto(y)} · X: ${corto(x)}` } : null;
+  },
+  panel: S => [panelXY(S)],
+  ejesTitulo: 'Logaritmos',
+  ejes(S) {
+    const u = unidad(S), [x, y] = S.vars.map(v => v.id);
+    return S.vars.length < 2 ? [] : seccionLog(S, { y, xs: [x], logs: logsDe(S), valores: v => S.valoresLog(v, { anios: v.usables, unidad: u.id }), que: 'año', ques: 'años', extra: 'Aquí el eje son desviaciones típicas, que pueden ser negativas: no admite eje logarítmico.' });
+  },
+  resumenEjes(S) { const [x, y] = S.vars.map(v => v.id); return S.vars.length < 2 ? '' : resumenLog(S, { y, xs: [x], logs: logsDe(S) }); },
+  /** La unidad cuya serie se sigue: Andalucía o una del nivel (la lista del navegador deja buscar tecleando). */
+  unidad(S) {
+    const u = unidad(S);
+    const sel = h('select', { class: 'an-select an-p-anio', 'aria-label': 'Unidad cuya serie se sigue' }, h('option', { value: '' }, 'Andalucía'));
+    sel.value = '';
+    sel.addEventListener('change', () => S.setA({ aud: sel.value }, { historial: true }));
+    if (u.fija) X.unidades(S.ctx, S.A.aniv).then(un => {
+      const us = [...un.mapa.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      for (const x of us) sel.append(h('option', { value: x.id }, x.nombre));
+      sel.value = u.id === 'AND' ? '' : u.id;
+      TI.nombreU = u.id !== 'AND' && un.mapa.get(u.id) ? un.mapa.get(u.id).nombre : '';
+    }).catch(() => {});
+    return [sel, h('p', { class: 'an-p-nota' }, u.fija ? 'Andalucía o cualquier unidad de la unidad territorial elegida.' : 'En municipio histórico, la serie se ve para Andalucía (los términos cambian con los cortes).')];
+  },
+  ajustes(S) {
+    return [{ t: 'En el tiempo', n: [
+      seg('Desfases', [['3', '±3'], ['5', '±5'], ['10', '±10'], ['20', '±20']], S.A.alag, v => S.setA({ alag: v }), { titulo: 'Años de adelanto o retraso que se prueban', info: INFO.desfases }),
+      seg('Series', [['0', 'Niveles'], ['1', 'Diferencias']], S.A.adif, v => S.setA({ adif: v }), { titulo: 'Diferencias: el cambio por año entre dos datos seguidos. Quita la tendencia, que hace parecer relacionadas a series que no lo están', info: INFO.series }),
+    ] }];
+  },
+  descargas: S => [h('button', { type: 'button', class: 'an-btn', onclick: () => exportar(S) }, 'CSV de series y desfases')],
+  async pintar(S, cancelado) {
+    const u = unidad(S);
+    const logs = logsDe(S);
+    // m: la cifra con la que se calcula (la misma o su logaritmo); crudo: la de la base. Un cero o negativo en log queda fuera
+    const series = S.vars.map(v => {
+      const k = (v.file.ids || []).map(String).indexOf(String(u.id));
+      const m = new Map(), crudo = new Map(), log = logs.has(v.id);
+      let noPos = 0;
+      if (k < 0) return { m, f: new Map(), crudo, log, noPos };
+      const fm = new Map();
+      v.usables.forEach(a => {
+        const c = S.ctx.datos.corteDe(v.file, a);
+        if (!c) return;
+        const kk = c.ids.map(String).indexOf(String(u.id));
+        if (kk < 0 || c.v[kk] == null) return;
+        const f = (c.f || '')[kk] || '0';
+        const fo = S.opcionesFiltro();
+        if ((fo.est && X.esEst(f)) || (fo.par && f === '5') || (fo.res && f === '2')) return;
+        const q = EL.transforma(+c.v[kk], log);
+        if (q == null) { noPos++; return; }
+        m.set(+a, q); crudo.set(+a, +c.v[kk]); fm.set(+a, f);
+      });
+      return { m, f: fm, crudo, log, noPos };
+    });
+    if (cancelado()) return;
+    // si cambia la fuente de alguna variable, la correlación se queda a un lado del cambio: ni las diferencias ni los
+    // desfases lo cruzan. El gráfico sigue enseñando esos años (la línea, partida; los puntos, atenuados)
+    const ents = S.vars.map(v => v.ent);
+    const corte = AN.aniosSinCruzar([...series[0].m.keys()].filter(a => series[1].m.has(a)), AN.tramosDe(ents));
+    const comunes = corte.anios, [lo, hi] = corte.limites, aviso = AN.avisoCorte(corte.fuera, ents);
+    const aUnLado = m => new Map([...m].filter(([a]) => a >= lo && a <= hi));
+    const L = Math.max(1, +S.A.alag || 5);
+    const lags = d3.range(-L, L + 1);
+    const cc = E.correlacionCruzada(aUnLado(series[0].m), aUnLado(series[1].m), lags, { dif: S.A.adif === '1' });
+    TI.ultimo = { u, series, comunes, cc, aviso, limites: corte.limites };
+    if (!series.some(s => s.m.size < 3) && comunes.length < 3) {
+      const b = [h('button', { type: 'button', class: 'an-btn', onclick: () => S.setA({ am: 'disp' }, { historial: true }) }, 'Comparar entre territorios, con años distintos (Dispersión)')];
+      if (!S.interp) b.push(h('button', { type: 'button', class: 'an-btn an-btn--sec', onclick: () => S.setA({ ainterp: '1' }) }, 'Incluir los años interpolados'));
+      const rango = s0 => { const ks = [...s0.m.keys()].sort((a, c) => a - c); return !ks.length ? '—' : ks.length === 1 ? String(ks[0]) : `${ks[0]}-${ks[ks.length - 1]}`; };
+      S.vacio(`${aviso ? `${aviso} ` : ''}«En el tiempo» necesita años con las dos cifras, y aquí ${comunes.length ? `solo hay ${comunes.length}` : 'no hay ninguno'} (${S.vars.map((v, j) => `${corto(v.ent)}: ${rango(series[j])}`).join('; ')}). Para relacionarlas entre territorios, cada una con su año, usa la dispersión.`, h('div', { class: 'an-vacio__btns' }, b));
+      return;
+    }
+    if (series.some(s => s.m.size < 3)) {
+      const cortas = S.vars.filter((v, j) => series[j].m.size < 3);
+      S.vacio(`No hay serie suficiente de ${cortas.map(v => '«' + corto(v.ent) + '»').join(' y ')} para esta unidad (hacen falta al menos tres años con cifra${cortas.length === 1 && series[S.vars.indexOf(cortas[0])].m.size ? `; tiene ${series[S.vars.indexOf(cortas[0])].m.size === 1 ? 'uno' : 'dos'}` : ''}). Elige otra unidad en «Serie de» o compáralas entre territorios, cada una con su año.`,
+        h('div', { class: 'an-vacio__btns' }, h('button', { type: 'button', class: 'an-btn', onclick: () => S.setA({ am: 'disp' }, { historial: true }) }, 'Comparar entre territorios (Dispersión)')));
+      return;
+    }
+    const graf = S.ui.graf;
+    graf.textContent = '';
+    const a = h('div', { class: 'an-ti__series' }), b = h('div', { class: 'an-ti__cc' });
+    graf.append(h('div', { class: 'an-ti' }, a, b));
+    dibujaSeries(S, a, series, comunes);
+    dibujaCC(S, b, cc);
+    resultados(S);
+    const anioTxt = comunes.length ? `${comunes[0]}-${comunes[comunes.length - 1]}` : '—';
+    const marcas = series.map(s0 => { const fs = [...s0.f.values()]; return { est: fs.filter(X.esEst).length, par: fs.filter(f => f === '5').length, res: fs.filter(f => f === '2').length }; });
+    const mtxt = (k, t) => (marcas.some(m0 => m0[k]) ? ` · ${t}: ${S.vars.map((v, j) => `${esc(corto(v.ent))} ${entero(marcas[j][k])}`).join(', ')}` : '');
+    S.ui.cuenta.innerHTML = `<b>${entero(comunes.length)} años con las dos cifras</b> (${anioTxt}) · ${S.vars.map((v, j) => `${esc(corto(v.ent))}: ${entero(series[j].m.size)} años`).join(' · ')}${S.interp ? ' · con años interpolados' : ' · solo años con cifra de fuente'}${mtxt('est', '<span class="an-m an-m--est"></span>estimadas')}${mtxt('par', '<span class="an-m an-m--par"></span>sumas parciales')}${mtxt('res', '<span class="an-m an-m--res"></span>con reserva o en revisión')}`;
+  },
+  redibujar(S) { if (TI.ultimo) S.refrescar(); },
+};
+
+function dibujaSeries(S, el, series, comunes) {
+  const W = Math.max(260, el.clientWidth), H = Math.max(160, el.clientHeight), m = { t: 30, r: 16, b: 26, l: 34 };
+  // cada serie, en desviaciones típicas de los años que comparten (un solo eje, nunca dos)
+  const z = series.map(s => {
+    const v = comunes.map(a => s.m.get(a));
+    const mu = d3.mean(v), sd = d3.deviation(v) || 1;
+    const [lo, hi] = TI.ultimo.limites;
+    return [...s.m.entries()].sort((p, q) => p[0] - q[0]).map(([a, x]) => ({ a, z: (x - mu) / sd, v: s.crudo.get(a), f: s.f.get(a), fuera: a < lo || a > hi }));
+  });
+  const todos = z.flat();
+  const x = d3.scaleLinear().domain(d3.extent(todos, p => p.a)).range([m.l, W - m.r]);
+  const lim = Math.max(2, d3.max(todos, p => Math.abs(p.z)));
+  const y = d3.scaleLinear().domain([-lim, lim]).range([H - m.b, m.t]).nice();
+  const svg = d3.select(el).append('svg').attr('class', 'an-svg').attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img').attr('aria-label', 'Las dos series en desviaciones típicas');
+  svg.append('text').attr('class', 'an-mini-t').attr('x', m.l).attr('y', 12).text(`${TI.ultimo.u.id === 'AND' ? 'Andalucía' : 'Unidad elegida'}: las dos series en desviaciones típicas (para verlas en un solo eje)`);
+  svg.append('g').attr('class', 'an-rej').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat('')).call(g => g.select('.domain').remove());
+  svg.append('g').attr('class', 'an-eje').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(v => num(v)).tickSizeOuter(0));
+  svg.append('g').attr('class', 'an-eje').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.min(10, W / 70)).tickFormat(d3.format('d')).tickSizeOuter(0));
+  z.forEach((s, j) => {
+    // la línea se corta donde falta un año (más de un hueco que el paso habitual de la serie)
+    const paso = d3.median(s.slice(1).map((p, i) => p.a - s[i].a)) || 1;
+    // y en cada par de años que la base dice que no se unen. Trozos reales: con `defined` se perdía también el tramo siguiente
+    const lin = d3.line().x(p => x(p.a)).y(p => y(p.z));
+    const d = AN.trozos(s, AN.cortesDe(S.vars[j].ent), { salto: paso * 2.5 }).filter(t => t.length > 1).map(t => lin(t)).join('');
+    svg.append('path').attr('class', 'an-serie').attr('d', d).attr('stroke', COL[j]);
+    // marca de cada cifra: hueco = estimada; cuadrado = suma parcial; borde de puntos ocres = con reserva o en revisión
+    const tam = s.length > 60 ? 9 : 22;
+    svg.append('g').selectAll('path').data(s).join('path').attr('transform', p => `translate(${x(p.a)},${y(p.z)})`)
+      .attr('d', p => d3.symbol().type(p.f === '5' ? d3.symbolSquare : d3.symbolCircle).size(tam)()).attr('opacity', p => (p.fuera ? 0.35 : null))
+      .attr('fill', p => (X.esEst(p.f) ? '#fff' : COL[j])).attr('stroke', p => (p.f === '2' ? '#c27c0e' : COL[j])).attr('stroke-width', p => (p.f === '2' ? 1.4 : 1)).attr('stroke-dasharray', p => (p.f === '2' ? '1.5 1.5' : null))
+      .on('mousemove', (ev, p) => S.ctx.tooltip.mostrar(`<strong>${p.a}</strong>${p.fuera ? '<div class="an-tt-m">No entra en la correlación: hay un cambio de fuente</div>' : ''}<div class="an-tt-f"><span>${esc(corto(S.vars[j].ent))}</span><b>${esc(valorTxt(S.vars[j].ent, p.v))}</b></div><div class="an-tt-m">${esc(marcaTxt(p.f))} · ${num(p.z, 2)} desv.</div>`, ev.clientX, ev.clientY))
+      .on('mouseleave', () => S.ctx.tooltip.ocultar());
+    const ult = s[s.length - 1];
+    for (const halo of [true, false]) svg.append('text').attr('class', 'an-serie-t').attr('x', Math.min(x(ult.a) + 4, W - m.r)).attr('y', y(ult.z) - 6).attr('text-anchor', 'end')
+      .style('fill', halo ? '#ffffff' : COL[j]).attr('stroke', halo ? '#ffffff' : null).attr('stroke-width', halo ? 4 : null).attr('stroke-linejoin', 'round').text(corto(S.vars[j].ent));
+  });
+}
+
+function dibujaCC(S, el, cc) {
+  const W = Math.max(260, el.clientWidth), H = Math.max(140, el.clientHeight), m = { t: 30, r: 16, b: 30, l: 34 };
+  const x = d3.scaleBand().domain(cc.map(c => c.L)).range([m.l, W - m.r]).padding(0.25);
+  const y = d3.scaleLinear().domain([-1, 1]).range([H - m.b, m.t]);
+  const svg = d3.select(el).append('svg').attr('class', 'an-svg').attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img').attr('aria-label', 'Correlación con desfases');
+  svg.append('text').attr('class', 'an-mini-t').attr('x', m.l).attr('y', 12).text(`r de X en t con Y en t + desfase${S.A.adif === '1' ? ' (en diferencias)' : ''} · gris: dentro de lo que daría el azar (±1,96/√n)`);
+  svg.append('g').attr('class', 'an-eje').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).tickValues([-1, -0.5, 0, 0.5, 1]).tickFormat(v => num(v)).tickSizeOuter(0));
+  svg.append('line').attr('class', 'an-cero').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0));
+  svg.append('g').selectAll('rect').data(cc.filter(c => isFinite(c.banda))).join('rect').attr('class', 'an-cc-banda').attr('x', c => x(c.L)).attr('width', x.bandwidth()).attr('y', c => y(c.banda)).attr('height', c => y(-c.banda) - y(c.banda));
+  svg.append('g').selectAll('rect').data(cc.filter(c => isFinite(c.r))).join('rect').attr('x', c => x(c.L) + x.bandwidth() * 0.2).attr('width', x.bandwidth() * 0.6)
+    .attr('y', c => y(Math.max(0, c.r))).attr('height', c => Math.abs(y(c.r) - y(0))).attr('class', c => (Math.abs(c.r) > c.banda ? 'an-cc-b is-fuera' : 'an-cc-b'))
+    .on('mousemove', (ev, c) => S.ctx.tooltip.mostrar(`<strong>Desfase ${c.L > 0 ? '+' : ''}${c.L}</strong><div class="an-tt-m">${c.L === 0 ? 'mismo año' : c.L > 0 ? `Y ${c.L} años después de X` : `Y ${-c.L} años antes que X`}</div><div class="an-tt-f"><span>r</span><b>${r2(c.r)}</b></div><div class="an-tt-m">${entero(c.n)} pares de años · p ${pTxt(c.p)}</div>`, ev.clientX, ev.clientY))
+    .on('mouseleave', () => S.ctx.tooltip.ocultar());
+  svg.append('g').attr('class', 'an-eje').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues(cc.map(c => c.L).filter(L => cc.length <= 21 || L % 5 === 0)).tickFormat(L => (L > 0 ? '+' + L : L)).tickSizeOuter(0));
+  svg.append('text').attr('class', 'an-mini-c').attr('x', W - m.r).attr('y', H - 2).attr('text-anchor', 'end').text('Y después de X →');
+  svg.append('text').attr('class', 'an-mini-c').attr('x', m.l).attr('y', H - 2).text('← Y antes que X');
+}
+
+function resultados(S) {
+  const { cc, u, comunes } = TI.ultimo;
+  const c0 = cc.find(c => c.L === 0);
+  const val = cc.filter(c => isFinite(c.r) && c.n >= 5);
+  const mejor = val.reduce((a, b) => (!a || Math.abs(b.r) > Math.abs(a.r) ? b : a), null);
+  const dif = S.A.adif === '1';
+  const pasos = comunes.slice(1).map((a, i) => a - comunes[i]);
+  const anual = pasos.length > 1 && pasos.filter(d => d === 1).length >= 0.9 * pasos.length;
+  const avisos = [];
+  if (TI.ultimo.aviso) avisos.push(TI.ultimo.aviso);
+  const enLog = TI.ultimo.series.map((q, j) => (q.log ? nombreMin(S.vars[j].ent) : '')).filter(Boolean);
+  if (enLog.length) avisos.push(`Calculado con el logaritmo de ${enLog.join(' y ')}: r y los desfases son de los logaritmos${dif ? ' (en diferencias, de sus tasas de cambio)' : ''}, no de las cifras.`);
+  TI.ultimo.series.forEach((q, j) => { if (q.noPos) avisos.push(`${corto(S.vars[j].ent)}: ${entero(q.noPos)} ${q.noPos === 1 ? 'año' : 'años'} con cero o negativo fuera: no tienen logaritmo y no se les suma nada.`); });
+  if (!dif) avisos.push('Dos series con tendencia (que crecen o bajan con los años) salen correlacionadas aunque no tengan nada que ver: mira también «Diferencias».');
+  if (S.interp) avisos.push('Con años interpolados, muchas cifras salen de una recta entre dos datos de fuente: la correlación sale inflada.');
+  if (!anual) avisos.push('Las series no son anuales: cada desfase solo empareja los años en que hay cifra en t y en t + desfase (mira n al pasar).');
+  S.ui.res.innerHTML = `
+    <p class="an-r__k">${esc(u.id === 'AND' ? 'Andalucía' : 'Unidad elegida')} · ${esc(corto(S.vars[1].ent))} y ${esc(corto(S.vars[0].ent))}</p>
+    <div class="an-r__big"><span class="an-r__n">${c0 ? r2(c0.r) : '—'}</span><span class="an-r__l">r en el mismo año${dif ? ', en diferencias' : ''}</span></div>
+    <dl class="an-dl an-dl--clave"><dt>Años</dt><dd>${c0 ? entero(c0.n) : '—'}</dd><dt>Desfase más fuerte</dt><dd>${mejor ? `${mejor.L > 0 ? '+' : ''}${mejor.L} · r ${r2(mejor.r)}` : '—'}</dd></dl>
+    <p class="an-lectura">Desfase +2: X de un año frente a Y de dos años después. Que Y vaya «detrás» de X no prueba que X la mueva.</p>
+    ${avisos.map(a => `<p class="an-nota an-nota--aviso">${esc(a)}</p>`).join('')}
+    ${S.mas(`<dl class="an-dl"><dt>r en el mismo año: p</dt><dd>${c0 ? pTxt(c0.p) : '—'}</dd>${mejor ? `<dt>Años del desfase más fuerte</dt><dd>${entero(mejor.n)}</dd>` : ''}</dl>
+      <p class="an-nota">Puede haber un tercero que mueva a las dos series. La p no tiene en cuenta que los años seguidos se parecen entre sí (autocorrelación): con series así, es demasiado optimista.</p>`)}`;
+  S.ponFuentes(S.vars.map(v => ({ t: corto(v.ent), ids: v.ent.fuentes || [] })));
+}
+
+function exportar(S) {
+  const t = TI.ultimo; if (!t) return;
+  const anios = [...new Set([...t.series[0].m.keys(), ...t.series[1].m.keys()])].sort((a, b) => a - b);
+  const cols = j => [`${S.vars[j].id}__valor`, `${S.vars[j].id}__calculo`, `${S.vars[j].id}__valor_en_calculo`, `${S.vars[j].id}__marca`];
+  const celdas = (j, a) => { const q = t.series[j]; return [q.crudo.get(a) ?? '', q.log ? 'log10' : 'cifra', q.m.get(a) ?? '', q.f.get(a) ? marcaTxt(q.f.get(a)) : '']; };
+  const filas = [['unidad', 'anio', ...cols(0), ...cols(1)]];
+  for (const a of anios) filas.push([t.u.id, a, ...celdas(0, a), ...celdas(1, a)]);
+  filas.push([]); filas.push(['desfase', 'r', 'n_anios', 'p', 'banda_azar_95', S.A.adif === '1' ? 'en diferencias por año' : 'en niveles']);
+  for (const c of t.cc) filas.push([c.L, c.r, c.n, c.p, c.banda]);
+  filas.push([]);
+  S.vars.forEach(v => filas.push([`# fuente original ${v.id}`, (v.ent.fuentes || []).map(i => S.ctx.fuentes.nombreFuente(i)).join('; ')]));
+  t.series.forEach((q, j) => { if (q.log) filas.push([`# ${S.vars[j].id}: calculado con su logaritmo (base 10); ${q.noPos} años con cero o negativo fuera`]); });
+  if (t.aviso) filas.push([`# ${t.aviso} La correlación y los desfases no usan esos años.`]);
+  csv(`analisis_tiempo__${S.vars[0].id}__${S.vars[1].id}__${t.u.id}.csv`, filas);
+}

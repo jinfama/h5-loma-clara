@@ -1,0 +1,107 @@
+// timelapses.js — los temas de js/timelapses/temas/ como indicadores del visor (uno por tema y vista), a su nivel
+// nativo (municipios de hoy; 1752 por unidad estable donde el tema lo pide). Se usan mientras data/v2/visor/ no exista.
+
+import { cargar, cargarSiHay } from '../../atlas2/data.js';
+import { registrarIndicador } from '../registro.js';
+import { TEMAS } from '../../timelapses/temas/index.js';
+import { reservasDe, provDe } from '../../timelapses/temas/base.js';
+import { registrarEscala, envuelveEscala } from '../escala.js';
+
+// tema del catálogo de data/v2/visor/ que sustituye a cada tema de los timelapses cuando existe
+const TEMA_CATALOGO = { poblacion: 'poblacion', tierra: 'tierra', cosechas: 'cosechas1752', ganado: 'ganado', clima: 'clima', trabajo: 'trabajo' };
+const GRUPO = { poblacion: 'Población', tierra: 'Tierra y cultivos', cosechas: 'Tierra y cultivos', ganado: 'Ganado', clima: 'Clima', trabajo: 'Trabajo' };
+let activo = null;   // {T, vista}: los temas guardan su estado dentro, así que solo uno está preparado a la vez
+
+export function registrarTemasTimelapse(geoPromesa) {
+  for (const T of TEMAS) {
+    if (T.externo) continue;
+    const vistas = T.vistas || [{ id: null, etiqueta: '' }];
+    for (const v of vistas) {
+      const id = v.id ? `${T.id}.${v.id}` : T.id;
+      let cacheValores = null;
+      const asegura = async () => {
+        if (!T._cargado) { await T.cargar({ cargar, cargarSiHay, geo: await geoPromesa }); T._cargado = true; }
+        if (!activo || activo.T !== T || activo.vista !== v.id) { T.preparar && T.preparar(v.id); activo = { T, vista: v.id }; }
+        P.anios = T.fotogramas.map(f => f.clave);
+        P.unidad = T.unidadDe ? T.unidadDe(v.id) : '';
+        const s = T.escalaDe && T.escalaDe(v.id);
+        if (s) registrarEscala(id, envuelveEscala(s, P));
+      };
+      // los valores del tema en la forma de data/v2/visor/valores/<ind>__municipio.json (para Líneas, Tabla, Ranking…)
+      const valoresMunicipio = async () => {
+        if (cacheValores) return cacheValores;
+        await asegura();
+        const geo = await geoPromesa;
+        const ids = geo.objects.municipios.geometries.map(g => g.properties.c);
+        const anios = [], vv = [], ff = [], notas = {}, fuentes = {}, motivos = [];
+        T.fotogramas.forEach((f, i) => {
+          if (!T.valor) return;
+          const res = new Set(reservasDe(T.claveReservas, f.corte ?? f.clave).flatMap(r => r.provincias || []).map(String));
+          const fila = [], chars = [];
+          let alguno = false;
+          for (const c of ids) {
+            const r = T.valor(i, c, v.id);
+            if (r && r.v != null && isFinite(r.v)) { alguno = true; fila.push(r.v); chars.push(res.has(provDe(c)) ? '2' : r.est ? '1' : '0'); }
+            else { fila.push(null); chars.push('.'); }
+          }
+          anios.push(f.clave); vv.push(fila); ff.push(chars.join(''));
+          if (f.nota) notas[f.clave] = f.nota;
+          if (f.fuentes && f.fuentes.length) fuentes[f.clave] = f.fuentes;
+          motivos.push(alguno ? null : 'Este corte no va por municipio de hoy (unidad estable o partido): véase el mapa.');
+        });
+        cacheValores = { ind: id, nivel: 'municipio', geo: 'geo/municipios.topo.json', ids, anios, v: vv, f: ff, motivos_anio: motivos, notas_anio: notas, fuentes_anio: fuentes, unidad: P.unidad };
+        return cacheValores;
+      };
+      const P = {
+        id, tema: T.id, temaCatalogo: TEMA_CATALOGO[T.id], grupo: GRUPO[T.id] || T.titulo, soloSinCatalogo: true, nivelUnico: true,
+        rotulo: v.id && vistas.length > 1 ? `${T.titulo}: ${v.etiqueta.toLowerCase()}` : T.titulo,
+        titulo: T.titulo, subrotulo: vistas.length > 1 ? v.etiqueta : '', kicker: GRUPO[T.id] || T.titulo, entradilla: T.entradilla || T.subtitulo, periodo: T.periodo,
+        niveles: ['municipio'], nivel_nativo: 'municipio', unidad: '',
+        nota: 'Por ahora solo por municipio de hoy: los valores de este tema por nivel (términos, unidades estables, partidos, provincias) llegarán con la base.',
+        estado: T.estado, acento: T.acento, rampa: T.rampa,
+        async cargar() { await asegura(); },
+        async activar() { await asegura(); },
+        fotogramas: () => T.fotogramas,
+        temporal: () => T.temporal !== false,
+        relleno: (i) => T.relleno(i, v.id),
+        capaDe: (i) => (T.capaDe ? T.capaDe(i, v.id) : null),
+        grupos: (i) => (T.grupos ? T.grupos(i, v.id) : null),
+        leyenda: (i) => T.leyenda(i, v.id),
+        cifra: (i) => T.cifra(i, v.id),
+        frases: () => T.frases || [],
+        detalle: (i, c, d) => T.detalle(i, c, d),
+        serieAndalucia: () => (T.serie ? T.serie(v.id) : null),
+        pista: () => (T.pista ? T.pista(v.id) : null),
+        sparkCero: !!T.sparkCero,
+        hayEstimado: (i) => (T.hayEstimado ? T.hayEstimado(i, v.id) : true),
+        textoEstimado: T.textoEstimado,
+        acentoDe: (oscuro) => (T.acentoDe && T.acentoDe(v.id, oscuro)) || T.acento,
+        ritmo: (i) => (T.ritmo ? T.ritmo(i, v.id) : 1600),
+        claveReservas: T.claveReservas || null,
+        valores: (nivel) => (nivel === 'municipio' ? valoresMunicipio() : Promise.resolve(null)),
+        async serie(nivel, uid) {
+          if (nivel !== 'municipio') return [];
+          const d = await valoresMunicipio(), j = d.ids.indexOf(uid);
+          return j < 0 ? [] : d.anios.map((a, k) => ({ anio: a, v: d.v[k][j], f: d.f[k][j] }));
+        },
+      };
+      registrarIndicador(P);
+    }
+  }
+}
+
+// traducción de la URL vieja (?cat=…&ind=…) y de timelapses.html (?tema=…&vista=…) a un id de este catálogo
+export function indDeTema(tema, vista) {
+  const T = TEMAS.find(x => x.id === tema);
+  if (!T || T.externo) return tema === 'fronteras' ? 'fronteras' : null;
+  if (!T.vistas) return T.id;
+  const v = T.vistas.find(x => x.id === vista) || T.vistas[0];
+  return `${T.id}.${v.id}`;
+}
+export function indDeVisorViejo(cat, ind) {
+  const m = { poblacion: ['poblacion', ind === 'habitantes' ? 'habitantes' : 'densidad'], clima: ['clima', ind === 'prec' ? 'p' : 't'],
+    empleo: ['trabajo', { pct_ind: 'industria', pct_ser: 'servicios' }[ind] || 'agricultura'],
+    suelo: ['tierra', ({ ha_olivar: 'olivar', pct_s_olivar: 'olivar', ha_labor: 'labor', pct_s_labor: 'labor', ha_vina: 'vina', pct_s_vina: 'vina' })[ind] || 'olivar'],
+    agraria: String(ind || '').startsWith('gan_') ? ['ganado', String(ind).slice(4) === 'caballar' ? 'caballerias' : String(ind).slice(4)] : ['cosechas', String(ind || '').startsWith('rend_') ? 'rend' : 'est'] }[cat];
+  return m ? indDeTema(m[0], m[1]) : null;
+}

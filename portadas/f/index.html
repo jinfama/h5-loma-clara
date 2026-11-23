@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Atlas Histórico de Andalucía</title>
+<meta name="description" content="Atlas Histórico de Andalucía: pueblos, ciudades y paisajes de Andalucía a través del tiempo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>
+  // Antes de pintar: ¿va dentro de la anfitriona? ¿hay WebGL? Sin WebGL se queda la imagen fija del relieve.
+  (function () {
+    var r = document.documentElement;
+    try { if (window.self !== window.top) r.classList.add("embebida"); } catch (e) { r.classList.add("embebida"); }
+    var ok = false;
+    try {
+      var c = document.createElement("canvas");
+      ok = !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl")));
+    } catch (e) { ok = false; }
+    r.classList.add(ok ? "cargando" : "sin3d");
+  })();
+</script>
+</head>
+<body>
+
+<section class="portada" id="inicio" aria-label="Portada">
+  <div class="escena" aria-hidden="true">
+    <div class="respaldo"><img src="../../data/v2/geo/relieve/relieve_sombreado.png" alt=""></div>
+    <div class="lazo" id="lazo"><canvas id="lazoTela"></canvas></div>
+    <canvas id="lienzo"></canvas>
+    <div class="velo"></div>
+    <div class="rotulos" id="rotulos"></div>
+    <p class="carga">Alzando el relieve…</p>
+  </div>
+
+  <header class="cab">
+    <h1><span>Atlas</span> <span>Histórico</span> <span>de Andalucía</span></h1>
+    <p class="entra">Pueblos, ciudades y paisajes de Andalucía a través del tiempo.</p>
+    <a class="entrar" href="../../visor.html" target="_top">Entrar al atlas</a>
+    <p class="ayuda ayuda-movil solo3d">Desliza para girar · pellizca para acercar · toca un pueblo</p>
+  </header>
+
+  <div class="esquina">
+    <button type="button" class="bajar abrir-sobre" aria-haspopup="dialog" aria-controls="sobre">Sobre el atlas</button>
+    <p class="ayuda solo3d">
+      <span class="raton">Arrastra para girar · rueda para acercar · pasa por un pueblo</span>
+      <span class="dedo">Desliza para girar · pellizca para acercar · toca un pueblo</span>
+    </p>
+  </div>
+
+  <div class="tiempo solo3d" id="tiempo">
+    <p class="aviso-temas" id="avisoTemas" aria-hidden="true">
+      <span class="raton">Pasa el cursor por cada palabra</span><span class="dedo">Toca cada palabra</span>
+    </p>
+    <div class="temas" id="temas" role="group" aria-label="Qué enseña la maqueta: pasa el cursor por cada palabra">
+      <button type="button" data-tema="paisajes" aria-pressed="true">Paisajes</button><span class="sep" aria-hidden="true">·</span>
+      <button type="button" data-tema="poblacion" aria-pressed="false">Población</button><span class="sep" aria-hidden="true">·</span>
+      <button type="button" data-tema="transporte" aria-pressed="false">Ferrocarril</button><span class="sep" aria-hidden="true">·</span>
+      <button type="button" data-tema="elecciones" aria-pressed="false">Elecciones</button><span class="sep" aria-hidden="true">·</span>
+      <button type="button" data-tema="trabajo" aria-pressed="false">Trabajo</button>
+      <a class="ymas" href="../../visor.html" target="_top">… y más <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="leyenda" id="leyenda" aria-live="polite"></div>
+    <button type="button" class="play" id="play" aria-label="Reproducir"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="playIco" d="M5 3l12 7-12 7z"/></svg></button>
+    <div class="pista" id="pista" role="slider" tabindex="0" aria-label="Fecha" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+      <div class="raya"></div>
+      <div class="hecho" id="hecho"></div>
+      <div class="marcas" id="marcas"></div>
+      <div class="mango" id="mango"></div>
+    </div>
+    <div class="fecha" aria-live="polite">
+      <span class="anio" id="anio">1752</span>
+      <span class="extra" id="extra"></span>
+      <span class="nota" id="nota" hidden></span>
+    </div>
+    <p class="frase" id="frase">Del Guadalquivir a los arroyos: los ríos de Andalucía.
+      <em><span class="raton">Pasa el cursor por un río</span><span class="dedo">Toca un río</span></em></p>
+    <button type="button" class="bajar bajar-movil abrir-sobre" aria-haspopup="dialog" aria-controls="sobre">Sobre el atlas</button>
+  </div>
+
+  <div class="ficha" id="ficha" role="status" hidden></div>
+</section>
+
+<dialog class="sobre" id="sobre" aria-labelledby="h-sobre">
+  <button type="button" class="cerrar" id="cerrarSobre" aria-label="Cerrar">✕</button>
+  <div class="sobre-in">
+    <h2 id="h-sobre">Sobre el atlas</h2>
+
+    <div class="bloque que">
+      <p class="lede">El Atlas Histórico de Andalucía cuenta cómo han cambiado los municipios andaluces: cuánta gente vivía en
+        cada uno, cómo se usaba su tierra, qué se cosechaba, qué clima tenían y en qué trabajaba su gente.</p>
+      <p>También enseña cómo se han unido y separado sus términos con el paso del tiempo. Todo se ve en un mismo mapa que
+        avanza año a año, municipio a municipio. Cada cifra dice de dónde sale y si es dato de la fuente o una estimación,
+        y lo que todavía se está revisando se marca como tal.</p>
+      <p>Es una obra en preparación: sus datos se siguen completando y revisando.</p>
+    </div>
+
+    <div class="bloque">
+      <h3>Qué temas tiene</h3>
+      <ul class="lista-temas">
+        <li><b>Población</b><span>cuántas personas vivían en cada municipio</span></li>
+        <li><b>Tierra</b><span>usos del suelo: labor, olivar, viña, regadío, monte…</span></li>
+        <li><b>Cosechas</b><span>qué se sembraba y cuánto se recogía</span></li>
+        <li><b>Ganado</b><span>cabezas de cada especie</span></li>
+        <li><b>Clima</b><span>temperatura y lluvia</span></li>
+        <li><b>Trabajo</b><span>en qué se ocupaba la gente</span></li>
+        <li><b>Cambios de fronteras</b><span>cómo se han unido y separado los términos</span></li>
+        <li><b>Geografía</b><span>relieve, ríos, costa y suelos</span></li>
+      </ul>
+    </div>
+
+    <div class="dos">
+      <div class="bloque">
+        <h3>Quién lo hace</h3>
+        <p>Lo prepara Juan Infante-Amate, de la Universidad de Granada.</p>
+        <p><a class="flecha" href="../../equipo.html" target="_top">Ver el equipo</a></p>
+      </div>
+      <div class="bloque">
+        <h3>Cómo citarlo</h3>
+        <p class="cita" id="cita">Infante-Amate, J. (2026). <i>Atlas Histórico de Andalucía</i>. Universidad de Granada. [En preparación]</p>
+        <button type="button" class="copiar" id="copiar">Copiar la cita</button>
+      </div>
+    </div>
+
+    <div class="bloque creditos">
+      <h3>Cómo se lee la portada</h3>
+      <p class="solo-municipios-txt">La maqueta es Andalucía con cada municipio de hoy alzado según su altitud media, con
+        la altura exagerada para que se lea. Encima van el relieve sombreado y los ríos principales.</p>
+      <p class="solo-dem-txt">La maqueta es el terreno de Andalucía, con la altura exagerada para que se lea, el relieve
+        sombreado y los ríos principales.</p>
+      <ul>
+        <li><b>Población.</b> Cada columna es un municipio de hoy, en el sitio de su capital actual, y su altura es
+          proporcional a sus habitantes en el año elegido; las ciudades que alguna vez pasan de 60.000 llevan un halo leve. Los años que no son de censo los estima la base de datos, y lo
+          indica al pasar por cada pueblo. Las cifras de 1752 y 1787 están en revisión, y la de 1842 es una imputación, no
+          un censo.</li>
+        <li><b>Paisajes.</b> Cada municipio se reparte en puntos de colores según las hectáreas de cada uso del suelo en
+          esa fecha. El sitio de cada punto dentro del término no dice dónde estaba el cultivo: solo pinta las
+          proporciones. Los puntos pequeños son cifras estimadas. 1752 está en revisión, y en el corte de hacia 1880
+          Huelva, Granada y Almería van con reserva (en gris).</li>
+        <li><b>Ferrocarril.</b> Las vías de tren se trazan el año en que abren y quedan en discontinuo cuando cierran; las
+          estaciones se encienden al abrir. Es una capa heredada, todavía sin revisar.</li>
+        <li><b>Trabajo.</b> Cada municipio de hoy se tiñe según el porcentaje de sus ocupados que trabajan en la agricultura,
+          en los años con dato de fuente. Lo rayado es estimación del modelo de la base (en algunos años, casi todo), y
+          1787 está en revisión.</li>
+        <li><b>Elecciones.</b> Cada municipio de hoy se tiñe con el color de la familia política más votada en las elecciones
+          municipales, de 1979 a 2023. Donde varios municipios de hoy forman una sola unidad estable, es el ganador de esa
+          unidad, y se avisa al pasar.</li>
+        <li><b>Al pasar el cursor.</b> El relieve se vuelve blanco alrededor del puntero y enseña los términos municipales de
+          hoy, las provincias y los ríos, con motivos inspirados en la cerámica de Fajalauza y en la lacería nazarí. Son
+          decoración: su sitio sobre el mapa no indica nada.</li>
+      </ul>
+
+      <h3>Créditos y atribuciones</h3>
+      <ul>
+        <li>Relieve y alturas: obra derivada de MDT200 del IGN, CC BY 4.0 scne.es.</li>
+        <li>Municipios: Instituto de Estadística y Cartografía de Andalucía (IECA), delimitaciones territoriales de
+          15-04-2026.</li>
+        <li>Ríos: IECA, Datos Espaciales de Referencia de Andalucía (DERA), capa T03_01_Rio, CC BY 4.0. Elaboración propia
+          (simplificada para la web).</li>
+        <li>Sitio de cada capital: IECA, DERA, capa T07_07_NucleosUrbanos_pun, núcleos del Nomenclátor del INE a
+          1-1-2023 (posición de la capital de hoy).</li>
+        <li>Población: Catastro de Ensenada (1750-1754), Censo de Floridablanca (1787), INE, alteraciones de los
+          municipios, e INE, padrón continuo.</li>
+        <li>Usos del suelo: Catastro de Ensenada, Respuestas Generales (1750-1754); Instituto Geográfico y Estadístico,
+          Reseña geográfica y estadística de España (1888); Junta de Andalucía, Mapa de Usos y Coberturas Vegetales del
+          Suelo de Andalucía (MUCVA), ediciones de 1956, 1977, 1984, 1999 y 2007; Junta de Andalucía, SIPNA, ocupación
+          del suelo, 2020.</li>
+        <li>Ferrocarril: Esteban-Oliver y Martí-Henneberg, Railways of Spain GIS (CORA), CC BY 4.0. Capa heredada, sin
+          revisar.</li>
+        <li>Trabajo: Censo de Floridablanca (1787); censos de población del INE (1900-2001, Volúmenes Históricos y tablas
+          por rama de actividad); censo anual de población 2021-2023 (INE); IECA, BADEA, afiliaciones a la Seguridad Social;
+          y el modelo de empleo municipal de la base (versión 2) para los años estimados.</li>
+        <li>Elecciones: Ministerio del Interior, Área de descarga de información electoral: resultados por municipio de cada
+          elección.</li>
+        <li>La fuente de cada cifra y de cada año está en el atlas.</li>
+        <li>Motivos inspirados en la loza de Fajalauza y en la lacería nazarí (granada, olivo, espiga y estrella): dibujo propio,
+          no reproducen ninguna pieza.</li>
+        <li>Hecho con three.js y TopoJSON. Letras: Syne e Instrument Sans (SIL Open Font License).</li>
+      </ul>
+      <p><a class="flecha" href="../../fuentes.html" target="_top">Fuentes y método</a></p>
+    </div>
+
+    <div class="final">
+      <a class="entrar" href="../../visor.html" target="_top">Entrar al atlas</a>
+    </div>
+  </div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+<script>
+  // Panel «Sobre el atlas»: se abre desde los enlaces y se cierra con ✕, con Esc (lo hace el propio dialog) o pulsando
+  // fuera del panel. Funciona también sin WebGL.
+  (function () {
+    var d = document.getElementById("sobre");
+    var abrir = function () { if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); } };
+    var cerrar = function () { if (d.close) d.close(); else d.removeAttribute("open"); };
+    document.querySelectorAll(".abrir-sobre").forEach(function (b) { b.addEventListener("click", abrir); });
+    document.getElementById("cerrarSobre").addEventListener("click", cerrar);
+    d.addEventListener("click", function (e) {
+      if (e.target !== d) return;   // un clic en el fondo oscuro llega al propio dialog, fuera de su caja
+      var r = d.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) cerrar();
+    });
+  })();
+  // Copiar la cita (también sin WebGL).
+  (function () {
+    var b = document.getElementById("copiar"), c = document.getElementById("cita");
+    b.addEventListener("click", function () {
+      var t = c.textContent.replace(/\s+/g, " ").trim();
+      var listo = function () { b.textContent = "Copiada"; setTimeout(function () { b.textContent = "Copiar la cita"; }, 1800); };
+      var aMano = function () { var s = getSelection(), r = document.createRange(); r.selectNodeContents(c); s.removeAllRanges(); s.addRange(r); };
+      try { navigator.clipboard.writeText(t).then(listo, aMano); } catch (e) { aMano(); }
+    });
+  })();
+</script>
+</body>
+</html>

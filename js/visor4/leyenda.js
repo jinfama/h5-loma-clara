@@ -1,0 +1,119 @@
+// leyenda.js — leyenda del mapa, debajo del mapa (ronda v8). Con burbujas, círculos de referencia a la escala del mapa.
+// spec (del proveedor): {tipo:'continua', escala, titulo, formato, log, ticks} | {tipo:'categorias', items, titulo} |
+// {tipo:'sinnivel', titulo}. pres: qué estados hay de verdad en el fotograma ({est, nd, sn, res, oculto}).
+// Solo se enseña la muestra de lo que está en el mapa: si no hay nada estimado, no se habla de estimado.
+
+import { esc } from '../atlas2/fmt.js';
+import { INTERPOLA_ATLAS } from '../visor3/datos.js';   // el visor ya no interpola (23-nov-2026)
+
+const nf = v => String(v);
+
+function rampa(spec, corta, ancho) {
+  const s = spec.escala;
+  const dom = s.domain(), a = dom[0], b = dom[dom.length - 1];
+  const stops = [];
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16;
+    const v = spec.log ? Math.exp(Math.log(a) + t * (Math.log(b) - Math.log(a))) : a + t * (b - a);
+    stops.push(`${s(v)} ${(t * 100).toFixed(1)}%`);
+  }
+  const ticks = (spec.ticks || s.ticksRedondos || [a, b]).filter(v => {
+    const t = spec.log ? (Math.log(v) - Math.log(a)) / (Math.log(b) - Math.log(a)) : (v - a) / (b - a);
+    return t > -0.001 && t < 1.001;
+  });
+  const pos = v => (spec.log ? (Math.log(v) - Math.log(a)) / (Math.log(b) - Math.log(a)) : (v - a) / (b - a)) * 100;
+  // cifras grandes, cortas («100 mil», «2 M»), y fuera las marcas que se pisarían en el ancho de la barra
+  const f0 = spec.formato || nf;
+  const fmt = v => (Math.abs(v) >= 1e6 ? (v / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' M' : Math.abs(v) >= 1e4 ? (v / 1e3).toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' mil' : f0(v));
+  const W = ancho || (corta ? 330 : 340), px = 6.4;   // ancho de la barra bajo el mapa (css: .l4--bajo .l4-cuerpo)
+  const lista = [];
+  for (const v of (corta && ticks.length > 3 ? [ticks[0], ticks[Math.floor(ticks.length / 2)], ticks[ticks.length - 1]] : ticks)) {
+    const x = pos(v) / 100 * W, w = String(fmt(v)).length * px;
+    const prev = lista[lista.length - 1];
+    if (prev && x - prev.x < (w + prev.w) / 2 + 6) { if (v === ticks[ticks.length - 1] && lista.length > 1) lista.pop(); else continue; }
+    lista.push({ v, x, w });
+  }
+  lista.splice(0, lista.length, ...lista.map(o => o.v));
+  return `<div class="l4-rampa" style="background:linear-gradient(90deg,${stops.join(',')})" role="img" aria-label="Escala de color de ${esc(fmt(a))} a ${esc(fmt(b))}${spec.log ? ', logarítmica' : ''}"></div>
+    <div class="l4-ticks">${lista.map(v => { const p = pos(v); return `<span class="${p < 6 ? 'is-ini' : p > 94 ? 'is-fin' : ''}" style="left:${p.toFixed(2)}%"><i></i>${esc(fmt(v))}</span>`; }).join('')}</div>`;
+}
+
+// por clases (ronda v15): un cuadrado por clase con su intervalo y, si cabe, cuántas unidades caen en ella este año
+function clasesHTML(spec, pres, corta) {
+  const cs = spec.clases || [], n = pres.cuentas;
+  const ejes = spec.frente && !corta ? '<p class="l4-frente"><span>muy por debajo</span><span>como Andalucía</span><span>muy por encima</span></p>' : '';
+  return `${ejes}<ul class="l4-clases${corta ? ' is-corta' : ''}${spec.divergente ? ' is-div' : ''}" role="list">${cs.map((c, i) => `<li title="${esc(c.etiqueta)}${n ? ` · ${n[i]} ${n[i] === 1 ? 'unidad' : 'unidades'} este año` : ''}"><i style="background:${c.color}"></i><span class="l4-clases__t">${esc(c.etiqueta)}</span>${n && !corta ? `<span class="l4-clases__n">${n[i].toLocaleString('es-ES')}</span>` : ''}</li>`).join('')}</ul>`;
+}
+
+// círculos de referencia de las burbujas: [{v, r}] con el formato de la escala
+function circulos(b) {
+  const refs = b.refs || [];
+  if (!refs.length) return '';
+  const R = refs[0].r, W = Math.ceil(2 * R + 92), H = Math.ceil(2 * R + 4);
+  const fmt = v => (Math.abs(v) >= 1e6 ? (v / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' M' : Math.abs(v) >= 1e4 ? (v / 1e3).toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' mil' : v.toLocaleString('es-ES'));
+  const cy = H - 2;
+  // rótulos a la altura de lo alto de cada círculo, separados al menos 12 px
+  const ys = [];
+  refs.forEach((x, k) => { let y = cy - 2 * x.r + 4; if (k && y - ys[k - 1] < 12) y = ys[k - 1] + 12; ys.push(y); });
+  const H2 = Math.max(H, Math.ceil(ys[ys.length - 1] + 3));
+  const signo = b.signo ? `<ul class="l4-signo">${b.signo.pos ? `<li><i style="background:${esc(b.signo.pos)}"></i>por encima de 0</li>` : ''}<li><i style="background:${esc(b.signo.neg)}"></i>por debajo de 0</li></ul>` : '';
+  return `<svg class="l4-burb" width="${W}" height="${H2}" viewBox="0 0 ${W} ${H2}" role="img" aria-label="Tamaño de las burbujas: ${refs.map(x => esc(fmt(x.v))).join(', ')}">
+    ${refs.map((x, k) => `<circle cx="${(R + 1).toFixed(1)}" cy="${(cy - x.r).toFixed(1)}" r="${x.r.toFixed(1)}" fill="${esc(b.color)}" fill-opacity=".16" stroke="${esc(b.color)}" stroke-width="1"/>
+      <polyline points="${(R + 1).toFixed(1)},${(cy - 2 * x.r).toFixed(1)} ${(2 * R + 6).toFixed(1)},${(cy - 2 * x.r).toFixed(1)} ${(2 * R + 10).toFixed(1)},${(ys[k] - 4).toFixed(1)}" fill="none" stroke="currentColor" stroke-width=".6" stroke-dasharray="2 2"/>
+      <text x="${(2 * R + 13).toFixed(1)}" y="${ys[k].toFixed(1)}">${esc(fmt(x.v))}</text>`).join('')}
+  </svg>${signo}`;
+}
+
+export function pintaLeyenda4(el, spec, pres = {}, { textoEstimado = 'estimado', textoReserva = '', rotuloReserva = 'en revisión (con reserva)', corta = false, titulo = '', calidad = false, grises = null, burbujas = null, notaRep = '', ancho = 0 } = {}) {
+  if (!el) return;
+  if (!spec) { el.innerHTML = ''; return; }
+  let cuerpo = '';
+  if (burbujas && spec.tipo !== 'sinnivel') { cuerpo = circulos(burbujas); spec = { ...spec, tipo: 'burbujas', log: false }; }
+  else if (spec.tipo === 'continua' && spec.escala) cuerpo = rampa(spec, corta, ancho);
+  else if (spec.tipo === 'clases') cuerpo = clasesHTML(spec, pres, corta);
+  else if (spec.tipo === 'categorias') cuerpo = `<ul class="l4-cats">${(spec.items || []).map(it => `<li><i style="background:${it.color}"></i>${esc(it.etiqueta)}</li>`).join('')}</ul>`;
+  else if (spec.tipo === 'sinnivel') cuerpo = `<p class="l4-sinnivel"><i class="l4-sw l4-sw--sn"></i><span>Sin dato a este nivel: prueba otra unidad territorial.</span></p>`;
+  const extra = [];
+  // la calidad del dato (estimado, parcial, suma parcial) solo se dibuja si se pide; la reserva lleva siempre su contorno
+  if (calidad) {
+    if (pres.calc) { if (pres.obs) extra.push(`<li><i class="l4-sw l4-sw--obs"></i>observado</li>`); extra.push(`<li title="Suma, conversión o estadístico de una capa, sin supuesto: va liso"><i class="l4-sw l4-sw--obs"></i>calculado de originales</li>`); }
+    if (pres.est) extra.push(`<li title="Más claro: la cifra lleva un supuesto"><i class="l4-sw l4-sw--est"></i>${esc(textoEstimado)}</li>`);
+    if (pres.est4) extra.push(`<li title="Agregado con alguna parte estimada; la ficha da el porcentaje"><i class="l4-sw l4-sw--est4"></i>parcialmente estimado</li>`);
+    if (pres.parcial) extra.push(`<li title="Faltan unidades: la cifra no es el total"><i class="l4-sw l4-sw--parcial"></i>suma parcial (no es el total)</li>`);
+  }
+  if (pres.res) extra.push(`<li title="${esc(textoReserva || 'con reserva o en revisión')}"><i class="l4-sw l4-sw--res${calidad ? '' : 'c'}"></i>${esc(rotuloReserva)}</li>`);
+  if (pres.ia) extra.push(`<li title="Lineal y año a año entre dos cifras de la misma unidad; nunca fuera de su primer y su último año con cifra"><i class="l4-sw l4-sw--ia"></i>interpolación del Atlas, no es un dato</li>`);
+  if (pres.nodecl) extra.push(`<li title="La fuente trae otros usos de esta unidad en esa fecha, pero no este: no es un cero de la fuente"><i class="l4-sw l4-sw--nodecl"></i>no declarado</li>`);
+  if (pres.sinmedir) extra.push(`<li title="La fuente puede nombrar árboles sueltos o mezclados con otros cultivos, sin medirlos: no es un cero"><i class="l4-sw l4-sw--sinmedir"></i>sin superficie declarada (árboles sin medir)</li>`);
+  if (pres.nd) extra.push(`<li><i class="l4-sw l4-sw--nd"></i>sin dato (no es cero)</li>`);
+  if (pres.sn && spec.tipo !== 'sinnivel') extra.push(`<li><i class="l4-sw l4-sw--sn"></i>sin dato a este nivel</li>`);
+  // términos grises con propuesta de «límites» (siguen grises: no son cifras)
+  let plegGris = '';
+  if (grises && !corta) {
+    const R = { A: 'línea en revisión en territorio', B: 'probablemente parte de otro término', C: 'municipio propio sin línea en la fuente' };
+    const it = ['A', 'B', 'C'].filter(k => grises[k]).map(k => `<li title="Propuesta de la base, en estudio; no son cifras"><i class="l4-sw l4-sw--g${k}"></i>gris ${k}: ${R[k]} (${grises[k]})</li>`);
+    // plegados en una línea: el mapa manda (Juan, ronda v12)
+    if (it.length) plegGris = `<details class="l4-grises"><summary>Grises: ${it.length} ${it.length === 1 ? 'clase' : 'clases'}</summary><ul class="l4-extra">${it.join('')}</ul><p class="l4-nota">Propuesta de la base, en estudio; no son cifras. Pasa el puntero para leerla.</p></details>`;
+  }
+  if (pres.oculto) extra.push(`<li><i class="l4-sw l4-sw--nd"></i>estimado oculto (solo lo observado)</li>`);
+  const mid = burbujas ? burbujas.color : spec.tipo === 'clases' && spec.clases && spec.clases.length ? spec.clases[Math.floor((spec.clases.length - 1) / 2)].color : spec.tipo === 'continua' && spec.escala ? (() => { const d = spec.escala.domain(); return spec.escala(spec.log ? Math.sqrt(Math.max(d[0], 1e-9) * d[d.length - 1]) : (d[0] + d[d.length - 1]) * 0.6); })() : '#9aa79b';
+  el.style.setProperty('--sw', mid);
+  const notaGris = '';
+  el.innerHTML = `${corta ? '' : `<p class="l4-titulo">${esc(titulo || String(spec.titulo || '').replace(/ · escala log\.$/, ''))}${spec.log ? ' <span class="l4-log">· escala logarítmica</span>' : ''}</p>`}${cuerpo ? `<div class="l4-cuerpo l4-cuerpo--${esc(spec.tipo || 'continua')}">${cuerpo}</div>` : ''}${extra.length ? `<ul class="l4-extra">${extra.join('')}</ul>` : ''}${!corta && spec.nota ? `<p class="l4-nota">${esc(spec.nota)}</p>` : ''}${notaRep ? `<p class="l4-nota l4-nota--rep">${esc(notaRep)}</p>` : ''}${notaGris}${plegGris}`;
+}
+
+// leyenda de los trazos de las vistas de líneas, ranking y franjas
+export function leyendaTrazos({ interp = false, puntos = false } = {}) {   // v19: con «Todo interpolado», también su trazo
+  // indicadores por épocas (v22): no se unen; cada cifra es un marcador
+  if (puntos) {
+    const m = (lleno) => `<svg width="14" height="12" aria-hidden="true"><circle cx="7" cy="6" r="4" fill="${lleno ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.4"/></svg>`;
+    return `<ul class="l4-extra l4-trazos"><li>${m(true)}punto lleno: cifra de la fuente</li><li>${m(false)}punto hueco: estimada</li><li>sin punto: sin dato, no es cero</li></ul>`;
+  }
+  const sw = (dash, op = 1) => `<svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" stroke="currentColor" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''}${op < 1 ? ` stroke-opacity="${op}"` : ''}/></svg>`;
+  const ia = interp && INTERPOLA_ATLAS ? `<li>${sw('2 3', 0.55)}interpolación del Atlas, no es un dato</li>` : '';
+  return `<ul class="l4-extra l4-trazos"><li>${sw('')}observado o calculado de originales</li><li>${sw('5 3')}estimado</li><li>${sw('9 3')}parcialmente estimado o suma parcial</li><li>${sw('1.5 3')}con reserva o en revisión</li><li><i class="l4-hueco"></i>hueco: sin dato, no es cero</li>${ia}</ul>`;
+}
+// leyenda de las marcas de la tabla
+export function leyendaMarcas() {
+  return `<ul class="l4-extra"><li><i class="l4-sw l4-sw--obs"></i>observado</li><li><i class="l4-sw l4-sw--obs"></i>calculado de originales</li><li><i class="l4-sw l4-sw--est"></i>estimado</li><li><i class="l4-sw l4-sw--est4"></i>parcialmente estimado</li><li><i class="l4-sw l4-sw--parcial"></i>suma parcial (no es el total)</li><li><i class="l4-sw l4-sw--res"></i>con reserva o en revisión</li><li><i class="l4-sw l4-sw--nd"></i>vacío (no es cero)</li></ul>`;
+}

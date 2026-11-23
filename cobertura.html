@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cobertura · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Qué indicadores tiene el Atlas Histórico de Andalucía, para qué años y a qué escala (municipio, partido judicial, provincia, Andalucía), y qué parte de sus cifras es observada, estimada o está en revisión.">
+  <meta name="theme-color" content="#0f3b2c">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/paginas6.css">
+  <link rel="stylesheet" href="css/cobertura.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script type="module" src="js/cobertura/main.js"></script>
+</head>
+<body class="p6 cb">
+  <nav class="p6-nav" id="cb-nav" aria-label="Atlas">
+    <a class="p6-marca" href="index.html"><span class="p6-sello" aria-hidden="true"></span>Atlas Histórico de Andalucía</a>
+    <ul>
+      <li><a href="visor.html">Visor</a></li>
+      <li><a href="info.html" aria-current="true">Info</a></li>
+    </ul>
+  </nav>
+
+  <main id="main">
+    <div class="cb-wrap">
+      <header class="p6-cab cb-cab">
+        <p class="p6-pre">Cobertura del atlas</p>
+        <h1>Qué hay y desde cuándo</h1>
+        <p class="p6-lede cb-lede">Cada fila es un indicador del atlas y cada marca, un año con cifras. La <b>altura</b> de la marca
+          dice qué parte de las unidades (municipios, partidos o provincias) tiene cifra ese año. Dentro de la marca, el
+          <b>color fuerte</b> es lo observado en la fuente o calculado a partir de cifras originales; el <b>color claro</b>, lo
+          estimado; y la <b>trama gris</b>, lo que está en revisión o con reserva, que no es lo mismo que estimado. Un hueco es un
+          año sin cifras, no un cero.</p>
+        <p class="cb-pasos">Elige la escala · pasa el puntero por un año (o tócalo) para ver el detalle · pulsa un indicador para abrirlo en el visor.
+          <a href="#leyenda">Leyenda completa</a></p>
+        <dl class="cb-cifras" id="cb-cifras" aria-label="El atlas en cifras"></dl>
+      </header>
+
+      <section class="cb-filtros" aria-label="Filtros">
+        <div class="cb-temas" id="cb-temas" role="group" aria-label="Tema"></div>
+        <div class="cb-filtros__der">
+          <label class="cb-solo"><input type="checkbox" id="cb-solo"> Solo los que existen a esta escala</label>
+          <button type="button" class="cb-btn" id="cb-plegar">Plegar todo</button>
+        </div>
+      </section>
+
+      <div class="cb-barra" id="cb-barra">
+        <div class="cb-escala" role="group" aria-labelledby="cb-escala-k">
+          <span class="cb-k" id="cb-escala-k">Escala</span>
+          <div class="cb-seg" id="cb-seg"></div>
+        </div>
+        <label class="cb-buscar">
+          <span class="cb-sr">Buscar indicador</span>
+          <input id="cb-q" type="search" placeholder="Buscar indicador" autocomplete="off">
+        </label>
+      </div>
+
+      <div class="cb-resline">
+        <p class="cb-resumen" id="cb-resumen" aria-live="polite"></p>
+        <ul class="cb-clave" aria-label="Qué dice cada color">
+          <li><i class="cb-sw cb-sw--obs" aria-hidden="true"></i>Observado</li>
+          <li><i class="cb-sw cb-sw--est" aria-hidden="true"></i>Estimado</li>
+          <li><i class="cb-sw cb-sw--rev" aria-hidden="true"></i>En revisión o con reserva</li>
+        </ul>
+      </div>
+
+      <div class="cb-matriz" id="cb-matriz">
+        <div class="cb-eje" id="cb-eje" aria-hidden="true">
+          <div class="cb-eje__lab">Indicador</div>
+          <div class="cb-eje__esc" id="cb-eje-esc"></div>
+          <div class="cb-tl cb-eje__tl" id="cb-eje-tl"></div>
+        </div>
+        <div class="cb-cuerpo" id="cb-cuerpo">
+          <p class="cb-cargando">Cargando la cobertura…</p>
+        </div>
+        <p class="cb-vacio" id="cb-vacio" hidden>Ningún indicador cumple el filtro.</p>
+        <div class="cb-guia" id="cb-guia" hidden></div>
+      </div>
+
+      <section class="p6-sec cb-leyenda" id="leyenda" aria-labelledby="cb-h-ley">
+        <h2 id="cb-h-ley">Leyenda</h2>
+        <div class="cb-ley">
+          <div class="cb-ley__tres">
+            <div class="cb-ley__cat"><i class="cb-sw cb-sw--obs" aria-hidden="true"></i>
+              <p><b>Observado</b> (color fuerte del tema): la cifra está en la fuente o se calcula a partir de cifras originales.</p></div>
+            <div class="cb-ley__cat"><i class="cb-sw cb-sw--est" aria-hidden="true"></i>
+              <p><b>Estimado</b> (color claro del tema): la cifra es una estimación. En una suma parcial o una cifra parcialmente
+                estimada, solo su parte estimada.</p></div>
+            <div class="cb-ley__cat"><i class="cb-sw cb-sw--rev" aria-hidden="true"></i>
+              <p><b>En revisión o con reserva</b> (trama gris, igual en todos los temas): cifra pendiente de revisar o con una reserva.
+                No es lo mismo que estimado.</p></div>
+          </div>
+          <div class="cb-ley__it">
+            <svg width="112" height="30" viewBox="0 0 112 30" aria-hidden="true">
+              <line x1="0" x2="112" y1="27.5" y2="27.5" class="cb-ley-base"/>
+              <rect x="6" y="5" width="16" height="22" class="cb-ley-obs"/>
+              <rect x="34" y="5" width="16" height="6" fill="url(#cb-rev)"/><rect x="34" y="11" width="16" height="6" class="cb-ley-est"/><rect x="34" y="17" width="16" height="10" class="cb-ley-obs"/>
+              <rect x="62" y="5" width="16" height="22" class="cb-ley-est"/>
+              <rect x="90" y="5" width="16" height="22" fill="url(#cb-rev)"/>
+            </svg>
+            <p><b>Una marca por año con cifras.</b> Se reparte de abajo arriba: observado, estimado y en revisión o con reserva. Cada
+              tema lleva su color.</p>
+          </div>
+          <div class="cb-ley__it">
+            <svg width="112" height="30" viewBox="0 0 112 30" aria-hidden="true">
+              <line x1="0" x2="112" y1="27.5" y2="27.5" class="cb-ley-base"/>
+              <rect x="6" y="5" width="16" height="22" class="cb-ley-obs"/>
+              <rect x="34" y="16" width="16" height="11" class="cb-ley-obs"/>
+              <rect x="62" y="23" width="16" height="4" class="cb-ley-obs"/>
+              <text x="92" y="20" class="cb-ley-t">…</text>
+            </svg>
+            <p><b>Altura:</b> qué parte de las unidades de esa escala tiene cifra ese año. Marca entera: todas; media marca: la mitad.</p>
+          </div>
+          <div class="cb-ley__it">
+            <svg width="112" height="30" viewBox="0 0 112 30" aria-hidden="true">
+              <line x1="0" x2="112" y1="27.5" y2="27.5" class="cb-ley-base"/>
+              <rect x="6" y="5" width="22" height="22" class="cb-ley-obs"/>
+              <rect x="84" y="5" width="22" height="22" class="cb-ley-obs"/>
+            </svg>
+            <p><b>Hueco:</b> ningún dato ese año a esa escala. Una casilla sin dato no es un cero.</p>
+          </div>
+          <div class="cb-ley__it">
+            <svg width="112" height="30" viewBox="0 0 112 30" aria-hidden="true">
+              <line x1="0" x2="112" y1="27.5" y2="27.5" class="cb-ley-base"/>
+              <rect x="6" y="17" width="20" height="10" class="cb-ley-res"/><rect x="26" y="5" width="30" height="22" class="cb-ley-res"/>
+              <rect x="56" y="12" width="26" height="15" class="cb-ley-res"/><rect x="88" y="20" width="18" height="7" class="cb-ley-res"/>
+            </svg>
+            <p><b>Fila de un tema o de un grupo plegado:</b> cuántos de sus indicadores tienen cifra cada año (altura entera: todos
+              los que existen a esa escala).</p>
+          </div>
+          <div class="cb-ley__it">
+            <span class="cb-ley__pills" aria-hidden="true"><span class="cb-p cb-p--si cb-p--on">Mun</span><span class="cb-p cb-p--si">Hist</span><span class="cb-p cb-p--si">Part</span><span class="cb-p">Prov</span><span class="cb-p cb-p--si">And</span></span>
+            <p><b>Escalas en las que existe el indicador:</b> municipio actual (Mun), municipio histórico (Hist), partido judicial de
+              1888 (Part), provincia (Prov) y Andalucía (And). En negro, la elegida; en gris punteado, las que no tiene. Pulsa una para
+              abrir el indicador en el visor a esa escala.</p>
+          </div>
+          <div class="cb-ley__it">
+            <span class="cb-atlas">Σ Calculado por el Atlas</span>
+            <p>Lo calcula el Atlas a partir de las cifras de la base; no es una cifra de la fuente.</p>
+          </div>
+          <div class="cb-ley__it">
+            <svg width="112" height="30" viewBox="0 0 112 30" aria-hidden="true">
+              <line x1="0" x2="112" y1="27.5" y2="27.5" class="cb-ley-base"/>
+              <rect x="20" y="5" width="44" height="22" class="cb-ley-obs"/><path class="cb-ley-cor" d="M20 7V2.5H64V7"/>
+              <line x1="72" x2="106" y1="16.5" y2="16.5" class="cb-ley-tramo"/><rect x="104" y="5" width="3" height="22" class="cb-ley-obs"/>
+            </svg>
+            <p><b>Periodos:</b> algunos indicadores no se refieren a un año sino a un periodo (época romana, segunda mitad del siglo
+              XVIII). Se dibujan a lo ancho de su periodo, con un corchete encima, o con una etiqueta en el borde izquierdo si caen antes de 1591. Una
+              raya fina marca el periodo que abarca una cifra calculada sobre varios años (por ejemplo, 1857–2021).</p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="p6-pie cb-pie">
+        <p><span id="cb-datos">Datos: …</span> · <a href="visor.html">Visor</a> · <a href="fuentes.html">Fuentes</a> · <a href="equipo.html">Equipo</a></p>
+      </footer>
+    </div>
+  </main>
+
+  <div class="cb-tt" id="cb-tt" aria-hidden="true" hidden></div>
+  <svg class="cb-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="cb-rev" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="4" height="4" fill="#dcdcdc"/><rect width="2" height="4" fill="#5c5c5c"/>
+      </pattern>
+    </defs>
+  </svg>
+</body>
+</html>

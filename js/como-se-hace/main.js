@@ -1,0 +1,107 @@
+// =====================================================================================================================
+// Atlas Histórico de Andalucía · «Cómo se hace» (como-se-hace.html, 22-nov-2026).
+// Relato con scroll: el gráfico queda fijo y cambia según el paso de texto que cruza la línea de lectura. Cada escena se
+// dibuja una vez por tamaño y sus marcas se encienden por subpaso (solo opacidad en CSS: con movimiento reducido, sin
+// transición). Todas las cifras salen de datos.js.
+// =====================================================================================================================
+import { d3, aplicar, tipOcultar, esc } from './util.js';
+import { cargar } from './datos.js';
+import { fuentes, extraer, unidades } from './escenas-a.js';
+import { fronteras, huecos, leer } from './escenas-b.js';
+
+const ESCENAS = [fuentes, extraer, unidades, fronteras, huecos, leer];
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+let D = null;
+let cap = -1, sub = 1, ancho = 0, alto = 0;
+const fig = $('#ch-fig'), svgEl = $('#ch-svg'), htmlEl = $('#ch-html'), lienzo = $('#ch-lienzo');
+const pasos = $$('.ch-paso');
+const enlaces = $$('#ch-prog a');
+
+function dibujar() {
+  const e = ESCENAS[cap];
+  const r = fig.getBoundingClientRect();
+  ancho = Math.round(r.width); alto = Math.round(r.height);
+  svgEl.replaceChildren(); htmlEl.replaceChildren();
+  svgEl.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  e.dibuja({ g: d3.select(svgEl), html: d3.select(htmlEl), w: ancho, h: alto, D, compacto: ancho < 560 });
+}
+
+function pintar() {
+  const e = ESCENAS[cap];
+  aplicar(svgEl, sub); aplicar(htmlEl, sub);
+  fig.setAttribute('aria-label', e.alt(sub, D) || e.titulo);
+  $('#ch-fuente').textContent = e.fuente(sub, D);
+}
+
+function irA(nCap, nSub) {
+  if (nCap === cap && nSub === sub) return;
+  const cambia = nCap !== cap;
+  cap = nCap; sub = nSub;
+  tipOcultar();
+  if (cambia) {
+    dibujar();
+    $('#ch-num').textContent = `Paso ${cap + 1} de ${ESCENAS.length}`;
+    $('#ch-titulo').textContent = ESCENAS[cap].titulo;
+    enlaces.forEach((a, i) => (i === cap ? a.setAttribute('aria-current', 'step') : a.removeAttribute('aria-current')));
+  }
+  pintar();
+}
+
+function lineaLectura() {
+  const apilado = matchMedia('(max-width: 860px)').matches;
+  if (!apilado) return innerHeight * .46;
+  const b = lienzo.getBoundingClientRect().bottom;
+  return b + (innerHeight - b) * .25;
+}
+
+function alMover() {
+  const l = lineaLectura();
+  let activo = pasos[0];
+  for (const p of pasos) { if (p.getBoundingClientRect().top <= l) activo = p; else break; }
+  pasos.forEach(p => p.classList.toggle('activo', p === activo));
+  irA(+activo.closest('.ch-cap').dataset.cap, +activo.dataset.sub);
+}
+
+let pendiente = false;
+const programar = () => {
+  if (pendiente) return;
+  pendiente = true;
+  requestAnimationFrame(() => { pendiente = false; alMover(); });
+};
+
+function medirNav() {
+  document.documentElement.style.setProperty('--ch-nav', Math.ceil($('#ch-nav').getBoundingClientRect().height) + 'px');
+}
+
+function rellenarTextos() {
+  $$('[data-n]').forEach(el => { el.textContent = D.t[el.dataset.n] ?? '…'; });
+  const filas = D.tabla.map(([p, q, v, c, f]) => `<tr><td>${esc(p)}</td><td>${esc(q)}</td><td class="num">${esc(v)}</td><td>${esc(c)}</td><td class="p6-fu">${esc(f)}</td></tr>`).join('');
+  $('#ch-tabla').innerHTML = `<thead><tr><th>Paso</th><th>Ejemplo</th><th>Cifra</th><th>Qué es</th><th>Fuente</th></tr></thead><tbody>${filas}</tbody>`;
+}
+
+async function iniciar() {
+  medirNav();
+  try {
+    D = await cargar();
+  } catch (err) {
+    console.warn(err);
+    $('#ch-cargando').hidden = true;
+    $('#ch-cargando').style.display = 'none';
+    $('#ch-error').hidden = false;
+    return;
+  }
+  $('#ch-cargando').style.display = 'none';
+  rellenarTextos();
+  alMover();
+  document.fonts?.ready.then(() => { if (cap >= 0) { dibujar(); pintar(); } });   // los textos ajustados se miden con la letra real
+  addEventListener('scroll', () => { tipOcultar(); programar(); }, { passive: true });
+  new ResizeObserver(() => {
+    medirNav();
+    const r = fig.getBoundingClientRect();
+    if (Math.round(r.width) !== ancho || Math.round(r.height) !== alto) { dibujar(); pintar(); }
+    programar();
+  }).observe(fig);
+}
+iniciar();

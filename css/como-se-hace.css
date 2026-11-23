@@ -1,0 +1,150 @@
+/* =====================================================================================================================
+   Atlas Histórico de Andalucía · «Cómo se hace» (como-se-hace.html): relato con scroll, gráfico fijo y texto que pasa.
+   Hereda de paginas6.css (Syne + Instrument Sans, papel blanco, reglas negras). Tres colores de procedencia:
+   extraído (verde), tomado (azul), estimado (ámbar, siempre con trazo hueco o trama además del color).
+   ===================================================================================================================== */
+:root {
+  --ch-fuente: #007a3d;
+  --ch-tomado: #2f6fa8;
+  --ch-estimado: #c46f14;
+  --ch-mal: #b3261e;
+  --ch-nav: 56px;
+}
+
+.ch-wrap { max-width: 1500px; }
+.ch-cab { padding-bottom: 28px; }
+.ch-cab .p6-lede { max-width: 70ch; }
+.ch-tres { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 22px 0 0; padding: 0; list-style: none; color: #e6efe9; font-size: 14px; position: relative; z-index: 1; }
+.ch-tres li { display: flex; align-items: center; gap: 8px; }
+.ch-tres b { color: #fff; }
+.ch-m { display: inline-block; width: 13px; height: 13px; flex: none; border: 2px solid #fff; }
+.ch-m--fuente { background: var(--ch-fuente); }
+.ch-m--tomado { background: var(--ch-tomado); }
+.ch-m--estimado { background: repeating-linear-gradient(45deg, #f8e6d0 0 2px, var(--ch-estimado) 2px 4px); }
+.ch-aviso { max-width: 1120px; margin: 16px auto; }
+
+/* ---------- relato: texto a la izquierda, gráfico fijo a la derecha ---------- */
+.ch-relato { display: grid; grid-template-columns: minmax(330px, 430px) minmax(0, 1fr); gap: 0 clamp(24px, 3vw, 56px); max-width: 1500px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); }
+.ch-texto { grid-column: 1; grid-row: 1; min-width: 0; padding-bottom: 34vh; }
+.ch-lienzo { grid-column: 2; grid-row: 1; position: sticky; top: var(--ch-nav); height: calc(100vh - var(--ch-nav)); height: calc(100svh - var(--ch-nav)); display: flex; flex-direction: column; min-width: 0; padding: 14px 0 10px; background: var(--p6-papel); }
+.ch-lienzo__cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--p6-tinta); }
+.ch-lienzo__tit { margin: 0; min-width: 0; font-size: 13px; color: var(--p6-gris); }
+.ch-lienzo__tit b { margin-left: 8px; font: 800 17px/1.1 var(--p6-disp); letter-spacing: -.02em; color: var(--p6-tinta); }
+.ch-prog { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; flex: none; }
+.ch-prog a { display: block; width: 26px; height: 26px; line-height: 24px; text-align: center; border: 1px solid var(--p6-linea); color: var(--p6-gris); text-decoration: none; font: 700 12px/24px var(--p6-txt); }
+.ch-prog a:hover { border-color: var(--p6-tinta); color: var(--p6-tinta); }
+.ch-prog a[aria-current="step"] { background: var(--verde-hondo); border-color: var(--verde-hondo); color: #fff; }
+.ch-fig { position: relative; flex: 1 1 auto; min-height: 0; margin: 8px 0 0; }
+.ch-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: hidden; }
+.ch-html { position: absolute; inset: 0; pointer-events: none; }
+.ch-cargando { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; color: var(--p6-gris); }
+.ch-fuente { flex: none; min-height: 2.7em; margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--p6-linea); font-size: 12px; line-height: 1.35; color: var(--p6-gris); }
+.ch-defs { position: absolute; }
+
+/* ---------- pasos de texto ---------- */
+.ch-cap { scroll-margin-top: var(--ch-nav); }
+.ch-paso { display: flex; align-items: flex-start; min-height: 74vh; padding: 12px 0 20px; }
+.ch-cap:first-child .ch-paso:first-child { min-height: 62vh; align-items: flex-start; padding-top: 34px; }
+.ch-tarjeta { width: 100%; padding: 16px 0 16px 16px; border-left: 3px solid var(--p6-linea); color: #5c5c5c; transition: color .25s ease, border-color .25s ease; }
+.ch-paso.activo .ch-tarjeta { border-left-color: var(--verde-andaluz); color: var(--p6-tinta); }
+.ch-tarjeta p { margin: 0 0 10px; font-size: 16.5px; line-height: 1.52; }
+.ch-tarjeta p:last-child { margin-bottom: 0; }
+.ch-tarjeta b { font-weight: 700; }
+.ch-tarjeta [data-n] { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ch-tarjeta .ch-nota { font-size: 13.5px; line-height: 1.45; color: var(--p6-gris); }
+.ch-pre { font: 700 12px/1 var(--p6-txt) !important; letter-spacing: .2em; text-transform: uppercase; color: var(--verde-andaluz); margin-bottom: 8px !important; }
+.ch-tarjeta h2 { margin: 0 0 14px; font-size: clamp(26px, 2.5vw, 36px); color: var(--p6-tinta); }
+.ch-k { padding-bottom: 1px; border-bottom: 3px solid; }
+.ch-k--fuente { border-color: var(--ch-fuente); }
+.ch-k--tomado { border-color: var(--ch-tomado); }
+.ch-k--estimado { border-bottom-style: dashed; border-color: var(--ch-estimado); }
+.ch-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px !important; }
+.ch-cta a { display: inline-block; padding: 7px 12px; border: 1px solid var(--p6-tinta); color: var(--p6-tinta); text-decoration: none; font: 600 13.5px var(--p6-txt); }
+.ch-cta a:first-child { background: var(--verde-hondo); border-color: var(--verde-hondo); color: #fff; }
+.ch-cta a:hover { box-shadow: inset 0 -3px 0 #7fd3a3; }
+
+/* ---------- marcas del gráfico ---------- */
+.ch-svg text { font-family: var(--p6-txt); font-size: 12.5px; fill: var(--p6-tinta); }
+.ch-svg [data-a] { opacity: 0; pointer-events: none; transition: opacity .42s ease; }
+.ch-svg [data-a].on { opacity: 1; pointer-events: auto; }
+.ch-html [data-a] { opacity: 0; visibility: hidden; transition: opacity .42s ease, visibility .42s; }
+.ch-html [data-a].on { opacity: 1; visibility: visible; pointer-events: auto; }
+.ch-svg .t-eje { font-size: 11.5px; fill: var(--p6-gris); font-variant-numeric: tabular-nums; }
+.ch-svg .t-rot { font-size: 13px; font-weight: 600; }
+.ch-svg .t-sec { font-size: 12px; fill: var(--p6-gris); }
+.ch-svg .t-num { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ch-svg .t-gran { font: 800 clamp(20px, 2.3vw, 30px) var(--p6-disp); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.ch-svg .t-tit { font: 800 15px var(--p6-disp); letter-spacing: -.01em; }
+.ch-svg .t-halo { paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+.ch-svg .t-mal { fill: var(--ch-mal); font-weight: 700; }
+.ch-svg .t-papel { font-family: Georgia, "Times New Roman", serif; font-size: 13.5px; font-variant-numeric: lining-nums tabular-nums; }
+.ch-svg .t-papelt { font-family: Georgia, "Times New Roman", serif; font-size: 14px; letter-spacing: .08em; }
+.ch-svg .g-rej { stroke: #eeeeec; stroke-width: 1; }
+.ch-svg .g-base { stroke: var(--p6-tinta); stroke-width: 1; }
+.ch-svg .l-est { fill: none; stroke: var(--ch-estimado); stroke-width: 2; stroke-dasharray: 5 4; }
+.ch-svg .l-obs { fill: none; stroke: var(--ch-tomado); stroke-width: 2; }
+.ch-svg .l-fina { fill: none; stroke: #9a9a9a; stroke-width: 1.25; }
+.ch-svg .p-mun { stroke: #fff; stroke-width: .5; }
+.ch-svg .p-ctx { fill: #efefeb; stroke: #fff; stroke-width: 1; }
+.ch-cruz line { stroke: #707070; stroke-width: 1; stroke-dasharray: 2 3; }
+.ch-svg .ch-hit { fill: transparent; cursor: crosshair; }
+
+/* ---------- fichas del paso 6 ---------- */
+.ch-fichas { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 12px; padding: 6px 0; }
+.ch-ficha { display: flex; flex-direction: column; gap: 4px; min-height: 0; padding: clamp(10px, 1.6vw, 22px); border: 1px solid var(--p6-tinta); background: #fff; overflow: hidden; }
+.ch-ficha h3 { margin: 0; font: 800 clamp(15px, 1.5vw, 20px)/1.1 var(--p6-disp); }
+.ch-ficha__m { width: 100%; height: clamp(10px, 2vh, 20px); flex: none; }
+.ch-ficha__v { font: 800 clamp(24px, 3.2vw, 46px)/1.05 var(--p6-disp); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.ch-ficha p { margin: 4px 0 0; font-size: clamp(13px, 1.05vw, 16px); line-height: 1.38; color: #333; }
+.ch-m-obs { background: #e5484d; }
+.ch-m-est { background: #f4aeb1; }
+.ch-m-par { box-shadow: inset 0 0 0 1px #e5484d; }
+.ch-m-sin { background: repeating-linear-gradient(45deg, #8c8c8c 0 1.5px, #ececec 1.5px 5px); }
+
+/* ---------- leyenda dentro del gráfico, tooltip y tabla ---------- */
+.ch-tip { position: fixed; z-index: 40; max-width: 270px; padding: 7px 10px; background: var(--p6-tinta); color: #fff; font-size: 12.5px; line-height: 1.35; pointer-events: none; }
+.ch-tip b { display: block; }
+.ch-tabla { padding: 26px 0 10px; border-top: 2px solid var(--p6-tinta); }
+.ch-tabla summary { cursor: pointer; font: 800 clamp(18px, 2vw, 24px)/1.1 var(--p6-disp); letter-spacing: -.02em; }
+.ch-tabla td.num { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ch-tabla .p6-tablawrap { margin-top: 10px; }
+
+/* ---------- móvil: el gráfico arriba, fijo; el texto pasa por debajo ---------- */
+@media (max-width: 860px) {
+  .ch-relato { display: block; padding: 0 16px; }
+  .ch-lienzo { z-index: 10; height: 54vh; height: 54svh; min-height: 330px; padding: 8px 0 4px; border-bottom: 2px solid var(--p6-tinta); }
+  .ch-lienzo__cab { padding-bottom: 5px; }
+  .ch-lienzo__tit { font-size: 11.5px; }
+  .ch-lienzo__tit #ch-num { display: none; }
+  .ch-lienzo__tit b { margin-left: 0; font-size: 14px; }
+  .ch-prog a { width: 22px; height: 22px; font: 700 11px/20px var(--p6-txt); }
+  .ch-fuente { min-height: 2.5em; margin-top: 3px; padding-top: 3px; font-size: 10.5px; line-height: 1.25; }
+  .ch-texto { padding-bottom: 42vh; }
+  .ch-paso, .ch-cap:first-child .ch-paso:first-child { min-height: 46vh; align-items: flex-start; padding: 22px 0 14px; }
+  .ch-tarjeta { padding: 6px 0 6px 12px; }
+  .ch-tarjeta p { font-size: 15.5px; line-height: 1.46; }
+  .ch-tarjeta .ch-nota { font-size: 13px; }
+  .ch-fichas { gap: 6px; padding: 2px 0; }
+  .ch-ficha { padding: 7px 8px; gap: 2px; }
+  .ch-ficha h3 { font-size: 13.5px; }
+  .ch-ficha__m { height: 7px; }
+  .ch-ficha__v { font-size: 21px; }
+  .ch-ficha p { font-size: 11.2px; line-height: 1.25; }
+  .ch-svg text { font-size: 11.5px; }
+  .ch-svg .t-eje { font-size: 10.5px; }
+  .ch-svg .t-rot { font-size: 11.5px; }
+  .ch-svg .t-sec { font-size: 10.5px; }
+  .ch-svg .t-num { font-size: 13px; }
+  .ch-svg .t-papel { font-size: 11.5px; }
+  .ch-svg .t-papelt { font-size: 11.5px; }
+  .ch-svg .t-tit { font-size: 13px; }
+}
+
+/* ---------- movimiento reducido: sin transiciones, el gráfico cambia de golpe ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  .ch-svg [data-a], .ch-html [data-a], .ch-tarjeta { transition: none !important; }
+}
+
+/* v41: teléfono en horizontal: el gráfico no se queda fijo tapando el texto */
+@media (orientation: landscape) and (max-height: 520px) { .ch-lienzo { position: static; height: auto; min-height: 0; } }

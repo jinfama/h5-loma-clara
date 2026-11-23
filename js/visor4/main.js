@@ -1,0 +1,1956 @@
+// main.js — armazón del visor v4 (visor.html, CONTRATO_VISOR_V4.md).
+// Izquierda: temas y, al lado, sus subindicadores. Centro: título, vistas y escena a pantalla completa; abajo, el
+// tiempo y las acciones. Derecha: opciones del indicador, unidad territorial, opciones de la vista, leyenda, avisos,
+// fuente original y, al pinchar, la ficha de la unidad. A 390 px las dos barras son cajones.
+// El motor es el de js/visor3/ (estado y URL, datos, niveles, escala, reproducción); aquí solo hay maquetación.
+
+/* global d3 */
+import { aplicarPaleta, ACENTO_TEMA } from './paleta.js';
+import { TITULO_ANALISIS, ANALISIS_RAIL, enlacesAnalisis, botonDeDatos, filasRail, trazos } from './rail.js';
+const PIDE_TODOS = location.hash === '#todos';   // visor.html#todos (desde paisaje.html): abre el buscador al entrar
+import { vistaDeFamilia, vistaInicial, opcionVista } from './vistas-familia.js';
+import { estado, setEstado, on, emit, leerURL, arrancar, ponVistaInicial } from '../visor3/estado.js';
+import { VISTAS, FICHA, MODOS, vistasOrdenadas } from '../visor3/registro.js';
+import * as datos from '../visor3/datos.js';
+import * as niveles from '../visor3/niveles.js';
+import { M, activar, irA, play, pausa, indiceDe } from '../visor3/motor.js';
+import { escalaDeInd, esCategorico } from '../visor3/escala.js';
+import { registrarTemasTimelapse, indDeVisorViejo } from '../visor3/proveedores/timelapses.js';
+import { cargar, cargarSiHay } from '../atlas2/data.js';
+import { cargarFuentes, nombreFuente, citaHTML, fuente } from '../atlas2/fuentes.js';
+import * as fmt from '../atlas2/fmt.js';
+import { esc, reduceMotion, normaliza, entero } from '../atlas2/fmt.js';
+import { crearTooltip } from '../atlas2/mapa.js';
+import { construir, ubicar, tema as temaDe, primeroDe, buscar, todos, arbol } from './catalogo.js';
+import { icono } from './iconos.js';
+import { pintaLeyenda4, leyendaTrazos, leyendaMarcas } from './leyenda.js';
+import { montarBuscador } from './buscador.js';
+import { motivoNoFrente, SIN_CIFRA_AND } from '../visor3/frente.js';
+import { pictoDeIndicador, claveDeIndicador } from '../pictos/agro.js';
+import { montarComparar, actualiza as actualizaCmp, limpiaCmp, cabeceraPar, parActivo, imagenPar } from './comparar.js';
+import { mapa } from './mapa.js';
+import { REPS, motivoNo as motivoNoRep, repEfectiva } from './representa.js';
+import { hayEstados, leyendaLimites, bloqueTermino, clasesPresentes } from './limites.js';
+import { montarAcciones } from './acciones.js';
+import { montarCapas, RIOS_OPCIONES, nivelesRiosActivos, conmutaNivelRios, esFichaRio, fichaRio, FONDO_IDS, sinTransporte, leyendaCapas, itemsTransporte, conmutaTransporte } from './capas.js';
+import { montarMunicipio } from './municipio.js';
+import { montarSeleccion, alterna, modo as modoSel, pinta as pintaSeleccion } from './seleccion.js';
+import { bloqueFicha, grisesEnFronteras } from './grises.js';
+// botones de «Fronteras» (las opciones del propio indicador, js/visor3/fronteras/indicador.js)
+let FR_OPC = null;
+window.__repintarFronteras = () => mapa.refrescar();   // al llegar la malla de hoy (Fronteras)
+import('../visor3/fronteras/indicador.js').then(m => { FR_OPC = m.opciones; }).catch(() => {});
+import { cargar as cargarGeo } from '../atlas2/data.js';
+
+aplicarPaleta();
+
+const $ = (s, el = document) => el.querySelector(s);
+let URL_ANIO = (() => { const q = new URLSearchParams(location.search); return q.has('anio') || q.has('year'); })();   // el enlace pide un año
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const RM = reduceMotion();
+const tooltip = crearTooltip();
+tooltip.el.classList.add('t4');
+
+// ---------------------------------------------------------------- unidades territoriales (solo cuatro)
+export const NIV4 = [
+  { id: 'provincia', rotulo: 'Provincia', corto: 'Provincia', sub: 'las ocho de hoy' },
+  { id: 'pj1888', rotulo: 'Partido judicial', corto: 'Partido', sub: 'la división de 1888' },
+  { id: 'termino', rotulo: 'Municipio histórico', corto: 'Mun. histórico', sub: 'el término de cada fecha' },
+  { id: 'municipio', rotulo: 'Municipio actual', corto: 'Mun. actual', sub: 'los 785 de hoy' },
+];
+const PANEL = ['ue1842', 'ue1752'];
+// niveles de URL viejas → uno de los cuatro
+const VIEJO = { ue1842: 'termino', ue1752: 'termino', pj1834: 'pj1888', pjactual: 'pj1888', comarca_agraria: 'municipio', andalucia: 'provincia', region: 'provincia', comarca: 'municipio' };
+// vistas que necesitan la misma unidad en todas las fechas: el municipio histórico pasa a la unidad estable
+const FIJAS = new Set(['lineas', 'ranking', 'franjas', 'distribucion', 'climograma', 'composicion']);
+const PRINCIPALES = ['mapa', 'lineas', 'composicion', 'tabla', 'ranking', 'arco'];   // Análisis, con su rótulo siempre (Juan no la veía)
+
+const boton = n => (PANEL.includes(n) ? 'termino' : VIEJO[n] || n);
+const rotNivel = n => (NIV4.find(x => x.id === boton(n)) || {}).rotulo || n;
+function disponibles(ent) {
+  const s = new Set();
+  if (!ent) return s;
+  const ns = ent.niveles || [ent.nivel_nativo];
+  for (const n of NIV4) if (ns.includes(n.id)) s.add(n.id);
+  // «Actuales» solo si la base da cifra municipal (capataz y Juan, 23-nov-2026): un mapa entero con la trama «sin dato a este
+  // nivel» se leía como que faltaban datos. Si no la da, el botón va apagado con su motivo (véase pintaNiveles).
+  return s;
+}
+function motivoNo(ent, n) {
+  if (!ent) return '';
+  if (ent.id === 'fronteras') return 'Las fronteras se ven por el término de cada fecha.';
+  if (ent.mensual) return 'Las normales mensuales se ven en el climograma.';
+  const ns = (ent.niveles || []).filter(x => NIV4.some(y => y.id === x)).map(rotNivel);
+  return `La fuente no da esta cifra por ${rotNivel(n).toLowerCase()}${ns.length ? `; sí por ${ns.join(', ').toLowerCase()}` : ''}.`;
+}
+// ¿trae la base años estimados entre las cifras de fuente? Solo entonces hay «Todo interpolado» (el visor no interpola)
+function baseEstima(ent) {
+  const af = new Set((ent && ent.anios_fuente || []).map(String));
+  return af.size > 0 && (ent.anios || []).some(a => !af.has(String(a)));
+}
+function nativo4(ent) {
+  const d = disponibles(ent);
+  const n = boton(ent && ent.nivel_nativo || '');
+  if (d.has(n)) return n;
+  return ['termino', 'municipio', 'pj1888', 'provincia'].find(x => d.has(x)) || 'municipio';
+}
+// nivel de datos que usa una vista: en las vistas de unidad fija, el municipio histórico es la unidad estable de 1842
+// (o la de 1752 si el indicador solo es de antes), que reúne el mismo territorio en todas las fechas
+function nivelDatos(ent, n4, vistaId) {
+  if (!ent) return n4;
+  if (FIJAS.has(vistaId) && n4 === 'termino') {
+    const disco = ent.niveles_en_disco || ent.niveles || [];
+    const anios = (ent.anios || []).map(Number);
+    if (disco.includes('ue1842') && (!anios.length || anios.some(a => a >= 1842))) return 'ue1842';
+    if (disco.includes('ue1752')) return 'ue1752';
+  }
+  return PANEL.includes(n4) ? 'termino' : n4;
+}
+// los indicadores con proveedor propio que no dan valores (capas, fronteras, cambios) solo se ven en el mapa
+const soloMapa = ent => !!(ent && ent.proveedor && !/^poblacion\./.test(ent.id));
+// la vista inicial de un indicador, si a ese nivel se puede ver; si no, el mapa
+const inicialDe = (ent, n4) => { const id = vistaInicial(ent), v = VISTAS.get(id); return v && admiteVista(v, ent, nivelDatos(ent, n4, id)) === true ? id : 'mapa'; };
+const admiteVista = (v, ent, nivel) => {
+  if (soloMapa(ent) && v.id !== 'mapa') return /^capa_/.test(ent.id) ? 'Es una capa: solo se ve en el mapa.' : 'Este indicador solo se ve en el mapa.';
+  // qué vistas ofrece cada familia: la tabla de vistas-familia.js
+  const deFamilia = vistaDeFamilia(v.id, ent);
+  if (deFamilia !== true) return deFamilia;
+  // categórico (el ganador): una categoría no es una cifra; no hay líneas, ranking ni franjas que valgan
+  if (esCategorico(ent) && !['mapa', 'tabla'].includes(v.id) && !v.categorica) return 'Es una categoría (quién ganó), no una cifra: se ve en el mapa y en la tabla.';
+  try { return v.admite(ent, nivel, ent); } catch (e) { return true; }
+};
+
+// ---------------------------------------------------------------- arranque
+const geoPromesa = cargar('geo/municipios.topo.json');
+registrarTemasTimelapse(geoPromesa);   // reserva: solo se usan si al catálogo le falta un tema
+
+async function importa(ruta) { try { await import(ruta); } catch (e) { console.error(`[visor4] no se pudo cargar ${ruta}`, e); } }
+
+let COBERTURA = null;
+async function boot() {
+  // Análisis y Arco pesan: si el enlace no los pide, se cargan cuando el mapa ya está pintado
+  const q0 = new URLSearchParams(location.search), h0 = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const pideAnalisis = q0.get('modo') === 'analisis' || q0.get('vista') === 'analisis';
+  const pideArco = q0.get('vista') === 'arco' || /^elec_/.test(q0.get('ind') || '') || /^(elecciones|politica|votos)$/.test(q0.get('tema') || h0.get('cat') || q0.get('cat') || '');
+  ponVistaInicial(id => { const e = datos.indicador(id); return e ? inicialDe(e, boton(estado.nivel)) : 'mapa'; });
+  on('titulo-vista', () => pintaTitulo());
+  await Promise.all([
+    cargarFuentes(),
+    importa('../visor3/vistas/index.js'),
+    importa('../visor3/fronteras/index.js'),
+    importa('../visor3/ficha/index.js'),
+    ...(pideAnalisis ? [importa('./analisis/index.js')] : []),   // vista «Análisis» (js/visor4/analisis/, docs/v2/ANALISIS_PRUEBAS.md)
+    importa('./isotipo.js'),   // vista «Recuento» del ganado (iconos repetidos)
+    importa('./vista-composicion.js'),   // vista «Composición»: grupos de usos y sectores de empleo
+    importa('./vista-anomalias.js'),   // vista «Anomalías por mes» del clima
+    ...(pideArco ? [importa('./arco.js')] : []),   // vista «Arco» de las elecciones (js/visor4/arco.js, css/arco.css; PETICIONES_API.md)
+  ]);
+  const cat = await datos.refrescarCatalogo();
+  construir(cat);
+  COBERTURA = datos.existe('visor/cobertura_municipio.json').then(h => (h ? cargarSiHay('visor/cobertura_municipio.json') : null));
+  const ini = normaliza0(leerURL(() => null));
+  arrancar(ini);
+  // Arco y Análisis, cuando el mapa ya se ve
+  const tarde = (n = 0) => {
+    const l = document.getElementById('v4-cargando');
+    if (l && !l.hidden && n < 200) { setTimeout(() => tarde(n + 1), 150); return; }
+    setTimeout(() => { if (!pideArco) importa('./arco.js'); if (!pideAnalisis) importa('./analisis/index.js'); }, 500);
+  };
+  tarde();
+  if (enlaceAntiguo) setTimeout(() => aviso('Este enlace era de una versión anterior.'), 900);
+  pintaRail();
+  pintaTodo();
+  await cambiaIndicador({ primera: true });
+  montaVista();
+  vistaAModo();
+  aplicaModo();   // un enlace con modo=analisis entra directo
+  actualizaCmp();   // un enlace con cmp=… abre ya los dos paneles
+  if (estado.ficha) pintaFicha();
+  on('cambio', alCambiar);
+  on('registro', x => { if (x && x.tipo === 'modo') { vistaAModo(); if (estado.modo === x.id) aplicaModo(); pintaRail(); return; } datos.refrescarCatalogo().then(c => { construir(c); pintaTodo(); }); });
+  document.body.classList.add('v4-listo');
+  if (PIDE_TODOS) { const bt = $('#v4-buscador-abrir'); if (bt) setTimeout(() => bt.click(), 0); }   // «Todos los indicadores» desde otra página
+  setTimeout(() => { if (innerWidth >= MOVIL) version(); }, 5000);   // la fecha de los datos no retrasa el mapa
+  montarCapas($('#v4-capas'), $('#v4-fondo')).then(() => pintaSub()).catch(e => console.error('[visor4] capas', e));
+  montarSeleccion($('#v4-selbar'), { escalas: escalasFigura, irEscala, aviso, ocultarSi: () => { const e = datos.indicador(estado.ind); return estado.vista === 'anomalias' || !e || (e.proveedor && !/^poblacion\./.test(e.id) && !/^fronteras/.test(e.id)) || !!e.mensual; } });
+  montarMunicipio($('#v4-mun'), { niveles, ficha: { abrir: a => setEstado({ mun: String(a.id) }), cerrar: () => {} } });
+}
+
+// URL de entrada → estado válido (ind, nivel y vista)
+// enlaces guardados de la versión anterior: a su tema equivalente; si no lo hay, a la entrada, con un aviso breve
+const TEMA_VIEJO = { transportes: 'transporte', transporte: 'transporte', vias: 'transporte', caminos: 'transporte', elecciones: 'politica', politica: 'politica', votos: 'politica',
+  fronteras: 'fronteras', limites: 'fronteras', territorio: 'fronteras', terminos: 'fronteras', geografia: 'geografia', relieve: 'geografia', rios: 'geografia', agua: 'geografia',
+  propiedad: 'propiedad', tenencia: 'propiedad', trabajo: 'trabajo', empleo: 'trabajo', clima: 'clima', poblacion: 'poblacion', agraria: 'agrario', agrario: 'agrario', suelo: 'agrario', usos: 'agrario' };
+const VISTA_VIEJA = new Set(['map', 'chart', 'line', 'area', 'table', 'ranking', 'stripes', 'climogram']);
+let enlaceAntiguo = false;
+function indDeEnlaceViejo(cat, ind) {
+  const c = String(cat || '').toLowerCase(), t = TEMA_VIEJO[c];
+  return resolverInd(indDeVisorViejo(cat, ind)) || resolverInd(c) || (t && (primeroDe(t) || (t === 'propiedad' ? primeroDe('agrario') : null))) || null;
+}
+function normaliza0(ini) {
+  const out = { ...ini };
+  const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const viejo = k => h.get(k) ?? q.get(k);
+  // ?ind= del catálogo, de un tema o de los timelapses; si no, la URL del visor viejo (#cat=…&ind=…)
+  // ronda v17: «Catastro de Ensenada (1752)» es ya «Fronteras de cada año» en 1752
+  if ((q.get('ind') || out.ind) === 'fronteras_ensenada') { out.ind = 'fronteras'; out.anio = 1752; URL_ANIO = true; }
+  if (viejo('view') === 'about') { location.replace('fuentes.html'); }   // «Método y fuentes» de la versión anterior
+  const vistaVieja = viejo('view');
+  if (vistaVieja && !q.has('vista') && !VISTA_VIEJA.has(vistaVieja)) delete out.vista;   // una vista que ya no existe
+  const hallado = resolverInd(q.get('ind') === 'fronteras_ensenada' ? 'fronteras' : (q.get('ind') || out.ind))
+    || (viejo('cat') ? indDeEnlaceViejo(viejo('cat'), viejo('ind')) : null)
+    || resolverInd(q.get('tema'));
+  enlaceAntiguo = !hallado && !!(q.get('ind') || viejo('cat') || q.get('tema') || h.get('ind') || (vistaVieja && !VISTA_VIEJA.has(vistaVieja)));
+  out.ind = hallado || defecto();
+  const ent = datos.indicador(out.ind);
+  if (out.log && !out.esc) out.esc = 'log';
+  // «Señalar la calidad del dato»: de la URL (cal=1) o lo último que eligió esta persona; por defecto, apagado
+  // v20 (Juan): sin el interruptor «Señalar la calidad del dato»
+  // el fondo elegido (relieve, ríos, límites, fronteras) se recuerda en este navegador; el enlace manda si trae capas
+  if (!q.has('capas')) { try { const f = JSON.parse(MEM.leer('fondo') || '[]'); if (Array.isArray(f) && f.length) out.capas = [...new Set([...(out.capas || []), ...f.filter(x => FONDO_IDS.includes(x))])]; } catch (e) { /* sin memoria */ } }
+  out.log = false;
+  let n4 = boton(out.nivel || '');
+  if (!disponibles(ent).has(n4)) n4 = nativo4(ent);
+  // un enlace con vista (o con algo propio del mapa o de las líneas) se respeta; si no, la vista inicial del indicador
+  const pideVista = ['vista', 'cmp', 'ver', 'rep', 'cmb'].some(k => q.has(k)) || VISTA_VIEJA.has(vistaVieja);
+  let vista = pideVista ? (out.vista && VISTAS.has(out.vista) ? out.vista : 'mapa') : inicialDe(ent, n4);
+  if (!pideVista && vista === 'composicion' && q.has('anio')) vista = 'mapa';   // un enlace a un año concreto es de mapa
+  if (ent && ent.mensual && VISTAS.has('climograma')) vista = 'climograma';
+  const v = VISTAS.get(vista);
+  if (!v || admiteVista(v, ent, nivelDatos(ent, n4, vista)) !== true) vista = ent && ent.mensual && VISTAS.has('climograma') ? 'climograma' : 'mapa';
+  out.vista = vista;
+  out.nivel = q.get('nivel') === 'andalucia' && (vista === 'lineas' || vista === 'tabla') ? 'andalucia' : nivelDatos(ent, n4, vista);
+  if (out.obs && boton(out.nivel) !== 'termino') out.obs = false;
+  if (esPolitica(ent)) out.obs = false;
+  if (sinInterpolar(ent)) out.interp = false;   // v20: en elecciones, ni «solo observado» ni «todo interpolado»
+  out.cal = false;   // v20: sin «Calidad del dato»
+  if (out.cmp) out.cmp = limpiaCmp(out.cmp);   // v21: siempre el mismo indicador; un enlace antiguo cmp=ind:anio ignora ind   // ronda v17: en límites actuales, todo, con su trama
+  // un enlace que pide un año interpolado lo enseña (enciende «años interpolados»)
+  if (out.anio != null && !q.has('interp') && ent && Array.isArray(ent.anios_fuente) && ent.anios_fuente.length
+    && !ent.anios_fuente.map(String).includes(String(out.anio)) && (ent.anios || []).map(String).includes(String(out.anio))) out.interp = true;
+  // ?m=<INE> (fronteras.html y el visor viejo): la ficha es la del municipio de hoy, aunque el mapa vaya por términos
+  const m = viejo('m');
+  if (m && /^\d{5}$/.test(m) && !q.get('fn') && boton(out.nivel) !== 'municipio') { out.ficha = m; out.fn = 'municipio'; out.sel = []; }
+  return out;
+}
+const defecto = () => (datos.indicador('poblacion_densidad') ? 'poblacion_densidad' : primeroDe('poblacion') || (arbol() && arbol().temas[0] && primeroDe(arbol().temas[0].id)) || '');
+const buscarId = re => { const a = arbol(); if (!a) return null; for (const [id, u] of a.porInd) if (!u.alias && re.test(id)) return id; return null; };
+
+// ?ind= admite un id del catálogo, un tema (poblacion, usos_suelo, fronteras…) o un id de los timelapses (tierra.olivar…)
+function resolverInd(raw) {
+  if (!raw) return null;
+  const r = String(raw);
+  const u = ubicar(r);
+  if (u && !u.alias) return r;
+  if (u && u.alias) return (u.concepto.variantes.find(v => v.medida === 'prod_t') || u.concepto.variantes[0]).ind;
+  if (datos.indicador(r)) return r;
+  const usos = m => buscar({ familia: 'usos', miembro: m, medida: 'pct' }) || buscar({ familia: 'usos', miembro: m });
+  const TEMA = {
+    poblacion: () => buscarId(/^poblacion_dens/) || primeroDe('poblacion'),
+    usos_suelo: () => usos('olivar'), usos: () => usos('olivar'), tierra: () => usos('olivar'), suelo: () => usos('olivar'),
+    agrario: () => primeroDe('agrario'), agraria: () => primeroDe('agrario'),
+    cosechas: () => buscar({ familia: 'cosecha_grupo', miembro: 'cereal', medida: 'prod_t' }), cosechas1752: () => buscar({ familia: 'cosecha_grupo', miembro: 'cereal', medida: 'prod_t' }),
+    ganado: () => buscar({ familia: 'ganado1752', miembro: 'ovino' }),
+    clima: () => primeroDe('clima'), trabajo: () => primeroDe('trabajo'), empleo: () => primeroDe('trabajo'),
+    geografia: () => primeroDe('geografia'), fronteras: () => (datos.indicador('fronteras') ? 'fronteras' : primeroDe('fronteras')), territorio: () => primeroDe('fronteras'),
+    transporte: () => 'capa_t_ferrocarril', ferrocarril: () => 'capa_t_ferrocarril', carreteras: () => 'capa_t_jrc', relieve: () => 'capa_relieve', altitud: () => 'capa_altitud', rios: () => 'capa_rios', ensenada: () => 'fronteras_ensenada',
+  };
+  if (TEMA[r]) return TEMA[r]() || null;
+  const m = /^(\w+)\.(\w+)$/.exec(r);
+  if (!m) return null;
+  const [, t, v] = m;
+  if (t === 'poblacion') return v === 'habitantes' ? buscarId(/^poblacion_hab/) : buscarId(/^poblacion_dens/);
+  if (t === 'tierra') return usos({ monte: 'monte_arbolado', dominante: 'olivar' }[v] || v);
+  if (t === 'cosechas') return buscar({ familia: 'cosecha_grupo', miembro: 'cereal', medida: v === 'rend' ? 'rend_kgha' : 'prod_t' });
+  if (t === 'ganado') return buscar({ familia: 'ganado1752', miembro: { caballerias: 'caballar' }[v] || v });
+  if (t === 'clima') return buscarId(v === 'p' ? /^clima_prec$/ : /^clima_tmed$/);
+  if (t === 'trabajo') return buscar({ familia: 'empleo', miembro: v === 'anual' ? 'agricultura' : v });
+  return TEMA[t] ? TEMA[t]() : null;
+}
+
+// ---------------------------------------------------------------- navegación (un solo setEstado por gesto)
+function variantePareja(c, actual) {
+  const va = actual && actual.variante;
+  if (!va) return c.variantes[0];
+  return c.variantes.find(v => v.medida && v.medida === va.medida) || c.variantes.find(v => v.anio && v.anio === va.anio && c.eje === 'fecha') || c.variantes[0];
+}
+function irAIndicador(id, { historial = true } = {}) {
+  const ent = datos.indicador(id);
+  if (!ent) return;
+  const d = disponibles(ent);
+  let n4 = boton(estado.nivel);
+  if (!d.has(n4)) n4 = nativo4(ent);
+  // al cambiar de tema, la vista inicial del indicador; dentro del tema, la que se esté usando
+  let vista = (datos.indicador(estado.ind) || {}).tema !== ent.tema ? inicialDe(ent, n4) : estado.vista;
+  if (ent.mensual && VISTAS.has('climograma')) vista = 'climograma';
+  else if (vista === 'climograma' && ent.tema !== 'clima') vista = 'mapa';
+  const v = VISTAS.get(vista);
+  if (!v || admiteVista(v, ent, nivelDatos(ent, n4, vista)) !== true) vista = 'mapa';
+  const sigueAnd = estado.nivel === 'andalucia' && (vista === 'lineas' || vista === 'tabla') && (ent.niveles_en_disco || []).includes('andalucia');
+  const nivel = sigueAnd ? 'andalucia' : nivelDatos(ent, n4, vista);
+  const mismoNivel = nivel === estado.nivel;
+  const deTrans = /^capa_t_/.test(estado.ind || '') && !/^capa_t_/.test(id);   // Juan: «¿por qué sale ferrocarril con elecciones?»
+  const capas = (/^capa_t_/.test(id) && id !== estado.ind) || deTrans ? { capas: sinTransporte(estado.capas) } : {};
+  setEstado({ ind: id, nivel, vista, comp: [], ...capas, ...(mismoNivel ? {} : { sel: [], ficha: '', fn: '' }) }, { historial });
+  cierraFlotantes('sub');
+}
+function irANivel(n4) {
+  const ent = datos.indicador(estado.ind);
+  let vista = estado.vista;
+  const v = VISTAS.get(vista);
+  if (v && admiteVista(v, ent, nivelDatos(ent, n4, vista)) !== true) vista = 'mapa';
+  setEstado({ nivel: nivelDatos(ent, n4, vista), vista, sel: [], ficha: '', fn: '' }, { historial: true });
+}
+// ---------------------------------------------------------------- escala de las figuras (Juan, 23-nov-2026)
+// Se elige encima de la figura, aunque el mapa esté en otra: al volver al mapa, vuelve su nivel. Composición lleva la suya.
+const FIGURAS = new Set(['composicion', 'lineas', 'ranking', 'tabla']);
+const ESCALAS = [['andalucia', 'Andalucía'], ['provincia', 'Provincias'], ['pj1888', 'Partidos judiciales'], ['municipio', 'Municipios'], ['termino', 'Municipios históricos']];
+let nivelMapa = null;
+function escalasFigura() {
+  const ent = datos.indicador(estado.ind), v = VISTAS.get(estado.vista);
+  if (!ent || !v || !FIGURAS.has(v.id)) return [];
+  const disco = ent.niveles_en_disco || ent.niveles || [];
+  const comp = v.id === 'composicion', actual = comp ? (estado.cesc || 'andalucia') : (PANEL.includes(estado.nivel) ? 'termino' : estado.nivel);
+  return ESCALAS.map(([id, rotulo]) => {
+    const nd = id === 'termino' ? nivelDatos(ent, 'termino', v.id) : id;
+    let motivo = '';
+    if (!(disco.includes(nd) || (id === 'termino' && disco.some(x => PANEL.includes(x))))) motivo = id === 'andalucia' ? 'Este indicador no tiene cifra de Andalucía.' : motivoNo(ent, id);
+    else if (!comp) { const a = admiteVista(v, ent, nd); if (a !== true) motivo = typeof a === 'string' ? a : 'No disponible en esta vista.'; }
+    return { id, rotulo, motivo, activa: actual === id };
+  });
+}
+function irEscala(id) {
+  const ent = datos.indicador(estado.ind);
+  if (estado.vista === 'composicion') {
+    if (id === 'andalucia' && (estado.csel || []).length) { const t = 'andalucia:AND', s = estado.csel; setEstado({ cesc: '', csel: s.includes(t) ? s.filter(x => x !== t) : [...s, t].slice(0, 8) }, { historial: true }); return; }
+    setEstado({ cesc: id === 'andalucia' ? '' : id }, { historial: true });
+    return;
+  }
+  if (nivelMapa == null) nivelMapa = boton(estado.nivel);
+  setEstado({ nivel: id === 'andalucia' ? 'andalucia' : nivelDatos(ent, id, estado.vista), sel: [], ficha: '', fn: '' }, { historial: true });
+}
+// las secciones del panel de Opciones que no hacen nada en esta vista, fuera
+function opcionesDeVista() {
+  const v = estado.vista;
+  for (const [s, k] of [['#v4-sec-capas', 'capas'], ['#v4-sec-fondo', 'fondo'], ['#v4-sec-panel', 'panel']]) { const e = $(s); if (e) e.toggleAttribute('data-fuera', !opcionVista(v, k)); }
+  const n = $('#v4-niveles'); if (n && n.closest('section')) n.closest('section').toggleAttribute('data-fuera', !opcionVista(v, 'limites'));
+}
+function irAVista(id) {
+  const ent = datos.indicador(estado.ind);
+  let n4 = boton(estado.nivel);
+  if (id === 'mapa' && nivelMapa) { n4 = disponibles(ent).has(nivelMapa) ? nivelMapa : n4; nivelMapa = null; }
+  const conAnd = estado.nivel === 'andalucia' && (id === 'lineas' || id === 'tabla');   // Andalucía sigue en las figuras que la admiten
+  setEstado({ vista: id, nivel: conAnd ? 'andalucia' : nivelDatos(ent, n4, id) }, { historial: true });
+}
+
+// ---------------------------------------------------------------- reacciones al estado
+async function alCambiar({ claves, conservarAnio = false }) {
+  const k = c => claves.has(c);
+  if (estado.obs && boton(estado.nivel) !== 'termino') setEstado({ obs: false });
+  { const e0 = datos.indicador(estado.ind); if (estado.obs && esPolitica(e0)) setEstado({ obs: false }); if (estado.interp && sinInterpolar(e0)) setEstado({ interp: false }); }   // «solo observado», solo en límites históricos
+  if (k('modo')) aplicaModo();
+  if (modoActivo) {   // dentro de un modo, el modo atiende sus cambios; el resto del visor espera
+    if (k('ficha') || k('fn')) pintaFicha();
+    try { if (modoActivo.def.actualizar) modoActivo.def.actualizar(modoActivo.ctx, claves); } catch (e) { console.error(e); }
+    cabeceraModo();
+    return;
+  }
+  if (k('ind') || k('nivel') || k('interp')) await cambiaIndicador({ nuevo: k('ind') && !k('anio') && !conservarAnio });   // una vista puede pedir conservar el año (Arco)
+  if (k('vista')) montaVista();
+  if (k('cmp')) { pintaVistas(); pintaIndicador(); }
+  if (k('ind') || k('nivel') || k('vista') || k('esc') || k('obs') || k('cmb') || k('ver') || k('interp') || (k('capas') && estado.ind === 'capa_rios')) pintaTodo();
+  if (k('rep') && !(k('ind') || k('nivel') || k('vista'))) pintaIndicador();
+  if (k('var') && !k('ind')) pintaPie();   // otra convocatoria del mismo año: avisos y cobertura
+  if (k('ficha') || k('fn')) pintaFicha();
+  if (k('vel')) pintaVelocidad();
+  if (vistaActiva && vistaActiva.def.update) { try { vistaActiva.def.update(vistaActiva.ctx, claves); } catch (e) { console.error(e); } }
+  if (FICHA && FICHA.actualizar && estado.ficha && !esFichaRio() && (k('anio') || k('ind'))) FICHA.actualizar(fichaArgs(), vistaActiva ? vistaActiva.ctx : null);
+  if (k('esc') || k('obs') || k('cal') || k('cmb') || k('ver') || k('interp')) pintaLeyendaVista();
+  if (k('cal')) MEM.poner('cal', estado.cal ? '1' : '0');
+  if (k('capas')) MEM.poner('fondo', JSON.stringify((estado.capas || []).filter(x => FONDO_IDS.includes(x))));
+  if (k('capas') || k('ind')) pintaLeyendaVista();
+  if (k('capas') && /^capa_t_/.test(estado.ind || '')) pintaSub();
+}
+
+let cargaSeq = 0;
+// mientras se abre un indicador, el año de arranque lo decide él: nadie pide antes la geometría de la primera fecha
+let abriendo = 0;
+async function cambiaIndicador(op) { abriendo++; try { return await cambiaIndicador0(op); } finally { abriendo--; } }
+async function cambiaIndicador0({ primera = false, nuevo = false }) {
+  // toda serie empieza en su primer año con dato; se respeta el año solo si lo trae el enlace o al cambiar de nivel
+  const anioAntes = (primera && !URL_ANIO) || nuevo ? null : estado.anio;
+  const ent = datos.indicador(estado.ind);
+  const mi = ++cargaSeq;
+  if (ent && ent.mensual) {
+    // normales mensuales: no hay años que reproducir (se ven en el Climograma)
+    $('#v4-cargando').hidden = true;
+    document.body.classList.add('v4-sin-tiempo');
+    pintaPie();
+    return;
+  }
+  document.body.classList.remove('v4-sin-tiempo');
+  const lento = setTimeout(() => { if (mi === cargaSeq) $('#v4-cargando').hidden = false; }, 160);
+  try {
+    const ok = await activar(estado.ind, estado.nivel);
+    if (!ok) return;
+  } catch (e) {
+    console.error(e);
+    $('#v4-cargando').hidden = false;
+    $('#v4-cargando').textContent = `No se pudo cargar «${ent ? ent.rotulo : estado.ind}» por ${rotNivel(estado.nivel).toLowerCase()}: ${e.message}`;
+    return;
+  } finally { clearTimeout(lento); }
+  if (mi !== cargaSeq) return;
+  $('#v4-cargando').hidden = true;
+  $('#v4-cargando').textContent = 'Cargando datos…';
+  document.body.classList.toggle('v4-un-fotograma', M.F.length < 2);
+  const bi = $('#v4-interp');
+  // el botón sale si la base trae años interpolados o si hay tramos entre cortes sin serie anual (para decirlo)
+  // elecciones y categóricos: no hay «serie anual» que echar de menos entre convocatorias
+  bi.hidden = !!(ent && (ent.proveedor || esCategorico(ent) || /^(politica|elecciones)$/.test(String(ent.tema || '')))) || !((M.prov.hayInterpolados && M.prov.hayInterpolados(M.nivel)) || huecosDe(M.F, true).length);
+  bi.setAttribute('aria-pressed', String(!!estado.interp));
+  montaRegla();
+  niveles.fijarCortes(a => {
+    if (M.nivel !== 'termino') return null;
+    const f = M.F.find(x => String(x.anio) === String(a) || String(x.clave) === String(a));
+    return f && f.corte ? String(f.corte) : null;
+  });
+  let i = anioAntes == null ? -1 : indiceDe(anioAntes);
+  // con años sin unir (1591 … 1752), se arranca en el primero después del hueco; 1591, desde la línea temporal
+  if (i < 0) {
+    // arranca tras el hueco solo si lo de antes es un año aislado (1591, 1900); una serie con cortes o por épocas, en su primer año
+    const g1 = ent && !ent.etiquetas_anio ? ((ent.anios_sin_unir || []).filter(z => Array.isArray(z) && z.length === 2).map(z => +z[1]).sort((p, q) => p - q)[0]) : null;
+    const k0 = g1 ? M.F.findIndex(f => +f.anio >= g1) : -1;
+    i = k0 === 1 ? 1 : 0;
+  }
+  await irA(i, { fade: false });
+  pintaPie();
+  if (estado.ver === 'and' && !(M.prov && M.prov.frenteDisponible && M.prov.frenteDisponible(M.nivel) && !estado.interp)) setEstado({ ver: '' });
+  pintaIndicador();   // con los datos ya cargados, las representaciones que valen de verdad
+  montaPanelIndicador();
+  void primera;
+}
+
+// ---------------------------------------------------------------- vistas
+let vistaActiva = null;
+// ---------------------------------------------------------------- modos (pantallas propias: «Análisis»)
+// En un modo, la cabecera es la suya, no hay pestañas de vista, la barra izquierda es suya (sin árbol ni opciones del
+// mapa) y el centro también; la línea de tiempo general se oculta si el modo trae la suya (lineaTiempo: false). Al salir
+// (modo = '') vuelve el tema, el indicador y la vista de antes, que no se tocan mientras el modo está activo.
+let modoActivo = null;
+function ctxDe(host, offs) {
+  return {
+    get estado() { return estado; },
+    set: setEstado,
+    on: (ev, fn) => { const off = on(ev, fn); offs.push(off); return off; },
+    emit, datos, niveles,
+    escala: (ind) => escalaDeInd(ind, datos.indicador(ind)),
+    fmt, fuentes: { nombreFuente, citaHTML, fuente },
+    ficha: { abrir: (a) => abreFicha(a), cerrar: () => setEstado({ ficha: '', fn: '' }) },
+    tooltip,
+    avisos: (ind = estado.ind, anio = estado.anio) => avisosDe(ind, anio),
+    reduceMotion: RM,
+    motor: M,
+    irAnio: (a) => { const k = indiceDe(a); if (k >= 0) irA(k); },
+    cabeceraPar,   // ronda v16: una vista puede llevar la línea temporal a un año
+    opciones: host,
+    catalogo: () => arbol(),
+    salir: () => setEstado({ modo: '' }, { historial: true }),
+  };
+}
+function cabeceraModo() {
+  if (!modoActivo) return;
+  const c0 = modoActivo.def.cabecera;
+  const c = typeof c0 === 'function' ? (c0(modoActivo.ctx) || {}) : (c0 || {});
+  { const pt = $('#v4-titulo-picto'); pt.hidden = true; pt.parentElement.classList.remove('con-picto'); }
+  $('#v4-titulo-k').textContent = c.kicker || c.k || 'Modo';
+  $('#v4-titulo-h').textContent = c.titulo || modoActivo.def.rotulo || modoActivo.id;
+  $('#v4-titulo-s').textContent = c.sub || '';
+  ajustaUnaLinea($('#v4-titulo-h'), 30, 16);
+}
+// los enlaces viejos con vista=analisis abren el modo Análisis cuando ya está registrado como modo
+function vistaAModo() {
+  if (estado.vista && MODOS.has(estado.vista) && !VISTAS.has(estado.vista)) setEstado({ modo: estado.vista, vista: 'mapa' }, { historial: false });
+}
+function aplicaModo() {
+  const id = estado.modo && MODOS.has(estado.modo) ? estado.modo : '';
+  if ((modoActivo ? modoActivo.id : '') === id) return false;
+  if (modoActivo) {
+    try { if (modoActivo.def.destruir) modoActivo.def.destruir(modoActivo.ctx); } catch (e) { console.error(e); }
+    modoActivo.offs.forEach(f => f());
+    document.body.classList.remove('v4-modo', 'v4-modo--' + modoActivo.id, 'v4-modo-sin-tiempo', 'v4-modo-sin-sel', 'v4-modo-sin-datos');
+    const p0 = $('#v4-modo-panel'); if (p0) p0.remove();
+    modoActivo = null;
+    vistaActiva = null;
+    $('#v4-escena').innerHTML = '';
+    montaVista();
+    pintaTodo();
+    if (M.F.length && !abriendo) irA(M.i, { fade: false });
+  }
+  if (!id) return true;
+  const def = MODOS.get(id);
+  if (vistaActiva) { try { vistaActiva.def.destroy(); } catch (e) { console.error(e); } vistaActiva.offs.forEach(f => f()); vistaActiva = null; }
+  if (estado.mun || estado.ficha) setEstado({ mun: '', ficha: '', fn: '' });
+  document.body.classList.add('v4-modo', 'v4-modo--' + id);
+  document.body.classList.toggle('v4-modo-sin-tiempo', def.lineaTiempo !== true);   // un modo trae su tiempo, salvo que pida el general
+  document.body.classList.toggle('v4-modo-sin-sel', def.seleccion !== true);         // ídem la tira de selección
+  document.body.classList.toggle('v4-modo-sin-datos', typeof def.exportar !== 'function');
+  document.body.dataset.vista = id;
+  let panel = $('#v4-modo-panel');
+  if (!panel) { panel = document.createElement('div'); panel.id = 'v4-modo-panel'; panel.className = 'v4-modo-panel'; $('#v4-sub-cuerpo').prepend(panel); }
+  panel.innerHTML = '';
+  const escena = $('#v4-escena'); escena.innerHTML = ''; escena.className = 'v4-escena v4-escena--modo';
+  const offs = [];
+  modoActivo = { id, def, ctx: ctxDe(panel, offs), offs };
+  cabeceraModo();
+  try { if (def.panelIzquierdo) def.panelIzquierdo(panel, modoActivo.ctx); } catch (e) { console.error(`[visor4] el modo «${id}» falló en su panel`, e); }
+  try { if (def.centro) def.centro(escena, modoActivo.ctx); } catch (e) { console.error(`[visor4] el modo «${id}» falló al montar`, e); escena.innerHTML = `<p class="v4-vacio">«${esc(def.rotulo || id)}» no ha podido arrancar.</p>`; }
+  pintaRail();
+  emit('tamano', tamano());
+  return true;
+}
+
+function montaVista() {
+  if (modoActivo) return;   // en un modo, el centro es suyo
+  const def = VISTAS.get(estado.vista) || VISTAS.get('mapa');
+  if (vistaActiva && vistaActiva.def === def) return;
+  if (vistaActiva) {
+    try { vistaActiva.def.destroy(); } catch (e) { console.error(e); }
+    vistaActiva.offs.forEach(f => f());
+  }
+  const escena = $('#v4-escena');
+  escena.innerHTML = '';
+  escena.className = 'v4-escena';
+  const host = $('#v4-opc-vista');
+  host.innerHTML = '';
+  const offs = [];
+  const ctx = {
+    get estado() { return estado; },
+    set: setEstado,
+    on: (ev, fn) => { const off = on(ev, fn); offs.push(off); return off; },
+    emit, datos, niveles,
+    escala: (ind) => escalaDeInd(ind, datos.indicador(ind)),
+    fmt, fuentes: { nombreFuente, citaHTML, fuente },
+    ficha: { abrir: (a) => abreFicha(a), cerrar: () => setEstado({ ficha: '', fn: '' }) },
+    tooltip,
+    avisos: (ind = estado.ind, anio = estado.anio) => avisosDe(ind, anio),
+    reduceMotion: RM,
+    motor: M,
+    irAnio: (a) => { const k = indiceDe(a); if (k >= 0) irA(k); },
+    cabeceraPar,   // ronda v16: una vista puede llevar la línea temporal a un año
+    opciones: host,
+  };
+  vistaActiva = { def, ctx, offs };
+  document.body.dataset.vista = def.id;
+  document.body.classList.toggle('v4-con-tiempo', !!def.usaAnio);
+  try { def.mount(escena, ctx); } catch (e) { console.error(`[visor4] la vista «${def.id}» falló al montar`, e); escena.innerHTML = `<p class="v4-vacio">La vista «${esc(def.rotulo)}» no ha podido arrancar.</p>`; }
+  if (def.usaAnio && M.F.length) requestAnimationFrame(() => { montaRegla(); marcaRegla(M.i); });
+  montaPanelIndicador();
+  pintaLeyendaVista();
+  emit('tamano', tamano());
+}
+const tamano = () => { const r = $('#v4-escena').getBoundingClientRect(); return { ancho: r.width, alto: r.height }; };
+new MutationObserver(() => { $('#v4-sec-vista').hidden = !$('#v4-opc-vista').children.length; }).observe($('#v4-opc-vista'), { childList: true });
+
+// ---------------------------------------------------------------- pintar
+function pintaTodo() {
+  abreTransporte();
+  { const t = $('#v4-opc-t'); if (t) t.textContent = estado.vista === 'mapa' ? 'Opciones del mapa' : 'Opciones'; }
+  const u = ubicar(estado.ind);
+  const t = u ? u.tema.id : null;
+  document.documentElement.style.setProperty('--acento', ACENTO_TEMA[t] || '#2f4a3e');
+  pintaRail();
+  pintaSub();
+  pintaTitulo();
+  pintaVistas();
+  pintaIndicador();
+  pintaNiveles();
+  requestAnimationFrame(resumenSecciones);
+}
+
+// al pulsar un tema: una onda de su color desde el punto pulsado y un rebote del icono (sin movimiento si se pide menos)
+let reboteTema = '', reboteT = 0;
+function ondaRail(e) {
+  const b = e.target.closest('.v4-tema'); if (!b) return;
+  reboteTema = b.dataset.tema || 'analisis'; clearTimeout(reboteT); reboteT = setTimeout(() => { reboteTema = ''; }, 700);
+  b.classList.remove('is-rebote'); void b.offsetWidth; b.classList.add('is-rebote');
+  if (RM) return;
+  const rail = $('#v4-rail'), r = rail.getBoundingClientRect(), rb = b.getBoundingClientRect();
+  const caja = document.createElement('span'); caja.className = 'v4-onda'; caja.setAttribute('aria-hidden', 'true');
+  caja.style.cssText = `left:${rb.left - r.left + rail.scrollLeft}px;top:${rb.top - r.top + rail.scrollTop}px;width:${rb.width}px;height:${rb.height}px;--acento:${b.style.getPropertyValue('--acento') || '#ffffff'}`;
+  const d = Math.hypot(rb.width, rb.height) * 2;
+  const o = document.createElement('i'); o.style.cssText = `left:${e.clientX - rb.left - d / 2}px;top:${e.clientY - rb.top - d / 2}px;width:${d}px;height:${d}px`;
+  caja.appendChild(o); rail.appendChild(caja);
+  o.addEventListener('animationend', () => caja.remove());
+  setTimeout(() => caja.remove(), 1500);
+}
+// el bloque «Análisis y visualizaciones» (De datos, De un municipio, Relatos, Paisaje) es de rail.js: lo comparte paisaje.html
+function pintaRail() {
+  const a = arbol(); if (!a) return;
+  const u = ubicar(estado.ind);
+  const activo = modoActivo || estado.modo ? null : (temaVisto || (u && u.tema.id));   // en un modo, ningún tema encendido
+  const ul = $('#v4-temas'), hayAnalisis = VISTAS.has('analisis') || MODOS.has('analisis');
+  ul.innerHTML = '<li class="v4-rail__k">Por tema</li>' + a.temas.map(t => `<li><button type="button" class="v4-tema" data-tema="${t.id}" aria-pressed="${t.id === activo}"${u && u.tema.id === t.id && !estado.modo ? ' aria-current="true"' : ''} style="--acento:${ACENTO_TEMA[t.id] || '#2f4a3e'}">${icono(t.id)}<span>${esc(t.rotulo)}</span></button></li>`).join('')
+    // Análisis, a la vista: abre la vista de análisis con el indicador activo (correlaciones, Moran, regresión…)
+    + `<li class="v4-rail__k v4-rail__k--an">${esc(TITULO_ANALISIS)}</li>`
+    + (hayAnalisis ? botonDeDatos(estado.modo === 'analisis' || estado.vista === 'analisis') : '')
+    + enlacesAnalisis();
+  $('#v4-rail').style.setProperty('--r-filas', filasRail(a.temas.length, ANALISIS_RAIL.length + (hayAnalisis ? 1 : 0)));
+  // ronda v14: el icono se dibuja por trazo al pasar (longitud 1 en lo que no lleva ya su propio discontinuo) y el tema
+  // recién pulsado rebota
+  trazos(ul);
+  if (innerWidth < MOVIL) { const act = ul.querySelector('.v4-tema[aria-pressed="true"]'); if (act) requestAnimationFrame(() => { const li = act.closest('li') || act; ul.scrollLeft = Math.max(0, li.offsetLeft - (ul.clientWidth - li.offsetWidth) / 2); }); }   // en el móvil, el tema activo a la vista
+  if (reboteTema) { const nb = ul.querySelector(reboteTema === 'analisis' ? '.v4-tema--analisis' : `.v4-tema[data-tema="${reboteTema}"]`); if (nb) nb.classList.add('is-rebote'); }
+  const ba = ul.querySelector('[data-vista-ir]');
+  if (ba) ba.addEventListener('click', () => { if (esTel()) aviso('El análisis de datos se ve mejor en una pantalla grande.'); if (MODOS.has('analisis')) setEstado({ modo: estado.modo === 'analisis' ? '' : 'analisis' }, { historial: true }); else abreAnalisis(); cierraFlotantes('sub'); });
+}
+
+const PLEGADOS = new Map();
+// municipios de hoy para el buscador (nombre e INE de la geometría)
+let MUNICIPIOS = [];
+cargarGeo('geo/municipios.topo.json').then(t => { MUNICIPIOS = t.objects.municipios.geometries.map(g => ({ c: String(g.properties.c), n: g.properties.n })); }).catch(() => {});   // grupo → abierto (lo que el usuario ha abierto o cerrado a mano)
+let temaVisto = null;   // tema cuya lista se enseña (puede no ser el del indicador activo mientras se explora)
+function periodoDe(ids) {
+  const anios = [...new Set(ids.flatMap(id => (datos.indicador(id) || {}).anios || []).map(a => String(a).replace(/^(\d{4})[-_.].+$/, '$1')))].map(Number).filter(isFinite).sort((p, q) => p - q);
+  const ent = datos.indicador(ids[0]) || {};
+  // por épocas (ronda v22): siempre la etiqueta, nunca la clave numérica
+  if (ent.etiquetas_anio && anios.length) { const et = a => ent.etiquetas_anio[String(a)] ?? String(a); return anios.length === 1 ? et(anios[0]) : `${et(anios[0])} – ${et(anios[anios.length - 1])}`; }
+  if (ent.periodo) return ent.periodo;
+  if (ent.estatico) return 'hoy';
+  if (ent.mensual) return 'normales';
+  if (!anios.length) return '';
+  if (anios.length === 1) return String(anios[0]);
+  if (anios.length <= 3) return anios.join(' · ');
+  return `${anios[0]}–${anios[anios.length - 1]}`;
+}
+// cabeceras de grupo con icono y una frase de qué es (Agrario: superficie, cultivos de 1752 y ganado)
+const ICO_G = {
+  usos: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 20l3-12h12l3 12z"/><path d="M8.5 8 7 20M15.5 8 17 20M4.8 14h14.4"/></svg>',
+  cultivo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21V9"/><path d="M12 13c-3 0-5-2-5-5 3 0 5 2 5 5zM12 13c3 0 5-2 5-5-3 0-5 2-5 5zM12 9c-2 0-3.5-1.5-3.5-3.5 2 0 3.5 1.5 3.5 3.5zM12 9c2 0 3.5-1.5 3.5-3.5-2 0-3.5 1.5-3.5 3.5z"/></svg>',
+  ganado: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 10c0-2 1.5-3 3-3h8c2 0 4 1.5 4 4v3h1.5M6 7 4.5 4.5M16 7l1.5-2.5"/><path d="M7 14v5M17 14v5M7 14h10c1 0 2-1 2-2"/></svg>',
+};
+const INFO_G = r => (/^superficie y usos/i.test(r) ? { ico: ICO_G.usos, que: 'Hectáreas y % de la superficie de cada uso del suelo: labor, olivar, viña, dehesa, monte…' }
+  : /^tipo de cultivo/i.test(r) ? { ico: ICO_G.cultivo, que: 'Qué se cosechaba en 1752 (Catastro de Ensenada): superficie, producción y rendimiento de cada cultivo.' }
+    : /^ganado(?!r)/i.test(r) ? { ico: ICO_G.ganado, que: 'Cabezas de cada especie: 1752 por municipio y 1890 por partido judicial.' } : null);
+
+// elecciones (ronda v20, Juan: «en política no se estima nada, no es serie temporal»): sin estimado ni interpolado
+const sinInterpolar = ent => esPolitica(ent) || !!(ent && ent.sin_interpolar);
+function esPolitica(ent) { return !!ent && (ent.tema === 'politica' || ent.tema === 'elecciones' || /^elec_/.test(String(ent.id || ''))); }
+// indicadores de análisis (ronda v18): los calcula el Atlas a partir de las cifras de la base; el catálogo trae
+// `analisis: true` (desde la próxima pasada); mientras, por su id
+const ANALISIS_IDS = /^poblacion_(perdida_max|anio_max)$/;
+function esAnalisis(id) { const e = datos.indicador(id); return !!(e && e.analisis) || ANALISIS_IDS.test(String(id || '')); }
+// ronda v19 (Juan, «ya te dije»): la lista, SIEMPRE por bloques. Los grupos de un solo indicador del mismo tema van
+// juntos en un bloque con un nombre llano («Habitantes, densidad y hogares»); los de análisis, en el suyo
+function nombreBloque(cs) {
+  // ronda v20 (Juan: «simplificar»): el nombre del primero («Habitantes»), sin paréntesis
+  return String(cs[0].rotulo).replace(/\s*\([^)]*\)\s*$/, '');
+}
+function enBloques(grupos) {
+  const out = [], norm = [], ana = [];
+  let pN = -1, pA = -1;
+  for (const g of grupos) {
+    const solo = g.conceptos.length === 1 && !g.conceptos[0].hijos.length;
+    if (!solo) { out.push(g); continue; }
+    if (g.conceptos[0].variantes.every(v => esAnalisis(v.ind))) { if (pA < 0) { pA = out.length; out.push(null); } ana.push(g); }
+    else { if (pN < 0) { pN = out.length; out.push(null); } norm.push(g); }
+  }
+  const bloque = gs => ({ rotulo: gs.length === 1 ? gs[0].rotulo : nombreBloque(gs.flatMap(g => g.conceptos)), conceptos: gs.flatMap(g => g.conceptos), bloque: true });
+  if (pN >= 0) out[pN] = bloque(norm);
+  if (pA >= 0) out[pA] = bloque(ana);
+  return out;
+}
+// nombre de grupo corto y claro en las tarjetas (ronda v17): «Voto por familia política (municipales)» → «Municipales»
+function rotuloGrupo(r) {
+  const m = /^Voto por familia pol[ií]tica \((\w+)\)$/i.exec(String(r || ''));
+  return m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : r;
+}
+function pintaSub() {
+  const a = arbol(); if (!a) return;
+  const u = ubicar(estado.ind);
+  const t = temaDe(temaVisto) || (u && u.tema) || a.temas[0];
+  $('#v4-sub-titulo').textContent = t.largo || t.rotulo;
+  ajustaUnaLinea($('#v4-sub-titulo'), 20, 13);
+  $('#v4-sub-lead').textContent = t.lead || '';
+  const q = normaliza($('#v4-buscar').value || '');
+  const actual = u && u.concepto;
+  const item = (c, hijo = false, comun = null) => {
+    const ids = c.variantes.map(v => v.ind);
+    const on = actual && (actual === c);
+    const p0 = periodoDe(ids), per = p0 === comun ? '' : p0;
+    return `<li><button type="button" class="v4-it${hijo ? ' v4-it--hijo' : c.hijos.length ? ' v4-it--padre' : ''}" data-clave="${esc(c.clave)}"${on ? ' aria-current="true"' : ''}>${(() => { const sv = pictoDeIndicador(ids[0], { tam: 22, titulo: '' }); return sv ? `<span class="v4-it__picto" aria-hidden="true">${sv}</span>` : ''; })()}<span class="v4-it__r">${esc(c.rotulo)}</span>${per ? `<span class="v4-it__p">${esc(per)}</span>` : ''}</button></li>`;
+  };
+  let html = '';
+  if (q) {
+    const hits = todos().filter(c => normaliza(`${c.rotulo} ${c.grupo.rotulo} ${(temaDe(c.tema) || {}).rotulo} ${(c.padre || {}).rotulo || ''}`).includes(q));
+    const muns = MUNICIPIOS.filter(m => normaliza(m.n).includes(q)).sort((p, r) => (normaliza(p.n).startsWith(q) ? 0 : 1) - (normaliza(r.n).startsWith(q) ? 0 : 1) || p.n.localeCompare(r.n, 'es')).slice(0, 8);
+    const htmlMun = muns.length ? `<section class="v4-g"><h3 class="v4-g__res">Municipios: abrir su ficha</h3><ul class="v4-g__lista">${muns.map(m => `<li><button type="button" class="v4-it v4-it--mun" data-ine="${esc(m.c)}"><span class="v4-it__r">${esc(m.n)}</span><span class="v4-it__p">${esc(m.c)}</span></button></li>`).join('')}</ul></section>` : '';
+    html = htmlMun + (hits.length ? `<section class="v4-g"><h3 class="v4-g__res">Resultados en todos los temas</h3><ul class="v4-g__lista">${hits.slice(0, 40).map(c => `<li><button type="button" class="v4-it" data-clave="${esc(c.clave)}"${actual === c ? ' aria-current="true"' : ''}><span class="v4-it__r">${esc(c.padre ? c.padre.rotulo + ': ' + c.rotulo : c.rotulo)}</span><span class="v4-it__p">${esc((temaDe(c.tema) || {}).rotulo || '')}</span></button></li>`).join('')}</ul></section>`
+      : (htmlMun ? '' : '<p class="v4-vacio-lista">Ningún indicador ni municipio con ese nombre.</p>'));
+  } else {
+    // en Transporte las capas van arriba como casillas: los grupos de abajo, solo con indicadores por municipio (no las capas otra vez)
+    const esCapa = c => c.variantes.every(v => /^capa_/.test(v.ind));
+    const grupos = t.id === 'transporte' && itemsTransporte()
+      ? (t.grupos || []).map(g => ({ ...g, conceptos: g.conceptos.filter(c => !esCapa(c)) })).filter(g => g.conceptos.length)
+      : (t.grupos || []);
+    if (t.id === 'transporte' && itemsTransporte()) {
+    // Transporte: las capas se eligen aquí (casillas, varias a la vez); en Opciones solo queda el fondo. Debajo, los indicadores por municipio de la base (22-nov-2026)
+    const nCapasT = itemsTransporte().reduce((n, g) => n + g.items.length, 0), nIndT = grupos.reduce((n, g) => n + g.conceptos.length + g.conceptos.reduce((m, c) => m + c.hijos.length, 0), 0);
+    html = `<h3 class="v4-lista-h"><span>Capas</span><small>${nCapasT} capas</small></h3><p class="v4-g__aviso">Capas heredadas o candidatas, aún sin revisar. Marca las que quieras ver a la vez; las fechadas (ferrocarril, carreteras del JRC) siguen la barra de tiempo.</p>`
+      + itemsTransporte().map(g => `<section class="v4-g v4-g--trans"><h3 class="v4-g__res">${esc(g.grupo)}</h3><ul class="v4-g__lista">${g.items.map(x => `<li><button type="button" class="v4-it v4-it--capa c4-it"${x.revision ? ` title="${esc(x.revision)}"` : ''} data-capa-t="${esc(x.id)}" data-ind="${esc(x.ind)}" aria-pressed="${x.on}" title="${esc(x.sub)}"><i class="c4-caja" aria-hidden="true"></i>${x.swatch}<span class="v4-it__r">${esc(x.nombre)}</span>${x.badge}</button></li>`).join('')}</ul></section>`).join('');
+      if (grupos.length) html += `<h3 class="v4-lista-h"><span>Indicadores</span><small>${nIndT} indicadores</small></h3><p class="v4-g__aviso">Distancias, red y puertos por municipio: elige uno para pintarlo en el mapa.</p>`;
+    }
+    const total = grupos.reduce((n, g) => n + g.conceptos.length + g.conceptos.reduce((m, c) => m + c.hijos.length, 0), 0);
+    for (const g of enBloques(grupos)) {
+      const k = t.id + '|' + g.rotulo;
+      const conActual = actual && (actual.grupo === g || (g.bloque && g.conceptos.includes(actual)));
+      const abierto = PLEGADOS.has(k) ? PLEGADOS.get(k) : (total <= 14 || conActual);
+      // periodo del grupo si todos sus indicadores lo comparten; si no, cada uno el suyo
+      const pers = g.conceptos.flatMap(c => [c, ...c.hijos]).map(c => periodoDe(c.variantes.map(v => v.ind)));
+      const comun = pers.every(x => x === pers[0]) ? pers[0] : null;
+      let sec = null, lis = '';
+      // lo que Juan pidió y la base está preparando (no se armoniza nada en el visor)
+      if (/^Tipo de cultivo/.test(g.rotulo)) lis += '<li class="v4-g__aviso">Vista armonizada de cultivos entre periodos (trigo, cebada, olivar… comparables): en preparación en la base.</li>';
+      // grupo experimental (propiedad): rotulado como tal, arriba y en cada indicador
+      const exper = /experimental/i.test(g.rotulo) || g.conceptos.some(c => c.variantes.some(v => (datos.indicador(v.ind) || {}).experimental));
+      if (exper) lis += '<li class="v4-g__aviso v4-g__aviso--exp">Experimental: indicadores en prueba en la base; pueden cambiar o retirarse. No sirven todavía para comparar.</li>';
+      for (const c of g.conceptos) {
+        if (c.seccion && c.seccion !== sec) { sec = c.seccion; lis += `<li class="v4-g__sec" aria-hidden="true">${esc(sec)}</li>`; }
+        lis += item(c, false, comun);
+        for (const h of c.hijos) lis += item(h, true, comun);
+      }
+      const n = pers.length;
+      const solo = false;   // v19: nunca tarjetas sueltas (enBloques)
+      const deAnalisis = g.conceptos.length && g.conceptos.every(c => c.variantes.every(v => esAnalisis(v.ind)));
+      const id = 'g-' + k.replace(/[^a-z0-9]+/gi, '-');
+      html += solo
+        ? `<section class="v4-g v4-g--solo${deAnalisis ? ' v4-g--analisis' : ''}">${deAnalisis ? '<p class="v4-g__atlas">Calculado por el Atlas</p>' : ''}<ul class="v4-g__lista">${lis}</ul></section>`
+        : `<section class="v4-g${abierto ? ' is-abierto' : ''}${INFO_G(g.rotulo) ? ' v4-g--info' : ''}${deAnalisis ? ' v4-g--analisis' : ''}"><h3 class="v4-g__h"><button type="button" class="v4-g__btn" data-g="${esc(k)}" aria-expanded="${abierto}" aria-controls="${id}">${INFO_G(g.rotulo) ? `<span class="v4-g__ico" aria-hidden="true">${INFO_G(g.rotulo).ico}</span>` : ''}<span class="v4-g__r">${esc(rotuloGrupo(g.rotulo))}${exper && !/experimental/i.test(g.rotulo) ? ' <em class="v4-exp">experimental</em>' : ''}</span><span class="v4-g__n">${n} ${n === 1 ? 'indicador' : 'indicadores'}</span>${deAnalisis ? '<span class="v4-g__atlas" title="Lo calcula el Atlas a partir de las cifras de la base; no es una cifra de la fuente">Calculado por el Atlas</span>' : ''}${INFO_G(g.rotulo) ? `<span class="v4-g__que">${esc(INFO_G(g.rotulo).que)}</span>` : ''}</button></h3><ul class="v4-g__lista" id="${id}"${abierto ? '' : ' hidden'}>${lis}</ul></section>`;
+    }
+  }
+  const lista = $('#v4-sub-lista');
+  lista.innerHTML = html;
+  $$('.v4-g__btn', lista).forEach(b => b.addEventListener('click', () => {
+    const ab = b.getAttribute('aria-expanded') !== 'true';
+    PLEGADOS.set(b.dataset.g, ab);
+    b.setAttribute('aria-expanded', String(ab));
+    b.closest('.v4-g').classList.toggle('is-abierto', ab);
+    lista.querySelector('#' + b.getAttribute('aria-controls')).hidden = !ab;
+  }));
+  // el indicador activo, siempre a la vista en la lista
+  const cur = lista.querySelector('.v4-it[aria-current="true"]');
+  if (cur) requestAnimationFrame(() => { const r = cur.getBoundingClientRect(), l = lista.getBoundingClientRect(); if (r.top < l.top || r.bottom > l.bottom) cur.scrollIntoView({ block: 'center', behavior: 'instant' }); });
+  const mapaC = new Map(todos().map(c => [c.clave, c]));
+  $$('[data-capa-t]', lista).forEach(b => b.addEventListener('click', () => conmutaTransporte(b.dataset.capaT, b.dataset.ind)));
+  $$('.v4-it--mun', lista).forEach(b => b.addEventListener('click', () => { setEstado({ mun: b.dataset.ine }, { historial: true }); cierraFlotantes('sub'); }));
+  $$('.v4-it:not(.v4-it--mun):not([data-capa-t])', lista).forEach(b => b.addEventListener('click', () => {
+    const c = mapaC.get(b.dataset.clave); if (!c) return;
+    const v = variantePareja(c, ubicar(estado.ind));
+    temaVisto = null;
+    // una vista puede responder a la elección (Composición resalta); true: no hay que cambiar de indicador
+    if (vistaActiva && vistaActiva.def.alElegir && vistaActiva.def.alElegir(v.ind)) { cierraFlotantes('sub'); return; }
+    if (v.ind === estado.ind) { cierraFlotantes('sub'); return; }
+    irAIndicador(v.ind);
+  }));
+}
+
+function pintaTitulo() {
+  const u = ubicar(estado.ind), ent = datos.indicador(estado.ind);
+  if (!ent) return;
+  const c = u && u.concepto;
+  $('#v4-titulo-k').textContent = u ? `${u.tema.largo || u.tema.rotulo} · ${u.grupo.rotulo}${esAnalisis(estado.ind) || (estado.cmb && /^poblacion_(hab|densidad)$/.test(estado.ind) && boton(estado.nivel) !== 'termino') ? ' · calculado por el Atlas' : ''}` : '';
+  // en grande, solo el nombre («Olivar»); la medida, el nivel, la unidad y el periodo, en la línea de debajo
+  const h = c ? c.rotulo : ent.rotulo;
+  $('#v4-titulo-h').textContent = h;
+  { const sv = pictoDeIndicador(ent.id, { tam: 34, titulo: '' }), pt = $('#v4-titulo-picto'); pt.innerHTML = sv || ''; pt.hidden = !sv; pt.parentElement.classList.toggle('con-picto', !!sv); }
+  const pv = vistaActiva && vistaActiva.def.periodoTitulo ? vistaActiva.def.periodoTitulo() : null;   // el periodo de lo que se ve, si la vista lo sabe
+  const per = pv ? pv.texto : periodoDe([estado.ind]);
+  const n = pv ? pv.n : new Set((ent.anios || []).map(a => String(a).slice(0, 4))).size;   // 2019 (abril y noviembre) cuenta una vez
+  const an = (ent.anios || []).map(Number).filter(isFinite);
+  const seguidos = an.length > 1 && an.length >= (an[an.length - 1] - an[0] + 1) * 0.6;
+  const medida = c && c.eje && u.variante ? (c.eje === 'fecha' ? u.variante.etiqueta : u.variante.etiqueta.toLowerCase()) : '';
+  const unidad = ent.unidad && !ent.mensual ? ent.unidad : '';
+  const unidadVa = unidad && !(medida && (medida.toLowerCase().includes(unidad.toLowerCase()) || (unidad === 'ha' && /hect/.test(medida))));
+  const partes = [medida, c && c.padre ? `producto del grupo ${c.padre.rotulo.toLowerCase()}` : '', unidadVa ? unidad : '', ['composicion', 'anomalias'].includes(estado.vista) ? '' : rotNivel(estado.nivel).toLowerCase(), per ? `${per}${n > 3 ? ` · ${entero(n)} ${seguidos ? 'años' : 'cortes'}` : ''}` : ''].filter(Boolean);
+  $('#v4-titulo-s').textContent = partes.join(' · ');
+  document.title = `${h}${medida ? ' · ' + medida : ''} · Visor · Atlas Histórico de Andalucía`;
+  ajustaUnaLinea($('#v4-titulo-h'), 30, 16);
+  pintaRevAnio();
+}
+
+// una sola línea: baja el cuerpo de letra hasta que quepa (y, en último caso, puntos suspensivos). Se repite cuando
+// cambia el ancho de su caja y cuando termina de cargar la letra (Syne es más ancha que la de reserva).
+const UNA_LINEA = new Map();
+const roLinea = new ResizeObserver(es => { for (const e of es) { const o = UNA_LINEA.get(e.target); if (o) mideLinea(e.target, o.max, o.min); } });
+function mideLinea(el, max, min) {
+  const top = innerWidth < 760 ? Math.min(max, 22) : max;
+  el.style.fontSize = top + 'px';
+  el.classList.remove('v4-dos-lineas');
+  if (!el.clientWidth) return;
+  if (el.scrollWidth <= el.clientWidth + 1) return;
+  let t = Math.max(min, Math.floor(top * el.clientWidth / el.scrollWidth));
+  el.style.fontSize = t + 'px';
+  let guarda = 12;
+  while (el.scrollWidth > el.clientWidth + 1 && t > min && guarda--) { t -= 1; el.style.fontSize = t + 'px'; }
+  if (el.scrollWidth > el.clientWidth + 1) el.classList.add('v4-dos-lineas');
+}
+function ajustaUnaLinea(el, max, min) {
+  if (!el) return;
+  if (!UNA_LINEA.has(el)) { UNA_LINEA.set(el, { max, min }); roLinea.observe(el); }
+  mideLinea(el, max, min);
+  requestAnimationFrame(() => mideLinea(el, max, min));
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const [el, o] of UNA_LINEA) if (el.isConnected) mideLinea(el, o.max, o.min); });
+
+// Análisis, siempre: si el indicador activo no se puede cruzar (fronteras, capas, categórico…), abre con la densidad de
+// población por municipio actual y lo dice en una línea
+const IND_ANALISIS = 'poblacion_densidad';
+function abreAnalisis() {
+  const ent = datos.indicador(estado.ind), v = VISTAS.get('analisis');
+  if (!v) return;
+  const ad = admiteVista(v, ent, nivelDatos(ent, boton(estado.nivel), 'analisis'));
+  if (ad === true) { notaVista(''); irAVista('analisis'); return; }
+  const alt = datos.indicador(IND_ANALISIS) ? IND_ANALISIS : (todos().map(c => c.variantes[0].ind).find(id => { const e = datos.indicador(id); return e && admiteVista(v, e, 'municipio') === true; }) || null);
+  if (!alt) { aviso('Ningún indicador del catálogo se puede cruzar todavía.'); return; }
+  setEstado({ ind: alt, nivel: 'municipio', vista: 'analisis', sel: [], comp: [], ficha: '', fn: '', mun: '', capas: sinTransporte(estado.capas) }, { historial: true });
+  notaVista('El indicador anterior no admite análisis; elige otro arriba.');
+}
+let notaFija = false;
+function notaVista(t) {
+  let n = $('#v4-nota-vista');
+  if (!n) { n = document.createElement('p'); n.id = 'v4-nota-vista'; n.className = 'v4-nota-vista'; n.setAttribute('role', 'status'); $('.v4-centro').appendChild(n); }
+  n.textContent = t; n.hidden = !t; notaFija = !!t;
+  // encima del escenario, justo debajo de la tira de selección (sin mover la rejilla del centro)
+  const esc0 = $('#v4-escena'); if (t && esc0) n.style.top = esc0.offsetTop + 'px';
+}
+on('cambio', ({ claves }) => { if (notaFija && claves.has('ind') && !claves.has('vista')) notaVista(''); });
+
+function pintaVistas() {
+  opcionesDeVista();
+  const ent = datos.indicador(estado.ind);
+  const cont = $('#v4-vistas');
+  const html = [];
+  for (const v of vistasOrdenadas()) {
+    if (v.id === 'analisis') continue;   // ronda v13: Análisis es un modo propio, desde la barra de temas
+    const ad = admiteVista(v, ent, nivelDatos(ent, boton(estado.nivel), v.id));
+    const prin = PRINCIPALES.includes(v.id) || !!v.principal;
+    if (ad !== true && v.id !== estado.vista) continue;   // ronda v15: solo las vistas que funcionan para este indicador
+    const on = v.id === estado.vista;
+    html.push(`<button type="button" role="tab" class="v4-vista${prin ? '' : ' v4-vista--extra'}" data-id="${v.id}" aria-selected="${on}"${ad !== true ? ` aria-disabled="true" title="${esc(typeof ad === 'string' ? ad : 'No disponible para este indicador')}"` : ` title="${esc(v.rotulo)}"`}>${v.icono ? `<svg class="i4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">${v.icono}</svg>` : icono(v.id)}<span>${esc(v.rotulo)}</span></button>`);
+  }
+  // «Comparar» (ronda v20): parte el área central en dos paneles; en Mapa y en Líneas
+  const puedeCmp = ['mapa', 'lineas'].includes(estado.vista) && !!ent && !ent.mensual && !/^capa_/.test(ent.id || '') && !(Array.isArray(ent.anios) && ent.anios.length < 2);
+  if (puedeCmp) html.push(`<button type="button" class="v4-vista v4-vista--cmp" data-cmp aria-pressed="${!!estado.cmp}" title="Comparar este indicador en dos años o dos periodos, en dos paneles"><svg class="i4" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h7.5v14H3zM13.5 5H21v14h-7.5z"/></svg><span>Comparar</span></button>`);
+  cont.classList.toggle('v4-vistas--sola', html.length <= 1);   // solo el mapa: sin fila de pestañas
+  // a 390 px, la fila de pestañas se pliega en un menú «Vista ▾» (el mismo orden; las que no valen, desactivadas)
+  const opts0 = vistasOrdenadas().filter(v => v.id !== 'analisis').map(v => { const ad = admiteVista(v, ent, nivelDatos(ent, boton(estado.nivel), v.id)); return (ad === true || v.id === estado.vista) ? `<option value="${v.id}"${v.id === estado.vista ? ' selected' : ''}${ad !== true && v.id !== 'analisis' && v.id !== estado.vista ? ' disabled' : ''}>${esc(v.rotulo)}</option>` : ''; }).join('');
+  const opts = opts0 + (puedeCmp ? `<option value="__cmp">${estado.cmp ? 'Dejar de comparar' : 'Comparar dos años'}</option>` : '');
+  html.push(`<label class="v4-vista-menu"><span>Vista</span><select id="v4-vista-sel" aria-label="Vista">${opts}</select></label>`);
+  html.push('<button type="button" class="v4-unidades" id="v4-unidades" aria-expanded="false" aria-controls="v4-selbar">Unidades</button>');
+  cont.innerHTML = html.join('');
+  $('#v4-unidades', cont).addEventListener('click', () => { document.body.classList.toggle('v4-sel-abierta'); pintaSeleccion(); });
+  pintaSeleccion();
+  $('#v4-vista-sel', cont).addEventListener('change', ev => { const id = ev.target.value; if (id === '__cmp') { setEstado({ cmp: estado.cmp ? '' : 'auto' }, { historial: true }); return; } if (id === 'analisis') abreAnalisis(); else if (id !== estado.vista) irAVista(id); });
+  $$('.v4-vista', cont).forEach(b => b.addEventListener('click', () => {
+    if (b.hasAttribute('data-cmp')) { setEstado({ cmp: estado.cmp ? '' : 'auto' }, { historial: true }); return; }
+    if (b.dataset.id === 'analisis') { if (estado.vista !== 'analisis') abreAnalisis(); return; }   // nunca «no se puede ver»
+    if (b.getAttribute('aria-disabled') === 'true') { aviso(b.title); return; }
+    if (b.dataset.id !== estado.vista) irAVista(b.dataset.id);
+  }));
+}
+
+function seg(nombre, opciones, valor, alCambiar, { titulo = '' } = {}) {
+  const id = 'seg-' + nombre.replace(/\W+/g, '');
+  return `<div class="v4-campo"><p class="v4-campo__k" id="${id}">${esc(nombre)}</p><div class="v4-seg" role="radiogroup" aria-labelledby="${id}"${titulo ? ` title="${esc(titulo)}"` : ''}>${opciones.map(([v, t, tt, dis]) => `<button type="button" role="radio" data-v="${esc(v)}" aria-checked="${String(v) === String(valor)}"${tt ? ` title="${esc(tt)}"` : ''}${dis ? ' disabled' : ''}>${esc(t)}</button>`).join('')}</div></div>`;
+}
+function enlazaSeg(el, nombre, fn) {
+  const id = 'seg-' + nombre.replace(/\W+/g, '');
+  const g = el.querySelector(`[aria-labelledby="${id}"]`);
+  if (!g) return;
+  g.querySelectorAll('button').forEach(b => b.addEventListener('click', () => fn(b.dataset.v)));
+  g.addEventListener('keydown', e => {
+    const bs = [...g.querySelectorAll('button:not([disabled])')], k = bs.indexOf(document.activeElement);
+    if (k < 0) return;
+    const to = { ArrowRight: k + 1, ArrowDown: k + 1, ArrowLeft: k - 1, ArrowUp: k - 1 }[e.key];
+    if (to == null) return;
+    e.preventDefault(); const b = bs[(to + bs.length) % bs.length]; b.focus(); b.click();
+  });
+}
+
+function pintaIndicador() {
+  const el = $('#v4-ind');
+  const u = ubicar(estado.ind), ent = datos.indicador(estado.ind);
+  if (!ent) { el.innerHTML = ''; return; }
+  const c = u && u.concepto;
+  const partes = [];
+  if (opcionVista(estado.vista, 'medida') && c && c.variantes.length > 1) partes.push(seg(c.ejeRotulo || 'Medida', c.variantes.map(v => [v.ind, v.etiqueta]), estado.ind));
+  const cat = typeof ent.escala === 'string' ? ent.escala : (ent.escala && ent.escala.tipo) || '';
+  const numerico = !ent.proveedor && !ent.mensual;
+  if (esCategorico(ent)) partes.push('<p class="v4-ind__nota">Categoría: un color por familia; «sin dato» no es ninguna de ellas.</p>');
+  else if (cat === 'divergente') partes.push('<p class="v4-ind__nota" title="Clases simétricas alrededor de 0; el centro, en blanco, es «sin anomalía».">Clases simétricas alrededor de 0 (en blanco, sin anomalía).</p>');
+  if (ent.id === 'capa_rios') {
+    const on = new Set(nivelesRiosActivos());
+    partes.push(`<div class="v4-campo"><p class="v4-campo__k" id="seg-riosniv">Niveles</p><div class="v4-seg" role="group" aria-labelledby="seg-riosniv">${RIOS_OPCIONES.map(n => `<button type="button" data-rio="${n.id}" aria-pressed="${on.has(n.id)}" aria-checked="${on.has(n.id)}" title="${esc(n.rotulo)}">${esc(n.id.replace('rios:', ''))}</button>`).join('')}</div></div>
+      <p class="v4-ind__nota">1-2: Guadalquivir y ríos de más de 90 km · 3: de 25 a 90 km · 4: menores (pesado). Longitudes dentro de Andalucía.</p>`);
+  }
+  // Representación (solo en el mapa): coropletas, burbujas (cantidades) o relieve 3D; lo que no vale, con su porqué
+  const enCambio = !!(estado.cmb && /^poblacion_(hab|densidad)$/.test(ent.id) && boton(estado.nivel) !== 'termino');
+  // las que no valen para este indicador salen apagadas, con su motivo
+  const repsTodas = numerico && estado.vista === 'mapa' && !estado.cmp ? REPS.map(([v, t, tt]) => [v, t, tt, enCambio && v === 'relieve' ? 'Con «Cambio», el relieve no aporta.' : motivoNoRep(v, ent, M.ind === estado.ind ? M.prov : null, estado.nivel)]) : [];
+  if (repsTodas.length > 1) {   // una sola representación posible: no hay nada que elegir
+    const prov = M.ind === estado.ind ? M.prov : null;
+    const efectiva = repEfectiva(estado.rep, ent, prov, estado.nivel);
+    partes.push(`<div class="v4-campo"><p class="v4-campo__k" id="seg-Representacion">Representación</p><div class="v4-seg v4-seg--rep" role="radiogroup" aria-labelledby="seg-Representacion">${repsTodas.map(([v, t, tt, no]) => { return `<button type="button" role="radio" data-v="${v}" aria-checked="${v === efectiva}"${no ? ` aria-disabled="true" data-no="${esc(no)}"` : ''} title="${esc(no || tt)}">${esc(t)}</button>`; }).join('')}</div></div>
+      <p class="v4-ind__nota v4-rep-nota"${efectiva === 'relieve' ? '' : ' hidden'}>${efectiva === 'relieve' ? 'En 3D no se dibujan el fondo ni las capas.' : ''}</p>`);
+  }
+  // Fronteras: de entrada, limpio; lo demás se enciende aquí
+  // Fronteras (ronda v15, Juan: «Fronteras no lo pillo»): los límites de cada año y, encima si se pide, los de hoy
+  if (ent.id === 'fronteras' && FR_OPC) {
+    partes.push(`<button type="button" class="v4-interruptor v4-fr-hoy" data-fr="hoy" aria-pressed="${!!FR_OPC.hoy}" title="Dibuja encima, en azul punteado, los límites de los municipios de hoy, para comparar"><i aria-hidden="true"></i><span>Fronteras de hoy</span></button>`);
+  }
+  if (opcionVista(estado.vista, 'ver') && numerico && !esCategorico(ent)) {
+    // «Ver» (rondas v16 y v23): Valor · Cambio (Habitantes y Densidad) · Frente a Andalucía
+    const conCambio = /^poblacion_(hab|densidad)$/.test(ent.id), enHist = boton(estado.nivel) === 'termino';
+    const af = (Array.isArray(ent.anios_fuente) && ent.anios_fuente.length ? ent.anios_fuente : (M.F || []).map(f => f.anio)).map(a => +String(a).slice(0, 4)).filter(a => isFinite(a) && a >= 1752);
+    const anios = [...new Set(af)].sort((p, q) => p - q);
+    const base = conCambio && estado.cmb ? +estado.cmb : null;
+    const provOk = M.ind === estado.ind && M.prov && M.prov.frenteDisponible;
+    const noAnd = motivoNoFrente(ent) || (estado.interp ? 'No se ofrece con «Todo interpolado».' : '')
+      || (provOk ? (M.prov.frenteDisponible(M.nivel) ? '' : ((M.prov.motivoSinFrente && M.prov.motivoSinFrente(M.nivel)) || SIN_CIFRA_AND)) : ((ent.niveles_en_disco || []).includes('andalucia') ? '' : SIN_CIFRA_AND));
+    const enAnd = estado.ver === 'and' && !noAnd;
+    partes.push(`<div class="v4-campo v4-campo--cmb"><p class="v4-campo__k" id="seg-Ver">Ver</p><div class="v4-seg" role="radiogroup" aria-labelledby="seg-Ver"><button type="button" role="radio" data-cmbv="" aria-checked="${!base && !enAnd}">Valor</button>${conCambio ? `<button type="button" role="radio" data-cmbv="1" aria-checked="${!!base}"${enHist ? ' disabled title="En límites históricos el término cambia de una fecha a otra: mira límites actuales, provincias o partidos"' : ''}>Cambio</button>` : ''}<button type="button" role="radio" data-cmbv="and" aria-checked="${enAnd}"${noAnd ? ` disabled title="${esc(noAnd)}"` : ' title="Cuánto está cada unidad por encima o por debajo de la cifra de Andalucía de ese año"'}>Frente a Andalucía</button></div></div>
+      ${enAnd ? '<p class="v4-mostrar-expl">Por encima o por debajo de la cifra de Andalucía de cada año. Los cortes son los mismos en todo el periodo.</p>' : ''}
+      ${base ? `<p class="v4-atlas-marca">Calculado por el Atlas: (cifra del año ÷ cifra de ${base} − 1) × 100</p><label class="v4-cmb-base">respecto a <select id="v4-cmb-anio" aria-label="Año base del cambio">${anios.map(a => `<option value="${a}"${a === base ? ' selected' : ''}>${a}</option>`).join('')}</select></label>` : ''}
+      ${base && enHist ? '<p class="v4-ind__nota">En límites históricos el término cambia de una fecha a otra: el cambio se ve en límites actuales, provincias o partidos.</p>' : ''}`);
+  }
+  if (opcionVista(estado.vista, 'mostrar') && numerico && !esCategorico(ent) && !esPolitica(ent)) {   // v20: en elecciones no hay «Mostrar» (no se estima nada)
+    // ronda v19 (Juan): un solo control para lo que se enseña; «Solo observado», solo en límites históricos (v17)
+    const hist = boton(estado.nivel) === 'termino';
+    const ops = [['todo', 'Todo', 'Las cifras de la base, de fuente y estimadas'], ...(ent.sin_interpolar || !baseEstima(ent) ? [] : [['interp', 'Todo interpolado', 'Además, los años entre dos cifras de fuente que estima la base']]), ...(hist ? [['obs', 'Solo observado', 'Solo las cifras tal como las da la fuente']] : [])];
+    const val = estado.interp ? 'interp' : estado.obs && hist ? 'obs' : 'todo';
+    const EXPL = {
+      todo: 'Las cifras de la base, de fuente y estimadas, en los años en que hay cifra.',
+      interp: 'Además, los años entre dos cifras de fuente que estima la base (por ejemplo, la población entre dos censos), con su marca de estimado. El visor no interpola nada por su cuenta.',
+      obs: 'Solo las cifras tal como las da la fuente; lo estimado queda como hueco, no como cero.',
+    };
+    if (ops.length > 1) partes.push(seg('Mostrar', ops, val, null) + `<p class="v4-mostrar-expl">${esc(EXPL[val])}</p>`);
+  }
+  if (false) partes.push(seg('Mostrar', [['0', 'Todo'], ['1', 'Solo observado', 'Lo estimado se oculta; no se convierte en cero']], estado.obs ? '1' : '0', null));
+  el.innerHTML = partes.join('');
+  { const sec = $('#v4-sec-ind'); if (sec) sec.hidden = !partes.length; }   // sin nada que elegir, sin sección
+  if (c && c.variantes.length > 1) enlazaSeg(el, c.ejeRotulo || 'Medida', v => { if (v !== estado.ind) irAIndicador(v); });
+  enlazaSeg(el, 'Escala', v => setEstado({ esc: v }));
+  el.querySelectorAll('[data-rio]').forEach(b => b.addEventListener('click', () => conmutaNivelRios(b.dataset.rio)));
+  enlazaSeg(el, 'Mostrar', v => setEstado({ obs: v === 'obs', interp: v === 'interp', ...(v === 'interp' ? { ver: '' } : {}) }));
+  el.querySelectorAll('[data-cmbv]').forEach(b => b.addEventListener('click', () => {
+    if (b.disabled) return;
+    if (b.dataset.cmbv === 'and') { setEstado({ ver: 'and', cmb: '', interp: false }); return; }
+    const quiere = b.dataset.cmbv === '1';
+    if (!quiere) { setEstado({ cmb: '', ver: '' }); return; }
+    if (estado.cmb) return;
+    const opts = (M.F || []).map(f => +String(f.anio).slice(0, 4)).filter(isFinite);
+    const b0 = opts.reduce((x, y) => (Math.abs(y - 1950) < Math.abs(x - 1950) ? y : x), opts[0] || 1950);
+    setEstado({ cmb: String(b0), ver: '', rep: '' });
+  }));
+  const selB = el.querySelector('#v4-cmb-anio'); if (selB) selB.addEventListener('change', () => setEstado({ cmb: selB.value }));
+  el.querySelectorAll('[data-fr]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.fr;
+    FR_OPC[k] = !FR_OPC[k];
+    b.setAttribute('aria-pressed', String(FR_OPC[k]));
+    if (k === 'grises') grisesEnFronteras(FR_OPC[k]);
+    if (k === 'ensenada') montaPanelIndicador();
+    mapa.refrescar();
+  }));
+  el.querySelectorAll('.v4-seg--rep button').forEach(b => b.addEventListener('click', () => {
+    const nota = el.querySelector('.v4-rep-nota');
+    if (b.dataset.no) { nota.textContent = b.dataset.no; nota.hidden = false; return; }
+    setEstado({ rep: b.dataset.v === 'coro' ? '' : b.dataset.v });
+  }));
+}
+
+function pintaNiveles() {
+  const ent = datos.indicador(estado.ind);
+  const secN = $('#v4-niveles').closest('.v4-sec');
+  if (secN) secN.hidden = !!(ent && /^capa_/.test(ent.id));
+  const d = disponibles(ent);
+  const act = boton(estado.nivel);
+  const el = $('#v4-niveles');
+  // ronda v16 (Juan): arriba, grandes, «Límites históricos (de la fuente)» y «Límites actuales (repartido)»; debajo,
+  // pequeños, provincia y partido; cada uno con su «i»
+  // ronda v20 (Juan: «son botones gigantes»): dos segmentos finos. «Límites: Históricos · Actuales» y «Unidad: Provincia ·
+  // Partido judicial»; una sola elección entre los cuatro (radio)
+  const ROT = { termino: ['Históricos', 'Límites históricos: el término de cada fecha, con la cifra de la fuente'], municipio: ['Actuales', 'Límites actuales: los 785 municipios de hoy; la base reparte la cifra de un término entre sus municipios de hoy'], provincia: ['Provincia', 'Las ocho provincias de hoy'], pj1888: ['Partido judicial', 'Los partidos judiciales de 1888'] };
+  const boton1 = n => {
+    const ok = d.has(n.id);
+    const sn = ok && n.id === 'municipio' && ent && !(ent.niveles || []).includes('municipio');
+    const tt = !ok ? `${n.rotulo}: ${motivoNo(ent, n.id)}` : sn ? `${ROT[n.id][1]}. ${motivoNo(ent, n.id)} Se enseña con la trama «sin dato a este nivel».` : `${ROT[n.id][1]}.`;
+    if (!ok && n.id === 'municipio' && ent && !ent.proveedor && !ent.mensual) {
+      return `<button type="button" role="radio" class="v4-nivel" data-n="municipio" aria-checked="false" aria-disabled="true" title="${esc(`${ROT.municipio[0]}: ${motivoNo(ent, 'municipio')}`)}">${esc(ROT.municipio[0])}</button>`;
+    }
+    return ok ? `<button type="button" role="radio" class="v4-nivel" data-n="${n.id}" aria-checked="${n.id === act}" aria-label="${esc(ROT[n.id][1])}" title="${esc(tt)}">${esc(ROT[n.id][0])}</button>` : '';
+  };
+  const porId = id => NIV4.find(n => n.id === id);
+  const fila = (k, ids) => { const bs = ids.map(id => boton1(porId(id))).join(''); return bs ? `<div class="v4-niv-grupo"><p class="v4-niv-k">${k}</p><div class="v4-seg v4-seg--niv">${bs}</div></div>` : ''; };
+  el.innerHTML = fila('Límites', ['termino', 'municipio']) + fila('Unidad', ['provincia', 'pj1888']);
+  marcaNivelesAnio();
+  $$('.v4-nivel', el).forEach(b => b.addEventListener('click', () => {
+    if (b.getAttribute('aria-disabled') === 'true') { aviso(b.title); return; }
+    if (b.dataset.n !== boton(estado.nivel)) irANivel(b.dataset.n);
+  }));
+  el.onkeydown = e => {
+    const bs = $$('.v4-nivel:not([aria-disabled="true"])', el), k = bs.indexOf(document.activeElement);
+    const to = { ArrowRight: k + 1, ArrowDown: k + 1, ArrowLeft: k - 1, ArrowUp: k - 1 }[e.key];
+    if (k < 0 || to == null) return;
+    e.preventDefault(); const b = bs[(to + bs.length) % bs.length]; b.focus(); b.click();
+  };
+  // qué es la unidad elegida, en llano
+  const nota = $('#v4-niveles-nota');
+  const n = estado.nivel;
+  // una línea corta a la vista; la explicación entera, al pasar el puntero
+  const t = PANEL.includes(n)
+    ? [`Unidad estable de ${n.slice(2)}: el mismo territorio en todas las fechas.`, `En esta vista, el municipio histórico se sigue como unidad estable de ${n.slice(2)}: el mismo territorio en todas las fechas (un municipio de entonces con lo que hoy son sus piezas).`]
+    : n === 'termino' ? ['El término de cada fecha · geometría reconstruida con recintos de hoy.', 'El término de cada fecha, reconstruido uniendo recintos de hoy: no es el límite histórico observado, y cada línea dice su fiabilidad (exacto, aproximado o supuesto). Cambia con el tiempo. Lo que no tiene geometría de su año va sobre los municipios de hoy, con su rótulo.']
+      : n === 'municipio' ? ['Los 785 de hoy; sin cifra municipal, trama.', 'Los 785 municipios de hoy, siempre los mismos. Solo llevan cifra si la unidad la da por municipio; si no, la trama «sin dato a este nivel».']
+        : n === 'pj1888' ? ['Partidos de 1888 (pertenencia propuesta).', 'Los partidos judiciales de 1888, una sola división para todas las fechas (la del ganado y la producción de 1890). La pertenencia de sus municipios es una propuesta de la base, con fuente o sin ella; cada partido dice cuál y con qué confianza.']
+          : ['Las ocho de hoy; Andalucía, en la cifra grande.', 'Las ocho provincias. Andalucía entera va siempre en la cifra grande.'];
+  nota.textContent = t[0];
+  nota.title = t[1];
+}
+
+// ---------------------------------------------------------------- tiempo
+// años sin unir (catálogo: anios_sin_unir): el hueco se comprime a una franja corta con un corte (//) (ronda v15)
+let HUECO = null;   // { g0, g1, gap } en años
+function huecoDe(ent, F) {
+  const tr = datos.tramosSinInterp(ent);   // donde cambia la fuente, la regla sigue a escala
+  const p = ((ent && ent.anios_sin_unir) || []).find(x => Array.isArray(x) && x.length === 2 && (+x[1] - +x[0] > 50 || !datos.cruzaTramo(tr, +x[0], +x[1])) && F.some(f => +f.anio <= +x[0]) && F.some(f => +f.anio >= +x[1]));
+  if (!p) return null;
+  const g0 = +p[0], g1 = +p[1], resto = Math.max(1, +F[F.length - 1].anio - g1);
+  return { g0, g1, gap: Math.max(8, Math.round(resto * 0.19)) };
+}
+function posAnio(y) { const h = HUECO; if (!h) return y; return y <= h.g0 ? y : y >= h.g1 ? y - (h.g1 - h.g0) + h.gap : h.g0 + (y - h.g0) / (h.g1 - h.g0) * h.gap; }
+// el año grande de la barra ocupa siempre lo mismo: la pista no cambia de ancho con cada fecha
+function fijaAnchoAnio(F) {
+  const el = $('#v4-anio'); if (!el) return;
+  const t0 = el.textContent; el.style.minWidth = '';
+  if (el.offsetParent) { let w = 0; for (const t of new Set(F.map(f => String(f.etiqueta)))) { el.textContent = t; w = Math.max(w, el.getBoundingClientRect().width); } el.style.minWidth = `${Math.ceil(w)}px`; }
+  el.textContent = t0;
+}
+function posDe(f, temporal) { return temporal ? posAnio(+f.anio) : M.F.indexOf(f); }
+function montaRegla() {
+  const F = M.F, r = $('#v4-range'), marks = $('#v4-marcas');
+  marks.innerHTML = '';
+  if (!F.length) return;
+  const temporal = M.prov.temporal ? M.prov.temporal(M.nivel) : true;
+  M.temporal = temporal;
+  HUECO = temporal && !estado.interp ? huecoDe(datos.indicador(estado.ind), F) : null;
+  const a = posDe(F[0], temporal), b = posDe(F[F.length - 1], temporal), span = (b - a) || 1;
+  r.min = a; r.max = b === a ? a + 1 : b; r.step = 1;
+  r.disabled = F.length < 2;
+  ['#v4-play', '#v4-prev', '#v4-next'].forEach(s => { $(s).disabled = F.length < 2; });
+  const frases = (M.prov.frases && M.prov.frases(M.nivel)) || [];
+  // pestañas de año: los años de fuente (anios_fuente del catálogo); los interpolados, solo una marquita en la pista
+  const ent = datos.indicador(estado.ind) || {};
+  const af = Array.isArray(ent.anios_fuente) && ent.anios_fuente.length ? new Set(ent.anios_fuente.map(a => String(a).replace(/^(\d{4})[-_.].+$/, '$1'))) : null;   // 2019-04 y 2019-11 → 2019
+  const esFuente = f => !af || af.has(String(f.clave)) || af.has(String(f.anio));
+  const nFuente = F.filter(esFuente).length;
+  const porEpocas = !!ent.etiquetas_anio;
+  marks.classList.toggle('v4-marcas--epocas', porEpocas);
+  document.getElementById('v4-anio').classList.toggle('is-epoca', porEpocas);
+  fijaAnchoAnio(F);
+  const largo = nFuente >= 160;   // con muchas pestañas, las que se pisan quedan en marca y se ven las que caben
+  const W = marks.getBoundingClientRect().width || 600;
+  const ancho = innerWidth < 760 ? 9.6 : 11.6;   // Syne 800 a 12 o 15 px, por cifra
+  F.forEach((f, k) => {
+    const m = document.createElement('button');
+    m.type = 'button'; m.tabIndex = -1; m.setAttribute('aria-hidden', 'true'); m.title = f.etiqueta + (esFuente(f) ? '' : ' · interpolado');
+    m.className = 'v4-m' + (k === 0 ? ' is-ini' : '') + (k === F.length - 1 ? ' is-fin' : '') + (f.estimado ? ' is-est' : '') + (frases.some(x => x.i === k) ? ' is-key' : '') + (largo || !esFuente(f) ? ' is-mini' : '');
+    m.style.left = (F.length === 1 ? 50 : ((posDe(f, temporal) - a) / span * 100)) + '%';
+    m.addEventListener('click', () => { pausa(); irA(k); });
+    if (porEpocas) {
+      // cada época, en su tramo (la primera y la última, medio paso); si no caben todas, una sí y otra no, con sus extremos.
+      // La de cada momento sale siempre entera en el año grande; las demás, al pasar el puntero
+      const n = F.length, p0 = W / Math.max(1, n - 1), salto = Math.max(1, Math.ceil(76 / p0)), ult = k === n - 1;
+      const ve = n === 1 || ult || (k % salto === 0 && n - 1 - k >= salto);
+      const p1 = p0 * salto, borde = k === 0 || ult;
+      if (ve) m.innerHTML = `<span title="${esc(f.etiqueta)}" style="width:${n === 1 ? 160 : Math.floor(borde ? p1 / 2 - 3 : p1 - 6)}px">${esc(f.corto || f.etiqueta)}</span>`;
+    } else if (!largo && esFuente(f)) m.innerHTML = `<span>${esc(f.corto || f.etiqueta)}</span>`;
+    marks.appendChild(m);
+  });
+  const ent0 = datos.indicador(estado.ind) || {};
+  if (HUECO) {   // el corte (//) en medio del hueco
+    const c = document.createElement('span');
+    c.className = 'v4-corte'; c.setAttribute('aria-hidden', 'true'); c.textContent = '//';
+    c.title = datos.cruzaTramo(datos.tramosSinInterp(ent0), HUECO.g0, HUECO.g1) ? datos.notaTramo(ent0, HUECO.g0, HUECO.g1) : `Sin datos entre ${HUECO.g0} y ${HUECO.g1}`;
+    c.style.left = ((posAnio(HUECO.g0) + HUECO.gap / 2 - a) / span * 100) + '%';
+    marks.appendChild(c);
+  }
+  if (temporal) for (const [t0, t1] of datos.tramosSinInterp(ent)) {   // donde cambia la fuente: un corte (//) con su porqué
+    if (t0 < +F[0].anio || t1 > +F[F.length - 1].anio) continue;
+    if (HUECO && HUECO.g0 === t0 && HUECO.g1 === t1) continue;   // ya lleva su corte comprimido
+    const cortada = (ent.anios_sin_unir || []).some(z => +z[0] === t0 && +z[1] === t1);   // línea seguida: una marca en el año en que cambia
+    const c = document.createElement('span');
+    c.className = cortada ? 'v4-corte' : 'v4-corte v4-corte--marca'; c.textContent = cortada ? '//' : '▾';
+    c.title = datos.notaTramo(ent, t0, t1);
+    c.style.left = ((posAnio(cortada ? (t0 + t1) / 2 : t1) - a) / span * 100) + '%';
+    marks.appendChild(c);
+  }
+  // etiquetas: primero, último, revisión y el resto mientras quepan
+  const labs = $$('.v4-m', marks).map((m, k) => ({ k, x: parseFloat(m.style.left) / 100 * W, sp: m.querySelector('span') })).filter(o => o.sp);
+  const prio = o => (o.k === 0 || o.k === F.length - 1 ? 0 : 2);
+  const kept = [];
+  labs.sort((p, q) => prio(p) - prio(q) || p.k - q.k).forEach(o => {
+    const w = o.sp.textContent.length * ancho + 10;
+    const x0 = o.k === 0 ? o.x : o.k === F.length - 1 ? o.x - w : o.x - w / 2;   // la primera y la última, ancladas hacia dentro
+    if (porEpocas) return;   // cada época, con su rótulo
+    if (kept.some(q => x0 < q[1] && q[0] < x0 + w)) o.sp.remove(); else kept.push([x0, x0 + w]);
+  });
+  if ((largo || marks.querySelectorAll('.v4-m span').length < 3) && temporal && F.length > 1 && !porEpocas) {
+    const ra = +F[0].anio, rb = +F[F.length - 1].anio;
+    const dec = d3.ticks(HUECO ? HUECO.g1 : a, rb, Math.max(2, Math.floor(W / 64))).filter(y => (posAnio(y) - a) / span * W > 34 + (HUECO ? 60 : 0) && (b - posAnio(y)) / span * W > 34);
+    for (const y of [ra, ...(HUECO ? [HUECO.g1] : []), ...dec, rb]) {
+      const s = document.createElement('span');
+      s.className = 'v4-m-lab'; s.style.left = ((posAnio(y) - a) / span * 100) + '%'; s.textContent = y;
+      marks.appendChild(s);
+    }
+  }
+  pintaHuecos(F, temporal, a, span);
+  const pista = M.prov.pista ? M.prov.pista(M.nivel) : null;
+  const cv = $('#v4-pista-color');
+  cv.hidden = !pista;
+  if (pista) {
+    const rr = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+    cv.width = Math.max(1, rr.width * dpr); cv.height = Math.max(1, rr.height * dpr);
+    const g = cv.getContext('2d');
+    F.forEach((f, k) => {
+      const x0 = (posDe(f, temporal) - a) / span, x1 = k < F.length - 1 ? (posDe(F[k + 1], temporal) - a) / span : 1;
+      g.fillStyle = pista[k] || fmt.token('--a2-nodata');
+      g.fillRect(Math.floor(x0 * cv.width), 0, Math.ceil((x1 - x0) * cv.width) + 1, cv.height);
+    });
+  }
+}
+// tramos sin serie anual entre dos cortes (1752-1787-1842 en población; usos, ganado y producción entre sus cortes):
+// con «Años interpolados» encendido, la pista los marca y una nota lo dice. El visor no interpola nada.
+const SIN_SERIE = 'la base no trae cifras anuales';
+function huecosDe(F, temporal) {
+  if (!temporal || F.length < 2) return [];
+  const ys = F.map(f => +f.anio).filter(isFinite);
+  const out = [];
+  for (let k = 1; k < ys.length; k++) if (ys[k] - ys[k - 1] > 1) out.push([ys[k - 1], ys[k]]);
+  return out;
+}
+function pintaHuecos(F, temporal, a, span) {
+  const nota = $('#v4-hueco-nota');
+  nota.hidden = true; nota.textContent = ''; nota.title = '';
+  const entH = datos.indicador(estado.ind);
+  if (!estado.interp || (entH && (entH.proveedor || esCategorico(entH) || /^(politica|elecciones)$/.test(String(entH.tema || ''))))) return;
+  const huecos = huecosDe(F, temporal), trH = datos.tramosSinInterp(entH);
+  if (!huecos.length) return;
+  const marks = $('#v4-marcas');
+  for (const [p, q] of huecos) {
+    const z = document.createElement('i');
+    z.className = 'v4-m-hueco';
+    z.style.left = ((p - a) / span * 100) + '%';
+    z.style.width = ((q - p) / span * 100) + '%';
+    z.title = datos.cruzaTramo(trH, p, q) ? datos.notaTramo(entH, p, q) : `Entre ${p} y ${q}: ${SIN_SERIE}`;
+    marks.appendChild(z);
+  }
+  // donde cambia la fuente se dice eso; el resto de huecos, con su nota de siempre
+  const conFuente = huecos.filter(([p, q]) => datos.cruzaTramo(trH, p, q)), resto = huecos.filter(([p, q]) => !datos.cruzaTramo(trH, p, q));
+  const donde = resto.length <= 2 ? resto.map(([p, q]) => `entre ${p} y ${q}`).join(' y ') : `entre sus cortes (${resto[0][0]}-${resto[resto.length - 1][1]})`;
+  nota.textContent = [...conFuente.map(([p, q]) => `${datos.notaTramo(entH, p, q)}.`),
+    ...(resto.length ? [donde.charAt(0).toUpperCase() + donde.slice(1) + ': ' + SIN_SERIE + '.'] : [])].join(' ');
+  nota.title = nota.textContent;
+  nota.hidden = false;
+}
+
+// aviso junto al título en los años en revisión; su sitio se reserva en todo el indicador: en el timelapse no se mueve nada
+function pintaRevAnio() {
+  const el = $('#v4-titulo-rev'), ent = datos.indicador(estado.ind); if (!el) return;
+  const s = datos.aniosSinRanking(ent);
+  el.hidden = !s.size;
+  if (!s.size) return;
+  const y = M.ind === estado.ind && M.F[M.i] ? +M.F[M.i].anio : +estado.anio;
+  el.textContent = ent.sin_ranking_nota || datos.REVISION_ANIO;
+  el.style.visibility = s.has(y) ? '' : 'hidden';
+}
+// un año que no existe en todas las escalas (hacia 1890: partido, provincia y Andalucía): el selector de unidad lo dice
+function marcaNivelesAnio() {
+  const nota = $('#v4-niveles-aviso'), ent = datos.indicador(estado.ind), cd = ent && ent.anios_con_dato, f = M.ind === estado.ind ? M.F[M.i] : null;
+  if (!nota) return;
+  const tiene = n => { const l = cd && cd[nivelDatos(ent, n, estado.vista)]; return !Array.isArray(l) || l.map(Number).includes(+f.anio); };
+  const niv = cd && f ? NIV4.filter(n => disponibles(ent).has(n.id)) : [], falta = niv.filter(n => !tiene(n.id));
+  $$('.v4-nivel').forEach(b => b.classList.toggle('is-sin-anio', falta.some(n => n.id === b.dataset.n)));
+  nota.hidden = !falta.length;
+  if (falta.length) {
+    const con = niv.filter(n => tiene(n.id)).map(n => rotNivel(n.id).toLowerCase());
+    if (Array.isArray(cd.andalucia) && cd.andalucia.map(Number).includes(+f.anio)) con.push('Andalucía');
+    nota.textContent = `${String(f.etiqueta).charAt(0).toUpperCase() + String(f.etiqueta).slice(1)}: solo hay cifra por ${con.join(', ').replace(/, ([^,]*)$/, ' y $1')}.`;
+  }
+}
+function marcaRegla(i) {
+  const f = M.F[i]; if (!f) return;
+  pintaRevAnio();
+  marcaNivelesAnio();
+  const r = $('#v4-range');
+  r.value = M.F.length === 1 ? r.min : posDe(f, M.temporal);
+  r.setAttribute('aria-valuetext', f.etiqueta);
+  const p = M.F.length === 1 ? 50 : ((r.value - r.min) / ((r.max - r.min) || 1) * 100);
+  r.style.setProperty('--p', p + '%');
+  $('#v4-pista').style.setProperty('--p', p + '%');
+  $('#v4-pomo').style.left = p + '%';
+  $('#v4-anio').textContent = f.etiqueta;
+  $$('.v4-m', $('#v4-marcas')).forEach((m, k) => m.classList.toggle('is-on', k === i));
+}
+function nearest(v) {
+  let best = 0, bd = Infinity;
+  M.F.forEach((f, k) => { const d = Math.abs(posDe(f, M.temporal) - v); if (d < bd) { bd = d; best = k; } });
+  return best;
+}
+// ---------- arrastre de la pista: toda la franja es agarre; ajuste al año más cercano; globo con el año; rueda
+let destino = null, enVuelo = false;
+async function ir(k) {
+  destino = k;
+  if (enVuelo) return;
+  enVuelo = true;
+  try { while (destino != null) { const d = destino; destino = null; if (d !== M.i) await irA(d, { fade: false }); } }
+  finally { enVuelo = false; }
+}
+function enlazaPista() {
+  const pista = $('#v4-pista'), range = $('#v4-range'), globo = $('#v4-globo');
+  const fr = ev => { const r = range.getBoundingClientRect(); return Math.max(0, Math.min(1, (ev.clientX - r.left) / (r.width || 1))); };
+  const kDe = ev => nearest(+range.min + fr(ev) * (+range.max - +range.min));
+  const pon = (k, fuerte) => {
+    const f = M.F[k]; if (!f) return;
+    const p = M.F.length === 1 ? 50 : ((posDe(f, M.temporal) - +range.min) / ((+range.max - +range.min) || 1)) * 100;
+    globo.textContent = f.etiqueta; globo.style.left = p + '%'; globo.hidden = false;
+    globo.classList.toggle('is-fuerte', !!fuerte);
+  };
+  let arrastre = false;
+  pista.addEventListener('pointerdown', ev => {
+    if (M.F.length < 2 || ev.button > 0) return;
+    ev.preventDefault();
+    arrastre = true; pista.setPointerCapture(ev.pointerId); pista.classList.add('is-arrastrando');
+    pausa(); range.focus({ preventScroll: true });
+    const k = kDe(ev); pon(k, true); ir(k);
+  });
+  pista.addEventListener('pointermove', ev => {
+    if (M.F.length < 2) return;
+    const k = kDe(ev);
+    if (arrastre) { pon(k, true); ir(k); } else pon(k, false);
+  });
+  const suelta = ev => {
+    if (!arrastre) return;
+    arrastre = false; pista.classList.remove('is-arrastrando');
+    try { pista.releasePointerCapture(ev.pointerId); } catch (e) { /* ya suelto */ }
+    globo.hidden = true;
+  };
+  pista.addEventListener('pointerup', suelta);
+  pista.addEventListener('pointercancel', suelta);
+  pista.addEventListener('pointerleave', () => { if (!arrastre) globo.hidden = true; });
+  let rueda = 0;
+  pista.addEventListener('wheel', ev => {
+    if (M.F.length < 2) return;
+    ev.preventDefault();
+    const now = performance.now(); if (now - rueda < 70) return; rueda = now;
+    const d = (Math.abs(ev.deltaY) > Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX) > 0 ? 1 : -1;
+    pausa(); ir(Math.max(0, Math.min(M.F.length - 1, (destino ?? M.i) + d)));
+  }, { passive: false });
+}
+
+function pintaVelocidad() { $$('#v4-vel button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === +(estado.vel || 1)))); }
+
+// ---------------------------------------------------------------- barra derecha: leyenda, avisos y fuente
+const tituloLey = () => { const e = datos.indicador(estado.ind); return (e && e.unidad) || ''; };
+on('leyenda', () => { if (estado.vista === 'mapa') pintaLeyendaVista(); });
+// el dibujo de la clase B (línea al término propuesto) sigue al puntero
+on('hover', () => { if (estado.vista === 'mapa') mapa.repintar(); });
+// la leyenda va debajo del mapa con un alto fijo para cada indicador, medido de antemano: en el timelapse el mapa no salta
+let midiendoLey = false;
+function pintaLeyendaVista() {
+  // una vista que pinta su propia leyenda (o no quiere la de abajo) lo dice con `leyenda: false` o `leyenda(el)`
+  const vd = VISTAS.get(estado.vista);
+  if (vd && vd.leyenda === false) { $('#v4-leyenda').innerHTML = ''; $('#v4-ley-bajo').hidden = true; return; }
+  $('#v4-ley-bajo').hidden = false;
+  if (vd && typeof vd.leyenda === 'function') { try { vd.leyenda($('#v4-leyenda'), vistaActiva ? vistaActiva.ctx : null); } catch (e) { console.error(e); } return; }
+  pintaLeyendaVista0();
+  { const pil = $('#v4-ley-pil'); if (pil) pil.hidden = !$('#v4-leyenda').innerHTML.trim(); }
+  if (midiendoLey) return;
+  const caja = $('#v4-ley-bajo'), clave = [estado.ind, estado.nivel, estado.vista, estado.mod || '', estado.rep, estado.ver, estado.cmb, estado.esc, estado.var, estado.obs, estado.interp, (estado.capas || []).join(','), innerWidth, innerHeight, !!estado.cmp].join('|');
+  if (caja.dataset.clave === clave) return;
+  caja.style.height = '';
+  if (estado.vista === 'mapa' && !mapa.listoLeyendas()) return;   // se mide cuando el mapa tenga sus unidades
+  caja.dataset.clave = clave;
+  const cs = getComputedStyle(caja), extra = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom), l4 = $('#v4-leyenda');
+  const alto = () => Math.ceil(Math.max(caja.offsetHeight, l4.getBoundingClientRect().height + extra));
+  let h = alto();
+  if (estado.vista === 'mapa') { midiendoLey = true; try { mapa.medirLeyendas(() => { h = Math.max(h, alto()); }); } finally { midiendoLey = false; } }
+  if (h) caja.style.height = `${h}px`;
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { const c = document.getElementById('v4-ley-bajo'); if (c && c.dataset.clave) { c.dataset.clave = ''; pintaLeyendaVista(); } });
+function pintaLeyendaVista0() {
+  const el = $('#v4-leyenda');
+  const v = estado.vista, ent = datos.indicador(estado.ind);
+  $('#v4-cal').hidden = v !== 'mapa' || !!(ent && ent.proveedor);
+  $('#v4-sec-ley').hidden = $('#v4-cal').hidden;
+  $('#v4-cal').setAttribute('aria-pressed', String(!!estado.cal));
+  if (v === 'mapa') {
+    const u = mapa.ultimaLeyenda();
+    const capas = leyendaCapas();
+    if (u && u.spec && u.spec.tipo === 'capas') { el.innerHTML = `<p class="l4-titulo">${esc(u.spec.titulo || 'Capas')}</p>${capas || '<p class="l4-nota">Marca alguna capa en «Transporte», a la derecha.</p>'}`; return; }
+    const entL = datos.indicador(estado.ind);
+    const enCmb = !!(estado.cmb && entL && /^poblacion_(hab|densidad)$/.test(entL.id) && boton(estado.nivel) !== 'termino');
+    const tit = (entL && entL.proveedor || enCmb || (u && u.spec && u.spec.frente)) && u && u.spec && u.spec.titulo ? u.spec.titulo : tituloLey() + (u && u.opts && u.opts.burbujas ? ' · área del círculo' : '');
+    const ancho = Math.max(180, Math.min(340, ($('#v4-ley-bajo').clientWidth || 372) - 32));
+    if (u) pintaLeyenda4(el, u.spec, u.pres, { ...u.opts, titulo: tit, calidad: !!estado.cal, ancho });
+    if (capas) el.insertAdjacentHTML('beforeend', capas);
+    // términos de la fecha con estado del límite (no en Fronteras de entrada: allí va con «Ver cómo se dibuja»)
+    const capaT = M.prov && M.prov.capaDe && M.F.length ? M.prov.capaDe(M.i, M.nivel) : null;
+    const frLimpio = /^fronteras/.test(String(estado.ind || '')) && !(FR_OPC && FR_OPC.dibujo);
+    if (capaT && capaT.objeto === 'terminos' && hayEstados(capaT.topo) && !frLimpio) el.insertAdjacentHTML('beforeend', `<ul class="l4-extra l4-capas l4-limites">${leyendaLimites(/^fronteras/.test(String(estado.ind || '')) ? '#262626' : '#8a8a8a', clasesPresentes(capaT.topo))}</ul>`);
+    return;
+  }
+  if (v === 'tabla') { el.innerHTML = `<p class="l4-titulo">Marca de cada cifra</p>${leyendaMarcas()}`; return; }
+  if (v === 'climograma') { el.innerHTML = '<p class="l4-nota">Barras: precipitación de cada mes. Línea: temperatura media. Trazo claro y discontinuo, 1961-1990; fuerte, 2011-2020.</p>'; return; }
+  if (v === 'franjas' && ent) {
+    // la escala de color de las franjas (valor o anomalía) va debajo del propio gráfico
+    el.innerHTML = `<p class="l4-titulo">Franjas</p><p class="l4-nota">Una franja por año; la escala de color, debajo del gráfico (valor o anomalía frente a la media de cada unidad).</p><ul class="l4-extra"><li><i class="l4-sw l4-sw--est"></i>estimado</li><li><i class="l4-sw l4-sw--nd"></i>sin dato (no es cero)</li></ul>`;
+    return;
+  }
+  el.innerHTML = `<p class="l4-titulo">${ent && ent.etiquetas_anio ? 'Marcadores' : 'Trazos'}</p>${leyendaTrazos({ interp: !!estado.interp, puntos: !!(ent && ent.etiquetas_anio) })}`;
+}
+
+const TIPO_AV = { nota: 'Nota', revision: 'En revisión', supuesto: 'Límites supuestos', candidata: 'Geometría histórica', estimado: 'Estimado', sinnivel: 'Sin dato a este nivel' };
+async function pintaPie() {
+  const ent = datos.indicador(estado.ind);
+  const f = M.ind === estado.ind ? M.F[M.i] : null;
+  // avisos
+  const av = [];
+  const vistos = new Set();
+  for (const a of (f && f.avisos) || []) {
+    if (a.tipo === 'sinnivel') continue;   // va abajo, con su motivo
+    const t = a.reserva ? 'reserva' : a.tipo;
+    const k = t + '|' + a.texto; if (vistos.has(k)) continue; vistos.add(k);
+    const kk = a.reserva ? 'Reserva' : TIPO_AV[a.tipo] || a.tipo;
+    const tt = String(a.texto || '').toLowerCase().startsWith(String(kk).toLowerCase()) ? String(a.texto).slice(String(kk).length).replace(/^[\s,:.]+/, '') : a.texto;
+    av.push(`<li class="v4-av v4-av--${t}"><span class="v4-av__k">${esc(kk)}</span><span class="v4-av__t">${esc(tt ? tt[0].toUpperCase() + tt.slice(1) : '')}</span></li>`);
+  }
+  // estimado y cobertura del año, sacados de las celdas
+  let extra = '';
+  if (f && ent && !ent.proveedor) {
+    try {
+      const c = await datos.corte(estado.ind, estado.nivel, f.clave);
+      if (c && c.v) {
+        const n = c.v.length, con = c.v.filter(v => v != null).length, fs = [...String(c.f || '')];
+        const est = fs.filter(x => x === '1').length, est4 = fs.filter(x => x === '4').length, calc = fs.filter(x => x === '3').length;
+        let parc = 0;
+        if (c.extra) c.v.forEach((v, k) => { if (v != null && (fs[k] === '5' || c.extra(k).parcial)) parc++; });
+        const cuando = f.etiqueta === 'Hoy' ? 'de hoy' : 'de ' + esc(f.etiqueta);
+        if (parc) av.push(`<li class="v4-av v4-av--parcial" title="Les falta alguna unidad: no son el total (borde discontinuo en el mapa)"><span class="v4-av__k">Suma parcial</span><span class="v4-av__t">${entero(parc)} de ${entero(con)} cifras.</span></li>`);
+        if (est4) av.push(`<li class="v4-av v4-av--estimado" title="Tienen alguna parte estimada (rayado ralo); la ficha da el porcentaje"><span class="v4-av__k">Parcialmente estimado</span><span class="v4-av__t">${entero(est4)} de ${entero(con)} cifras.</span></li>`);
+        if (calc) av.push(`<li class="v4-av v4-av--calculado" title="Suma, conversión o estadístico de una capa, sin supuesto: van lisas"><span class="v4-av__k">Calculado de originales</span><span class="v4-av__t">${entero(calc)} de ${entero(con)} cifras.</span></li>`);
+        if (est) av.push(`<li class="v4-av v4-av--estimado" title="${estado.obs ? 'Ocultas ahora: «solo lo observado»' : 'Rayado en el mapa'}"><span class="v4-av__k">Estimado</span><span class="v4-av__t">${entero(est)} de ${entero(con)} cifras${estado.obs ? ' (ocultas)' : ''}.</span></li>`);
+        if (boton(estado.nivel) === 'municipio' || con < n) {
+          const pct = n ? Math.round(con / n * 1000) / 10 : 0;
+          extra = `<div class="v4-cob"><p class="v4-cob__k">${esc(rotNivel(estado.nivel))} con cifra ${f.etiqueta === 'Hoy' ? 'hoy' : 'en ' + esc(f.etiqueta)}</p><div class="v4-cob__barra" role="img" aria-label="${entero(con)} de ${entero(n)} (${fmt.decimal(pct)} %)"><i style="width:${pct}%"></i></div><p class="v4-cob__t"><b>${entero(con)}</b> de ${entero(n)} · ${fmt.decimal(pct)} %</p></div>`;
+        }
+      }
+    } catch (e) { /* sin corte: nada que contar */ }
+  }
+  if (f && f.sinNivel) {
+    const cob = await COBERTURA;
+    const mot = cob && cob.sin_nivel_municipal && cob.sin_nivel_municipal[estado.ind];
+    const txt = mot ? mot.replace(/\(niveles: ([^)]*)\)/, (m, l) => '; sí la da por ' + l.split(/,\s*/).map(x => (x === 'andalucia' ? 'Andalucía' : rotNivel(x).toLowerCase())).join(', ')).replace(/\s+;/, ';') : motivoNo(ent, estado.nivel);
+    av.push(`<li class="v4-av v4-av--sinnivel"><span class="v4-av__k">Sin dato a este nivel</span><span class="v4-av__t">${esc(txt[0].toUpperCase() + txt.slice(1).replace(/\.?$/, '.'))}</span></li>`);
+  }
+  if (ent && ent.mensual) av.push('<li class="v4-av v4-av--candidata"><span class="v4-av__k">Normales</span><span class="v4-av__t">Medias de cada mes en 1961-1990 y en 2011-2020, solo si están todos los años.</span></li>');
+  $('#v4-avisos').innerHTML = (av.length ? `<ul class="v4-av-lista">${av.join('')}</ul>` : '<p class="v4-nada">Nada que advertir en este año.</p>') + extra;
+  // reservas: su texto literal, plegado
+  const res = (f && f._res) || [];
+  if (res.length) $('#v4-avisos').insertAdjacentHTML('beforeend', `<details class="v4-det"><summary>Qué dice la reserva</summary>${res.map(r => `<p><b>${esc(r.rotulo)}.</b>${r.texto ? ` «${esc(r.texto)}»` : ''}</p>`).join('')}</details>`);
+  // fuente original
+  const ids = (f && f.fuentes) || (ent && ent.fuentes) || [];
+  const lista = (Array.isArray(ids) ? ids : [ids]).filter(Boolean).map(id => {
+    const fu = fuente(id);
+    return `<li${fu && fu.titulo && fu.titulo !== fu.original ? ` title="${esc(fu.titulo)}"` : ''}><span class="v4-fu__n">${esc(nombreFuente(id))}</span></li>`;
+  });
+  for (const tx of (f && f.fuentesTexto) || []) lista.push(`<li><span class="v4-fu__n">${esc(tx)}</span></li>`);
+  // el popover «Fuente» (ronda v15): la fuente original del año visible, su enlace si consta y su sitio en Fuentes
+  const idsF = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
+  const itF = idsF.map(id => itemFuente(id, idsF.length === 1));
+  for (const tx of (f && f.fuentesTexto) || []) itF.push(`<li><b>${esc(tx)}</b></li>`);
+  fuentePop = `<p class="v4-fi__k">Fuente original${f ? ` · ${esc(f.etiqueta)}` : ''}</p><ul class="v4-fi__fu">${itF.join('') || '<li>Fuente sin identificar</li>'}</ul>${idsF.length === 1 ? '' : '<p class="v4-fi__mas"><a href="fuentes.html#fuentes">Ver todas las fuentes →</a></p>'}`;
+  if (fiAbierto === 'fuente') pintaFi();
+  const notas = [];
+  if (f && f.nota) notas.push(`<p>${esc(f.nota)}</p>`);
+  if (ent && ent.nota) notas.push(`<p>${esc(ent.nota)}</p>`);
+  $('#v4-fuente').innerHTML = `${f ? `<p class="v4-fu__anio">${esc(f.etiqueta)}</p>` : ''}<ul class="v4-fu">${lista.join('') || '<li>Fuente sin identificar</li>'}</ul>${notas.length ? `<details class="v4-det"${ent && /^(propiedad|politica)$/.test(String((ubicar(ent.id) || {}).tema && ubicar(ent.id).tema.id)) ? ' open' : ''}><summary>Nota del indicador</summary>${notas.join('')}</details>` : ''}<p class="v4-fu__mas"><a href="fuentes.html">Todas las fuentes y el método</a></p>`;
+}
+
+// insignias de un indicador en un año (para las vistas): las del fotograma si es el indicador activo
+function avisosDe(ind, anio) {
+  if (ind === M.ind && M.F.length) { const k = indiceDe(anio); const f = M.F[k >= 0 ? k : M.i]; return (f && f.avisos) || []; }
+  const y = +String(anio ?? '').replace(/\D/g, '');
+  return /^poblacion_(hab|densidad)$/.test(String(ind)) && (y === 1752 || y === 1787) ? [{ tipo: 'nota', texto: 'Población de 1752 y 1787: construida con las decisiones firmadas; pendiente de la aceptación de conjunto del responsable de la base' }] : [];
+}
+
+// panel propio del indicador (fronteras: recuento por corte y Ensenada), en la barra derecha
+let panelInd = null;
+function montaPanelIndicador() {
+  const sec = $('#v4-sec-panel'), host = $('#v4-panel-ind');
+  const quiere = M.prov && M.prov.panel && (!M.prov.panelVisible || M.prov.panelVisible()) && estado.vista === 'mapa' && M.ind === estado.ind && vistaActiva;
+  if (panelInd && (!quiere || panelInd.prov !== M.prov)) {
+    try { panelInd.inst && panelInd.inst.destruir && panelInd.inst.destruir(); } catch (e) { console.error(e); }
+    host.innerHTML = ''; panelInd = null;
+  }
+  sec.hidden = !quiere;
+  if (!quiere || panelInd) return;
+  const el = document.createElement('div');
+  el.className = 'v3-panel-ind v4-panel-ind';
+  host.appendChild(el);
+  let inst = null;
+  try { inst = M.prov.panel(el, vistaActiva.ctx) || null; } catch (e) { console.error('[visor4] el panel del indicador falló', e); }
+  panelInd = { el, inst, prov: M.prov };
+}
+
+// ---------------------------------------------------------------- ficha (en la barra derecha)
+function fichaArgs() { return { nivel: estado.fn || estado.nivel, id: estado.ficha, anio: estado.anio, ind: estado.ind }; }
+let ultimoClic = null;
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#v4-der')) ultimoClic = { x: e.clientX, y: e.clientY }; }, true);
+function colocaFichaBreve() {
+  const d = $('#v4-der'); if (!d || innerWidth < MOVIL) return;
+  const w = Math.min(360, innerWidth - 32), h = Math.min(innerHeight - 32, 620);
+  const c = ultimoClic || { x: innerWidth - w - 24, y: 120 };
+  let x = c.x + 18, y = c.y - 40;
+  if (x + w > innerWidth - 16) x = c.x - w - 18;   // a la izquierda del clic si no cabe a la derecha
+  x = Math.max(16, Math.min(innerWidth - w - 16, x)); y = Math.max(16, Math.min(innerHeight - h - 16, y));
+  d.style.left = x + 'px'; d.style.top = y + 'px'; d.style.width = w + 'px'; d.style.maxHeight = h + 'px';
+}
+function abreFicha({ id, nivel }) { if (id) setEstado({ ficha: String(id), fn: nivel && nivel !== estado.nivel ? nivel : '' }); }
+function pestana(cual) {
+  const ficha = cual === 'ficha';
+  $('#v4-tab-opc').setAttribute('aria-selected', String(!ficha));
+  $('#v4-tab-ficha').setAttribute('aria-selected', String(ficha));
+  $('#v4-pane-ficha').hidden = !ficha;
+}
+function pintaFicha() {
+  const tab = $('#v4-tab-ficha');
+  if (!estado.ficha) {
+    if (FICHA && FICHA.cerrar && !$('#v4-pane-ficha').hidden) { try { FICHA.cerrar(); } catch (e) { console.error(e); } }
+    tab.disabled = true; pestana('opc'); document.body.classList.remove('v4-con-ficha'); return;
+  }
+  tab.disabled = false; pestana('ficha'); document.body.classList.add('v4-con-ficha');
+  colocaFichaBreve();
+  const cuerpo = $('#v4-ficha-cuerpo');
+  if (esFichaRio()) {
+    // ficha de un río (capa de ríos): la pinta capas.js
+    const esTr = /^tr:/.test(String(estado.ficha || ''));
+    $('#v4-ficha-k').textContent = esTr ? 'Ficha · Transporte' : 'Ficha · Río';
+    $('#v4-ficha-grande').hidden = true;
+    $('#v4-ficha-titulo').textContent = '…';
+    cuerpo.innerHTML = '';
+    fichaRio(cuerpo).then(n => { if (esFichaRio()) $('#v4-ficha-titulo').textContent = n || (esTr ? 'Transporte' : 'Río'); });
+    return;
+  }
+  const nivel = estado.fn || estado.nivel;
+  const d = (M.prov && M.prov.detalle && nivel === M.nivel) ? M.prov.detalle(M.i, estado.ficha, { c: estado.ficha, n: estado.ficha }, M.nivel) : null;
+  $('#v4-ficha-titulo').textContent = (d && d.titulo) || estado.ficha;
+  // en otro nivel que el del mapa, el nombre sale de la geometría de ese nivel
+  if (!d || String(d.titulo) === String(estado.ficha)) {
+    const yo = estado.ficha;
+    niveles.geometria(nivel, estado.anio).then(g => { const p = g && g.props.get(String(yo)); if (p && estado.ficha === yo) $('#v4-ficha-titulo').textContent = p.mf || p.n || yo; }).catch(() => {});
+  }
+  $('#v4-ficha-k').textContent = `Ficha · ${rotNivel(nivel)}`;
+  const bg = $('#v4-ficha-grande');
+  bg.hidden = true;
+  const ponGrande = ine => { if (!ine) return; bg.hidden = false; bg.dataset.ine = ine; };
+  if (/^\d{5}$/.test(String(estado.ficha)) && ['municipio'].includes(boton(nivel))) ponGrande(String(estado.ficha));
+  else if (boton(nivel) === 'termino') niveles.geometria(nivel, estado.anio).then(g => { const p = g && g.props.get(String(estado.ficha)); if (p && (p.pz || []).length === 1) ponGrande(String(p.pz[0])); }).catch(() => {});
+  if (FICHA && FICHA.abrir) {
+    cuerpo.innerHTML = '';
+    try { FICHA.abrir(cuerpo, fichaArgs(), vistaActiva ? vistaActiva.ctx : null); } catch (e) { console.error(e); }
+    // término gris con propuesta de «límites»: su propuesta, confianza, testigos y quién lo resuelve, arriba
+    const bg = bloqueFicha(estado.ficha); if (bg) cuerpo.insertAdjacentHTML('afterbegin', bg);
+    // término de la fecha: estado del límite y su motivo, intendencia, partido, provincia, cambios y deslindes
+    if (boton(nivel) === 'termino' && M.nivel === nivel && M.F[M.i]) {
+      const yo = estado.ficha, f = M.F[M.i];
+      niveles.geometria(nivel, f.corte || f.clave || estado.anio).then(g => {
+        const pr = g && g.props.get(String(yo));
+        const html = bloqueTermino(pr, `en ${f.etiqueta}`, g && g.topo);
+        if (html && estado.ficha === yo) { const viejo = cuerpo.querySelector('.l9-ficha'); if (viejo) viejo.remove(); cuerpo.insertAdjacentHTML('afterbegin', html); }
+      }).catch(() => {});
+    }
+    return;
+  }
+  cuerpo.innerHTML = d ? `<p class="v3fi-v">${d.nd ? '—' : esc(d.valor || '')}</p>${(d.lineas || []).map(l => `<p>${esc(l)}</p>`).join('')}` : '<p>Sin datos de esta unidad.</p>';
+}
+
+// ---------------------------------------------------------------- cajones y plegado
+const ANCHO_SUB = 900, ANCHO_DER = 1100, MOVIL = 760;   // ronda v12: una sola barra, a la izquierda (opciones incluidas)
+const telHoriz = () => matchMedia('(orientation: landscape) and (max-height: 520px) and (max-width: 1099.98px)').matches;
+const esTel = () => innerWidth < MOVIL || telHoriz();
+const flota = () => ({ sub: innerWidth < ANCHO_SUB || telHoriz(), der: innerWidth < ANCHO_DER || telHoriz() });
+// en el teléfono, Fuente e Info van en la cabecera: encima del mapa taparían su cifra
+let sitioFi = null;
+function colocaFi() {
+  const fi = $('#v4-fi'), cab = $('.v4-cab'); if (!fi || !cab) return;
+  if (!sitioFi) sitioFi = { padre: fi.parentElement, sig: fi.nextElementSibling };
+  if (esTel()) { if (fi.parentElement !== cab) cab.appendChild(fi); }
+  else if (fi.parentElement !== sitioFi.padre) sitioFi.padre.insertBefore(fi, sitioFi.sig);
+}
+let ultimoFoco = null;
+function abreSub() { document.body.classList.add('v4-sub-abierta'); $('#v4-abrir-temas').setAttribute('aria-expanded', 'true'); $('#v4-sub-plegar').setAttribute('aria-expanded', 'true'); velo(); if (flota().sub) { ultimoFoco = document.activeElement; setTimeout(() => { const b = $('#v4-sub-lista [aria-current="true"]') || $('#v4-sub-lista button'); if (b) b.focus(); }, 30); } emitTam(); }
+function cierraSub() { document.body.classList.remove('v4-sub-abierta'); $('#v4-abrir-temas').setAttribute('aria-expanded', 'false'); $('#v4-sub-plegar').setAttribute('aria-expanded', 'false'); temaVisto = null; velo(); emitTam(); }
+// la barra derecha, abierta o cerrada a mano, se recuerda (solo cuando va fija al lado del mapa)
+const MEM = { leer: k => { try { return localStorage.getItem('v4.' + k); } catch (e) { return null; } }, poner: (k, v) => { try { localStorage.setItem('v4.' + k, v); } catch (e) { /* sin memoria */ } } };
+function abreDer({ recordar = false } = {}) { if (recordar && !flota().der) MEM.poner('der', '1'); if (document.body.classList.contains('v4-der-abierta')) return; document.body.classList.add('v4-der-abierta'); $('#v4-abrir-der').setAttribute('aria-expanded', 'true'); velo(); emitTam(); }
+function cierraDer({ recordar = false } = {}) { if (recordar && !flota().der) MEM.poner('der', '0'); document.body.classList.remove('v4-der-abierta'); $('#v4-abrir-der').setAttribute('aria-expanded', 'false'); velo(); emitTam(); }
+const conmutaDer = () => (document.body.classList.contains('v4-der-abierta') ? cierraDer({ recordar: true }) : abreDer({ recordar: true }));
+// ronda v20 (Juan: «que opciones se pueda arrastrar»): el borde izquierdo del cajón cambia su ancho (se recuerda)
+const OPC_MIN = 260, OPC_MAX = 560;
+function ponAnchoOpc(px, recordar = true) {
+  const max = Math.min(OPC_MAX, Math.round(innerWidth * 0.6));
+  const v = Math.round(Math.max(OPC_MIN, Math.min(max, px)));
+  document.documentElement.style.setProperty('--v4-opc-w', v + 'px');
+  if (recordar) MEM.poner('opc-ancho', String(v));
+  return v;
+}
+function montaTiradorOpc() {
+  const t = $('#v4-opc-tirador'); if (!t) return;
+  const guardado = +MEM.leer('opc-ancho'); if (guardado > 0) ponAnchoOpc(guardado, false);
+  let x0 = 0, w0 = 0, activo = false;
+  t.addEventListener('pointerdown', e => {
+    activo = true; x0 = e.clientX; w0 = $('#v4-opc').getBoundingClientRect().width;
+    t.setPointerCapture(e.pointerId); document.body.classList.add('v4-arrastrando-ancho'); e.preventDefault();
+  });
+  t.addEventListener('pointermove', e => { if (activo) ponAnchoOpc(w0 + (x0 - e.clientX), false); });
+  const fin = e => { if (!activo) return; activo = false; document.body.classList.remove('v4-arrastrando-ancho'); ponAnchoOpc($('#v4-opc').getBoundingClientRect().width); emitTam(); try { t.releasePointerCapture(e.pointerId); } catch (er) { /* nada */ } };
+  t.addEventListener('pointerup', fin); t.addEventListener('pointercancel', fin);
+  t.addEventListener('dblclick', () => { document.documentElement.style.removeProperty('--v4-opc-w'); MEM.poner('opc-ancho', ''); emitTam(); });
+  t.addEventListener('keydown', e => {
+    const d0 = { ArrowLeft: 16, ArrowRight: -16 }[e.key]; if (!d0) return;
+    e.preventDefault(); ponAnchoOpc($('#v4-opc').getBoundingClientRect().width + d0); emitTam();
+  });
+}
+// ronda v17: las opciones van en su panel a la derecha; por debajo de ANCHO_OPC se pliegan a «Opciones» y flotan
+const ANCHO_OPC = 1180;
+const opcFlota = () => innerWidth < ANCHO_OPC;
+function abreOpc({ recordar = false } = {}) {
+  if (recordar && !opcFlota()) MEM.poner('opc', '1');
+  document.body.classList.add('v4-opc-abierta'); $('#v4-abrir-der').setAttribute('aria-expanded', 'true'); { const a = $('#v4-opc-asa'); if (a) a.setAttribute('aria-expanded', 'true'); } velo(); emitTam();
+  requestAnimationFrame(() => { apilaSecciones(); ponAyudas(); });
+}
+function cierraOpc({ recordar = false } = {}) {
+  if (recordar && !opcFlota()) MEM.poner('opc', '0');
+  document.body.classList.remove('v4-opc-abierta'); $('#v4-abrir-der').setAttribute('aria-expanded', 'false'); { const a = $('#v4-opc-asa'); if (a) a.setAttribute('aria-expanded', 'false'); } velo(); emitTam();
+}
+const conmutaOpc = () => (document.body.classList.contains('v4-opc-abierta') ? cierraOpc({ recordar: true }) : abreOpc({ recordar: true }));
+// por debajo de 1366 px arranca plegado (con su botón «Opciones»), para que la vista central no se quede estrecha
+const ANCHO_OPC_ABIERTO = 1366;
+let opcPrevio = null;
+function ajustaOpc() {
+  const f = opcFlota(), ancho = innerWidth >= ANCHO_OPC_ABIERTO, k = `${f}|${ancho}`;
+  if (k === opcPrevio) return; opcPrevio = k;
+  if (f || !ancho) cierraOpc(); else if (MEM.leer('opc') !== '0') abreOpc(); else cierraOpc();
+}
+function cierraFlotantes(cual) {
+  if ((cual === 'opc' || !cual) && opcFlota() && document.body.classList.contains('v4-opc-abierta')) cierraOpc();
+  const f = flota();
+  if ((cual === 'sub' || !cual) && f.sub && document.body.classList.contains('v4-sub-abierta')) { cierraSub(); if (ultimoFoco && ultimoFoco.focus) ultimoFoco.focus(); }
+  if ((cual === 'der' || !cual) && f.der && document.body.classList.contains('v4-der-abierta')) cierraDer();
+}
+function velo() {
+  const f = flota(), b = document.body.classList;
+  $('#v4-velo').hidden = !((f.sub && b.contains('v4-sub-abierta')) || (f.der && b.contains('v4-der-abierta')) || (opcFlota() && b.contains('v4-opc-abierta')));
+}
+let tamRaf = 0;
+function emitTam() { cancelAnimationFrame(tamRaf); tamRaf = requestAnimationFrame(() => setTimeout(() => { emit('tamano', tamano()); if (M.F.length) { montaRegla(); marcaRegla(M.i); } }, RM ? 0 : 230)); }
+let modoPrevio = null;
+function ajustaModo() {
+  ajustaOpc();
+  const f = flota(), m = `${f.sub}|${f.der}|${innerWidth < MOVIL}`;
+  if (m === modoPrevio) return;
+  modoPrevio = m;
+  document.body.classList.toggle('v4-movil', innerWidth < MOVIL);
+  if (f.sub) cierraSub(); else abreSub();
+  cierraDer();   // la barra derecha ya no existe como barra: la ficha breve flota
+}
+
+// ---------------------------------------------------------------- «i»: qué es cada opción, en un recuadro flotante (ronda v16)
+const AYUDAS = {
+  lim_hist: ['Límites históricos (de la fuente)', 'El término municipal tal como era en la fecha de la fuente. La cifra es la que da la fuente para ese término. El límite se dibuja uniendo recintos de hoy: no es la línea trazada entonces, y la ficha dice si es exacto, aproximado o supuesto.'],
+  lim_act: ['Límites actuales (repartido)', 'Los 785 municipios de hoy, siempre los mismos. Cuando la fuente da la cifra de un término que hoy son varios municipios, la base la reparte entre ellos y la marca como estimada. Si no se puede repartir, sale la trama «sin dato a este nivel».'],
+  provincia: ['Provincia', 'Las ocho provincias de hoy. Su cifra junta la de sus unidades (suma, o cociente de sumas en tasas y densidades). Andalucía entera va en la cifra grande.'],
+  partido: ['Partido judicial', 'Los partidos judiciales de 1888, una sola división para todas las fechas. Su cifra junta la de sus municipios; la pertenencia de cada municipio es una propuesta de la base.'],
+  mostrar: ['Mostrar', 'Todo: se ven las cifras de la fuente y las estimadas. Solo observado: las estimadas se esconden y quedan como hueco; no se convierten en cero.'],
+  representacion: ['Representación', 'Coropletas: cada unidad, pintada según la clase de su cifra. Burbujas: un círculo con área proporcional a la cifra (solo para cantidades que se suman). Relieve 3D: la altura de cada unidad es su cifra.'],
+  cambio: ['Cambio respecto a un año', 'El mapa pinta, para cada unidad, (cifra del año ÷ cifra del año base − 1) × 100: rojo si pierde, azul si gana. Las clases son las mismas en todos los años, así que al reproducir se ve cómo se extiende la pérdida. Si alguna de las dos cifras es estimada, el resultado lleva la trama de estimado. En Líneas equivale al «Índice 100» con ese año de base.'],
+  calidad: ['Calidad del dato', 'Enciende los degradados que distinguen lo observado (liso), lo estimado (más claro) y lo parcialmente estimado o la suma parcial. Apagado, el mapa sale liso; la ficha y el puntero dicen siempre la clase de cada cifra.'],
+  fondo: ['Fondo', 'Lo que va debajo de los datos para situarse: límites de las provincias, relieve sombreado, altitud, ríos. No son cifras; cada capa dice de dónde sale.'],
+  capas: ['Capas', 'Lo que se dibuja encima de los datos: transporte, fronteras, municipios de hoy… No son datos por municipio. Las de transporte son heredadas o candidatas, sin revisar: sirven para situarse, no para análisis.'],
+  indice: ['Índice 100', 'Cada serie se divide por su cifra del año base y se multiplica por 100. Sirve para comparar el ritmo de cambio de unidades de tamaño muy distinto.'],
+  facets: ['Facets', 'Un panel pequeño por provincia, partido o indicador, con el mismo eje, en vez de todas las líneas juntas.'],
+  limites: ['Límites y unidad', [
+    ['Límites históricos (de la fuente)', 'El término tal como era en la fecha de la fuente, con la cifra que da la fuente para él. El límite se dibuja uniendo recintos de hoy; la ficha dice si es exacto, aproximado o supuesto.'],
+    ['Límites actuales (repartido)', 'Los 785 municipios de hoy. Cuando la fuente da la cifra de un término que hoy son varios municipios, la base la reparte entre ellos y la marca como estimada. Se ve siempre todo, con su trama.'],
+    ['Provincia', 'Las ocho de hoy, con la cifra que juntan sus unidades (suma, o cociente de sumas en tasas y densidades).'],
+    ['Partido judicial', 'Los de 1888, una sola división para todas las fechas; la pertenencia de sus municipios es una propuesta de la base.'],
+  ]],
+  suavizado: ['Suavizado', 'Media de 10 años: la línea gruesa es la media de los diez años alrededor de cada uno (la calcula el visor); el dato, fino, debajo.'],
+};
+// los rótulos de las opciones (los del armazón y los de las vistas) que llevan «i»
+const AYUDA_ROT = {};   // ronda v17 (Juan: «solo pocas»): ninguna «i» por botón
+const AYUDA_CAB = { 'v4-h-niv': 'limites' };
+function btnAyuda(k, cls = '') { const a = AYUDAS[k]; return a ? `<button type="button" class="v4-i${cls ? ' ' + cls : ''}" data-ayuda="${k}" aria-label="Qué es: ${esc(a[0])}" aria-expanded="false">i</button>` : ''; }
+function ponAyudas() {
+  for (const k of $$('#v4-opc .v4-campo__k, #v4-opc .vv-ctl > span')) {
+    if (k.querySelector('.v4-i')) continue;
+    const t = [...k.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+    const key = AYUDA_ROT[t]; if (key) k.insertAdjacentHTML('beforeend', btnAyuda(key));
+  }
+  for (const [hid, key] of Object.entries(AYUDA_CAB)) {
+    const h = document.getElementById(hid); if (!h || !h.querySelector('.v4-sec__btn')) continue;
+    if (!h.querySelector('.v4-i')) h.insertAdjacentHTML('beforeend', btnAyuda(key, 'v4-i--cab'));
+    const i = h.querySelector('.v4-i'), t = h.querySelector('.v4-sec__t'), b = h.querySelector('.v4-sec__btn');
+    if (t && t.offsetWidth) { i.style.left = (t.offsetLeft + t.offsetWidth + 8) + 'px'; i.style.top = (b.offsetTop + b.offsetHeight / 2) + 'px'; }
+  }
+}
+let ayudaBtn = null;
+function cierraAyuda() { const pop = $('#v4-ayuda'); if (pop) pop.hidden = true; if (ayudaBtn) ayudaBtn.setAttribute('aria-expanded', 'false'); ayudaBtn = null; }
+function abreAyuda(b) {
+  if (ayudaBtn === b) { cierraAyuda(); return; }
+  cierraAyuda();
+  const a = AYUDAS[b.dataset.ayuda] || (b.dataset.ayudaP ? [b.dataset.ayudaT || 'Qué es', b.dataset.ayudaP] : null); if (!a) return;
+  let pop = $('#v4-ayuda');
+  if (!pop) { pop = document.createElement('div'); pop.id = 'v4-ayuda'; pop.className = 'v4-ayuda'; pop.setAttribute('role', 'dialog'); document.body.appendChild(pop); }
+  pop.innerHTML = `<button type="button" class="v4-ayuda__x" aria-label="Cerrar">✕</button><p class="v4-ayuda__t">${esc(a[0])}</p>${Array.isArray(a[1]) ? `<dl class="v4-ayuda__dl">${a[1].map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>` : `<p class="v4-ayuda__p">${esc(a[1])}</p>`}`;
+  pop.setAttribute('aria-label', a[0]);
+  pop.hidden = false;
+  const r = b.getBoundingClientRect(), w = Math.min(320, innerWidth - 16), h = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(r.left - 12, innerWidth - w - 8)) + 'px';
+  pop.style.top = (r.bottom + 8 + h > innerHeight - 8 ? Math.max(8, r.top - h - 8) : r.bottom + 8) + 'px';
+  ayudaBtn = b; b.setAttribute('aria-expanded', 'true');
+}
+function montaAyudas() {
+  // la «i» de las cabeceras se coloca tras su título: de nuevo cuando el cajón cambia de ancho o se abre (v20)
+  { const opc = $('#v4-opc'); if (opc && 'ResizeObserver' in window) { let raf = 0; new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(ponAyudas); }).observe(opc); } }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.v4-i[data-ayuda], .v4-i[data-ayuda-p]');
+    if (b) { e.preventDefault(); e.stopPropagation(); abreAyuda(b); return; }
+    if (ayudaBtn && (!e.target.closest('#v4-ayuda') || e.target.closest('.v4-ayuda__x'))) cierraAyuda();
+  }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && ayudaBtn) { const b = ayudaBtn; cierraAyuda(); b.focus(); } });
+  for (const sub of [$('#v4-sub-cuerpo'), $('#v4-opc-cuerpo')].filter(Boolean)) { let raf = 0; new MutationObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(ponAyudas); }).observe(sub, { childList: true, subtree: true }); }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(ponAyudas);
+  ponAyudas();
+}
+
+// ---------------------------------------------------------------- «Fuente» e «Info» de cada visualización (ronda v15)
+function itemFuente(id, solo) {
+    const fu = fuente(id) || {};
+    const en = fu.url ? `<a href="${esc(fu.url)}" target="_blank" rel="noopener">${esc((() => { try { return new URL(fu.url).hostname.replace(/^www\./, ''); } catch (e) { return 'enlace'; } })())} ↗</a>` : fu.doi ? `<a href="https://doi.org/${esc(String(fu.doi).replace(/^https?:\/\/(dx\.)?doi\.org\//, ''))}" target="_blank" rel="noopener">DOI ↗</a>` : '';
+    const tit = fu.titulo && fu.titulo !== nombreFuente(id) ? `<span class="v4-fi__tt">${esc(fu.titulo)}</span>` : '';
+    return `<li><b>${esc(nombreFuente(id))}</b>${tit}<span class="v4-fi__en">${en ? en + ' · ' : ''}<a href="fuentes.html#f-${esc(id)}">${solo ? 'Ver todas las fuentes →' : 'Ver en Fuentes →'}</a></span></li>`;
+  }
+// la fuente original de un año o de un periodo [desde, hasta] (cada panel de Comparar, ronda v21)
+function fuenteDeAnios(anios) {
+  const ent = datos.indicador(estado.ind), a0 = +anios[0], a1 = +anios[anios.length - 1];
+  const fr = (M.F || []).filter(f => !f.atlas && +f.anio >= a0 && +f.anio <= a1);
+  let ids = [...new Set(fr.flatMap(f => (Array.isArray(f.fuentes) ? f.fuentes : [f.fuentes])).filter(Boolean))];
+  if (!ids.length && ent) ids = (Array.isArray(ent.fuentes) ? ent.fuentes : [ent.fuentes]).filter(Boolean);
+  const it = ids.map(id => itemFuente(id, ids.length === 1));
+  for (const tx of new Set(fr.flatMap(f => f.fuentesTexto || []))) it.push(`<li><b>${esc(tx)}</b></li>`);
+  const et = fr.length === 1 ? fr[0].etiqueta : fr.length ? `${fr[0].etiqueta}–${fr[fr.length - 1].etiqueta}` : (a0 === a1 ? String(a0) : `${a0}–${a1}`);
+  return `<p class="v4-fi__k">Fuente original · ${esc(et)}</p><ul class="v4-fi__fu">${it.join('') || '<li>Fuente sin identificar</li>'}</ul>${ids.length === 1 ? '' : '<p class="v4-fi__mas"><a href="fuentes.html#fuentes">Ver todas las fuentes →</a></p>'}`;
+}
+let fuentePop = '', fiAbierto = '';
+const AGREGA = {
+  suma: 'Se suma: la cifra de una provincia, un partido o Andalucía es la suma de la de sus unidades.',
+  cociente: 'Es un cociente de sumas: para una provincia, un partido o Andalucía se divide la suma del numerador entre la suma del denominador (por ejemplo, habitantes entre superficie).',
+  no: 'No se suma: la cifra es la que trae la base para cada unidad o zona.',
+};
+function infoIndicadorHTML() {
+  const ent = datos.indicador(estado.ind); if (!ent) return '';
+  const u = ubicar(ent.id), c = u && u.concepto;
+  const nat = ent.nivel_nativo && !ent.proveedor ? `La fuente da la cifra por ${rotNivel(ent.nivel_nativo).toLowerCase()}.` : '';
+  const calc = [nat, AGREGA[ent.agregacion] || ''].filter(Boolean).join(' ');
+  const per = periodoDe([ent.id]);
+  const trF = datos.tramosSinInterp(ent);
+  const sinUnir = [...(ent.anios_sin_unir || []).filter(x => Array.isArray(x) && x.length === 2 && !datos.cruzaTramo(trF, +x[0], +x[1])).map(([a1, b1]) => `Entre ${a1} y ${b1} no hay cifras: las líneas no se unen.`),
+    ...trF.map(([a1, b1]) => `${datos.notaTramo(ent, a1, b1)}.`)];
+  const esc0 = escalaDeInd(ent.id, ent);
+  const cls = esc0 && esc0.porClases ? `Colores por clases fijas para todos los años${esc0.tipo === 'divergente' ? ', simétricas alrededor de 0' : ''}, para comparar en el tiempo.` : '';
+  return `<p class="v4-fi__k">Qué mide</p><h3 class="v4-fi__t">${esc(c ? c.rotulo : ent.rotulo)}</h3>
+    <p class="v4-fi__p">${esc(ent.nota || `${ent.rotulo}${ent.unidad ? `, en ${ent.unidad}` : ''}.`)}</p>
+    <dl class="v4-fi__dl">${ent.unidad ? `<dt>Unidad</dt><dd>${esc(ent.unidad)}</dd>` : ''}${per ? `<dt>Años</dt><dd>${esc(per)}${sinUnir.length ? ` · ${esc(sinUnir.join(' '))}` : ''}</dd>` : ''}${calc ? `<dt>Cálculo</dt><dd>${esc(calc)}</dd>` : ''}${cls ? `<dt>Colores</dt><dd>${esc(cls)}</dd>` : ''}</dl>
+    <p class="v4-fi__k">Cómo leer sus marcas</p><div class="l4 v4-fi__ley">${leyendaMarcas()}</div>${claveDeIndicador(ent.id) && estado.vista !== 'isotipo' ? '<p class="v4-fi__p">Dibujos ilustrativos: no reproducen ninguna fuente histórica.</p>' : ''}`;
+}
+function pintaFi() {
+  const pop = $('#v4-fi-pop'); if (!pop) return;
+  pop.innerHTML = `<button type="button" class="v4-fi__x" data-fi-cierra aria-label="Cerrar">✕</button>${fiAbierto === 'fuente' ? fuentePop : infoIndicadorHTML()}`;
+  pop.setAttribute('aria-label', fiAbierto === 'fuente' ? 'Fuente original' : 'Qué mide el indicador');
+}
+function abreFi(k) {
+  const pop = $('#v4-fi-pop'); if (!pop) return;
+  fiAbierto = fiAbierto === k ? '' : k;
+  $$('#v4-fi [data-fi]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.fi === fiAbierto)));
+  pop.hidden = !fiAbierto;
+  if (fiAbierto) pintaFi();
+}
+function montaFi() {
+  const caja = $('#v4-fi'); if (!caja) return;
+  caja.addEventListener('click', e => {
+    if (e.target.closest('[data-fi-cierra]')) { abreFi(fiAbierto); return; }
+    const b = e.target.closest('[data-fi]'); if (b) abreFi(b.dataset.fi);
+  });
+  document.addEventListener('pointerdown', e => { if (fiAbierto && !e.target.closest('#v4-fi')) abreFi(fiAbierto); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && fiAbierto) { abreFi(fiAbierto); } });
+  on('cambio', ({ claves }) => { if (fiAbierto === 'info' && (claves.has('ind') || claves.has('nivel'))) pintaFi(); });
+}
+
+// ---------------------------------------------------------------- secciones plegables de la barra derecha (se recuerdan)
+function montaSecciones() {
+  let plegadas = [], abiertas = [];
+  try { plegadas = JSON.parse(MEM.leer('secciones') || '[]'); abiertas = JSON.parse(MEM.leer('secciones-abiertas') || '[]'); } catch (e) { plegadas = []; abiertas = []; }
+  $$('.v4-sec').forEach(sec => {
+    const h = sec.querySelector('.v4-sec__h'); if (!h || h.querySelector('button')) return;
+    const id = h.id;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'v4-sec__btn';
+    b.innerHTML = `<span class="v4-sec__t">${esc(h.textContent.trim())}</span><span class="v4-sec__res"></span><i class="v4-sec__chev" aria-hidden="true"></i>`;
+    h.textContent = ''; h.appendChild(b);
+    const pon = (pleg) => { sec.classList.toggle('is-plegada', pleg); b.setAttribute('aria-expanded', String(!pleg)); };
+    // las secciones marcadas data-plegada (capas para superponer) empiezan cerradas, salvo que se hayan abierto antes
+    const cerradaDeSerie = sec.dataset.plegada === '1';
+    pon(cerradaDeSerie ? !abiertas.includes(id) : plegadas.includes(id));
+    b.addEventListener('click', () => {
+      const pleg = !sec.classList.contains('is-plegada');
+      pon(pleg);
+      plegadas = pleg ? [...new Set([...plegadas, id])] : plegadas.filter(x => x !== id);
+      abiertas = pleg ? abiertas.filter(x => x !== id) : [...new Set([...abiertas, id])];
+      MEM.poner('secciones', JSON.stringify(plegadas));
+      MEM.poner('secciones-abiertas', JSON.stringify(abiertas));
+    });
+  });
+}
+
+// ronda v14: plegada, cada sección dice cuántos elementos o en qué estado está («3 capas activas»)
+function resumenSecciones() {
+  const pon = (id, t) => { const r = document.querySelector(`#${id} .v4-sec__res`); if (r && r.textContent !== t) { r.textContent = t; r.title = t; } };
+  const n = $$('#v4-sub-lista .v4-it:not(.v4-it--mun)').length;
+  pon('v4-h-lista', n ? `${n} ${n === 1 ? 'indicador' : 'indicadores'}` : '');
+  pon('v4-h-ind', $$('#v4-ind .v4-seg button[aria-pressed="true"], #v4-ind .v4-seg button[aria-checked="true"]').map(b => b.textContent.trim()).filter(Boolean).join(' · '));
+  const niv = $('#v4-niveles .v4-nivel[aria-checked="true"]'); pon('v4-h-niv', niv ? niv.textContent.trim() : '');
+  const deFondo = new Set([...$$('#v4-fondo [data-capa]').map(b => b.dataset.capa), 'sinprov']);
+  const nc = (estado.capas || []).filter(id => !deFondo.has(id)).length;
+  pon('v4-h-capas', nc ? `${nc} ${nc === 1 ? 'capa activa' : 'capas activas'}` : 'ninguna activa');
+  const cal = $('#v4-cal'); pon('v4-h-ley', cal ? (cal.getAttribute('aria-pressed') === 'true' ? 'encendida' : 'apagada') : '');
+  const na = $$('#v4-avisos .v4-av').length; pon('v4-h-av', na ? `${na} ${na === 1 ? 'aviso' : 'avisos'}` : 'ninguno');
+}
+on('cambio', () => requestAnimationFrame(resumenSecciones));
+
+// un solo sistema de controles (ronda v10): rótulos en columna fija; si en una sección algún botón no cabe, esa sección
+// entera pasa a «rótulo encima» (todas sus filas igual)
+function apilaSecciones() {
+  for (const sec of $$('#v4-pane-opc .v4-sec')) {
+    if (sec.classList.contains('is-plegada') || sec.hidden || !sec.offsetWidth) continue;
+    sec.classList.remove('is-apilada');
+    const gs = sec.querySelectorAll('.v4-campo .v4-seg, .vv-ctl .a2-seg');
+    const ks = sec.querySelectorAll('.v4-campo > .v4-campo__k, .vv-ctl > span');
+    if ([...gs].some(g => g.scrollWidth > g.clientWidth + 1 || [...g.children].some(b => b.scrollWidth > b.clientWidth + 1))
+      || [...ks].some(k => k.scrollWidth > k.clientWidth + 1)) sec.classList.add('is-apilada');
+  }
+}
+let rafApila = 0;
+const pideApilar = () => { cancelAnimationFrame(rafApila); rafApila = requestAnimationFrame(apilaSecciones); };
+const roApila = new ResizeObserver(pideApilar);
+
+// en el tema Transporte, la sección de sus capas se abre sola (sin cambiar lo que se recuerda)
+function abreTransporte() {
+  const sc = $('#v4-sec-capas'); if (sc) sc.hidden = /^capa_t_/.test(estado.ind || '');   // en Transporte se eligen en su lista
+  if (!/^capa_t_/.test(estado.ind || '')) return;
+  const sec = $('#v4-sec-capas'); if (!sec || !sec.classList.contains('is-plegada')) return;
+  sec.classList.remove('is-plegada');
+  const b = sec.querySelector('.v4-sec__btn'); if (b) b.setAttribute('aria-expanded', 'true');
+}
+
+// ---------------------------------------------------------------- ancho de las barras (arrastrar su borde; se recuerda)
+const ANCHOS = { sub: { min: 260, max: 520, var: '--v4-sub-u', def: 300 }, der: { min: 272, max: 520, var: '--v4-der-u', def: 296 } };
+function ponAncho(cual, px, recordar = true) {
+  const a = ANCHOS[cual];
+  if (px == null) { document.documentElement.style.removeProperty(a.var); if (recordar) MEM.poner('ancho-' + cual, ''); }
+  else {
+    const v = Math.round(Math.max(a.min, Math.min(a.max, px)));
+    document.documentElement.style.setProperty(a.var, v + 'px');
+    if (recordar) MEM.poner('ancho-' + cual, String(v));
+  }
+}
+function enlazaTiradores() {
+  for (const cual of ['sub', 'der']) {
+    const g = MEM.leer('ancho-' + cual);
+    if (g && +g > 0) ponAncho(cual, +g, false);
+    const t = $('#v4-tirador-' + cual), panel = $(cual === 'sub' ? '#v4-sub' : '#v4-der');
+    let x0 = 0, w0 = 0, activo = false;
+    t.addEventListener('pointerdown', ev => {
+      if (ev.button > 0) return;
+      ev.preventDefault();
+      activo = true; x0 = ev.clientX; w0 = panel.getBoundingClientRect().width;
+      t.setPointerCapture(ev.pointerId); t.classList.add('is-activo'); document.body.classList.add('v4-arrastrando-ancho');
+    });
+    t.addEventListener('pointermove', ev => {
+      if (!activo) return;
+      const dx = ev.clientX - x0;
+      ponAncho(cual, cual === 'sub' ? w0 + dx : w0 - dx, false);
+    });
+    const fin = ev => {
+      if (!activo) return;
+      activo = false; t.classList.remove('is-activo'); document.body.classList.remove('v4-arrastrando-ancho');
+      try { t.releasePointerCapture(ev.pointerId); } catch (e) { /* suelto */ }
+      ponAncho(cual, panel.getBoundingClientRect().width);
+      emitTam();
+    };
+    t.addEventListener('pointerup', fin);
+    t.addEventListener('pointercancel', fin);
+    t.addEventListener('dblclick', () => { ponAncho(cual, null); emitTam(); aviso('Ancho de serie.'); });
+    t.addEventListener('keydown', ev => {
+      const d = { ArrowLeft: -16, ArrowRight: 16 }[ev.key];
+      if (d == null) return;
+      ev.preventDefault();
+      const w = panel.getBoundingClientRect().width;
+      ponAncho(cual, cual === 'sub' ? w + d : w - d); emitTam();
+    });
+  }
+}
+
+// ---------------------------------------------------------------- avisos breves (copiar enlace, motivo de un botón apagado)
+let avisoT = 0;
+export function aviso(txt) {
+  if (!txt) return;
+  const el = $('#v4-aviso-copia');
+  el.textContent = txt; el.dataset.on = 'true';
+  clearTimeout(avisoT); avisoT = setTimeout(() => { el.dataset.on = 'false'; }, 2600);
+}
+
+// ---------------------------------------------------------------- versión de los datos
+async function version() {
+  const m = await cargarSiHay('MANIFEST.json');
+  if (!m) return;
+  const f = m.actualizado || m.generado || '';
+  const h = String(m.data_project_sha256 || '').slice(0, 8);
+  const fecha = f ? new Date(f) : null;
+  const txt = fecha && !isNaN(fecha) ? fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  $('#v4-version').innerHTML = `Datos ${esc(txt)}${h ? ` · huella <span class="v4-mono">${esc(h)}</span>` : ''}`;
+}
+
+// ---------------------------------------------------------------- eventos de la interfaz
+const VEL_ANTES = (bs, b) => { const k = bs.findIndex(x => x.getAttribute('aria-pressed') === 'true'); return k >= 0 ? k : bs.indexOf(b); };
+function enlazar() {
+  $$('[data-icono]').forEach(s => { s.outerHTML = icono(s.dataset.icono, { clase: s.className }); });
+  $('#v4-temas').addEventListener('click', e => {
+    const b = e.target.closest('.v4-tema[data-tema]'); if (!b) return;   // el botón de Análisis va aparte
+    if (estado.modo) setEstado({ modo: '' }, { historial: true });   // un tema saca del modo (Análisis)
+    const t = b.dataset.tema, u = ubicar(estado.ind);
+    const abierta = document.body.classList.contains('v4-sub-abierta');
+    if (u && u.tema.id === t && !temaVisto) { if (abierta && !flota().sub) cierraSub(); else abreSub(); return; }
+    if (flota().sub) { temaVisto = t; pintaRail(); pintaSub(); abreSub(); return; }   // en pantalla estrecha, primero la lista
+    temaVisto = null;
+    const id = (t === 'politica' && buscarId(/^elec_ganador/)) || primeroDe(t);   // Elecciones abre en el Arco, con el ganador
+    if (id) { irAIndicador(id); pintaRail(); pintaSub(); }   // la lista del tema, ya, sin esperar a los datos
+    abreSub();
+  });
+  $('#v4-temas').addEventListener('keydown', e => {
+    const bs = $$('.v4-tema'), k = bs.indexOf(document.activeElement);
+    const to = { ArrowDown: k + 1, ArrowRight: k + 1, ArrowUp: k - 1, ArrowLeft: k - 1, Home: 0, End: bs.length - 1 }[e.key];
+    if (k < 0 || to == null) return;
+    e.preventDefault(); bs[(to + bs.length) % bs.length].focus();
+  });
+  $('#v4-buscar').addEventListener('input', () => pintaSub());
+  $('#v4-buscar').addEventListener('keydown', e => { if (e.key === 'Enter') { const b = $('#v4-sub-lista .v4-it'); if (b) b.click(); } if (e.key === 'Escape') { e.target.value = ''; pintaSub(); } });
+  $('#v4-sub-plegar').addEventListener('click', () => (document.body.classList.contains('v4-sub-abierta') ? cierraSub() : abreSub()));
+  $('#v4-abrir-temas').addEventListener('click', () => (document.body.classList.contains('v4-sub-abierta') ? cierraSub() : abreSub()));
+  $('#v4-salir-modo').addEventListener('click', () => setEstado({ modo: '' }, { historial: true }));
+  $('#v4-rail').addEventListener('pointerdown', ondaRail);
+  colocaFi(); addEventListener('resize', colocaFi);
+  // en el teléfono: la leyenda, plegada en una píldora; la velocidad, un botón que va pasando; sin pantalla completa si no existe
+  $('#v4-ley-pil').addEventListener('click', e => { const on = document.body.classList.toggle('v4-ley-abierta'); e.currentTarget.setAttribute('aria-expanded', String(on)); });
+  { let ciclando = false; $('#v4-vel').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || ciclando || !esTel()) return; const bs = $$('button', $('#v4-vel')); ciclando = true; bs[(VEL_ANTES(bs, b) + 1) % bs.length].click(); ciclando = false; }, true); }
+  if (!document.documentElement.requestFullscreen) { const bp = document.querySelector('[data-accion="pantalla"]'); if (bp) bp.style.display = 'none'; }
+  montaFi();
+  montarComparar({ on, emit, tooltip, mapa, indicador: id => datos.indicador(id), nivelDe: (ent, vista) => nivelDatos(ent, boton(estado.nivel), vista),
+    rotNivel, emitTam, plegarOpc: () => cierraOpc(), fuenteHTML: fuenteDeAnios, infoHTML: infoIndicadorHTML,
+    tituloLeyenda: spec => { const e = datos.indicador(estado.ind), enC = !!(estado.cmb && e && /^poblacion_(hab|densidad)$/.test(e.id) && boton(estado.nivel) !== 'termino'); return (e && e.proveedor || enC || (spec && spec.frente)) && spec && spec.titulo ? spec.titulo : tituloLey(); },
+    irAnio: a => { const k = indiceDe(a); if (k >= 0) { pausa(); irA(k); } } });
+  montarBuscador({ arbol, indicador: id => datos.indicador(id), disponibles, periodoDe, esAnalisis, actual: () => estado.ind,
+    irA: id => { if (id !== estado.ind) { if (estado.modo) setEstado({ modo: '' }, { historial: true }); irAIndicador(id); } } });
+  montaAyudas();
+  $('#v4-abrir-der').addEventListener('click', () => { if (opcFlota()) cierraFlotantes('sub'); conmutaOpc(); });
+  $('#v4-opc-cerrar').addEventListener('click', () => cierraOpc({ recordar: true }));
+  $('#v4-opc-asa').addEventListener('click', () => { if (opcFlota()) cierraFlotantes('sub'); conmutaOpc(); });
+  montaTiradorOpc();
+  $('#v4-der-plegar').addEventListener('click', () => { cierraDer({ recordar: true }); $('#v4-der-asa').focus(); });
+  $('#v4-der-asa').addEventListener('click', () => { abreDer({ recordar: true }); $('#v4-der-plegar').focus(); });
+  montaSecciones();
+  $$('#v4-pane-opc .v4-sec').forEach(x => roApila.observe(x));
+  { const mo = new MutationObserver(pideApilar); for (const id of ['#v4-ind', '#v4-opc-vista', '#v4-niveles', '#v4-fondo']) if ($(id)) mo.observe($(id), { childList: true, subtree: true }); }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(pideApilar);
+  enlazaTiradores();
+  $('#v4-velo').addEventListener('click', () => cierraFlotantes());
+  $('#v4-tab-opc').addEventListener('click', () => pestana('opc'));
+  $('#v4-cal').addEventListener('click', () => setEstado({ cal: !estado.cal }));
+  $('#v4-interp').addEventListener('click', () => setEstado({ interp: !estado.interp }));
+  $('#v4-tab-ficha').addEventListener('click', () => { if (estado.ficha) pestana('ficha'); });
+  $('#v4-ficha-cerrar').addEventListener('click', () => setEstado({ ficha: '', fn: '' }));
+  $('#v4-ficha-grande').addEventListener('click', e => { const ine = e.currentTarget.dataset.ine; if (ine) setEstado({ mun: ine }, { historial: true }); });
+  $('#v4-play').addEventListener('click', () => (M.playing ? pausa() : play()));
+  $('#v4-prev').addEventListener('click', () => { pausa(); irA(M.i - 1); });
+  $('#v4-next').addEventListener('click', () => { pausa(); irA(M.i + 1); });
+  $('#v4-range').addEventListener('input', e => { pausa(); ir(nearest(+e.target.value)); });
+  enlazaPista();
+  $('#v4-range').addEventListener('keydown', e => {
+    const n = M.F.length - 1;
+    const to = { ArrowRight: M.i + 1, ArrowUp: M.i + 1, ArrowLeft: M.i - 1, ArrowDown: M.i - 1, Home: 0, End: n, PageUp: M.i + 5, PageDown: M.i - 5 }[e.key];
+    if (to == null) return;
+    e.preventDefault(); pausa(); irA(to);
+  });
+  $$('#v4-vel button').forEach(b => b.addEventListener('click', () => setEstado({ vel: +b.dataset.v })));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (e.target.closest('input[type=search]')) return;
+      const f = flota(), b = document.body.classList;
+      if ((f.sub && b.contains('v4-sub-abierta')) || (f.der && b.contains('v4-der-abierta'))) { cierraFlotantes(); return; }
+      if (estado.ficha) setEstado({ ficha: '', fn: '' });
+      return;
+    }
+    if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if ((e.key === 'o' || e.key === 'O') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); conmutaOpc(); return; }
+    if (!VISTAS.get(estado.vista) || !VISTAS.get(estado.vista).usaAnio || M.F.length < 2) return;
+    if (e.key === ' ' && !e.target.closest('button, a, summary')) { e.preventDefault(); M.playing ? pausa() : play(); }
+    else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !e.target.closest('[role=radiogroup], [role=tablist], .v4-temas')) { e.preventDefault(); pausa(); irA(M.i + (e.key === 'ArrowRight' ? 1 : -1)); }
+  });
+  on('anio', ({ i }) => {
+    marcaRegla(i);
+    pintaPie();
+    if (estado.ficha && !esFichaRio() && FICHA && FICHA.actualizar) FICHA.actualizar(fichaArgs(), vistaActiva ? vistaActiva.ctx : null);
+    if (panelInd && panelInd.inst && panelInd.inst.actualizar) { try { panelInd.inst.actualizar(i); } catch (e) { console.error(e); } }
+  });
+  on('play', () => { $('#v4-play').setAttribute('aria-pressed', 'true'); $('#v4-play').setAttribute('aria-label', 'Pausar'); document.body.classList.add('v4-reproduciendo'); });
+  on('pausa', () => { $('#v4-play').setAttribute('aria-pressed', 'false'); $('#v4-play').setAttribute('aria-label', 'Reproducir'); document.body.classList.remove('v4-reproduciendo'); setEstado({ anio: M.F[M.i] && M.F[M.i].clave }); });
+  // pinchar: abre la ficha; con Ctrl/Mayús o con «Seleccionar en el mapa», añade o quita de la selección
+  on('pinchar', ({ id, mod }) => {
+    tooltip.ocultar();
+    // ronda v16 (Juan): «si pincho provincia o municipio, que se active o desactive»: pinchar la añade a la selección o la
+    // quita; al añadirla se abre su ficha breve (desde ella, la ficha grande)
+    const yaEsta = (estado.sel || []).map(String).includes(String(id));
+    alterna(id);
+    if (mod || modoSel.mapa) return;
+    if (yaEsta) { if (String(estado.ficha) === String(id)) setEstado({ ficha: '', fn: '' }); }
+    else setEstado({ ficha: String(id), fn: '' });
+  });
+  let rz = 0;
+  addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { ajustaModo(); velo(); emit('tamano', tamano()); if (M.F.length) { montaRegla(); marcaRegla(M.i); } ajustaUnaLinea($('#v4-titulo-h'), 30, 16); ajustaUnaLinea($('.v4-ind__nombre'), 20, 13); }); });
+  addEventListener('popstate', () => { const s = normaliza0(leerURL(() => null)); setEstado(s); });
+  pintaVelocidad();
+  ajustaModo();
+  montarAcciones({ aviso, irA, M, mapa, rotNivel, par: { activo: parActivo, imagen: imagenPar }, vista: () => (modoActivo ? { def: modoActivo.def, ctx: modoActivo.ctx } : vistaActiva ? { def: vistaActiva.def, ctx: vistaActiva.ctx } : null), nativo: () => nivelDatos(datos.indicador(estado.ind), nativo4(datos.indicador(estado.ind)), estado.vista) });
+}
+
+enlazar();
+boot().catch(e => { console.error(e); $('#v4-cargando').hidden = false; $('#v4-cargando').textContent = 'El visor no ha podido arrancar: ' + e.message; });

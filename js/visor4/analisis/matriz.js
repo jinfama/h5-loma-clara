@@ -1,0 +1,187 @@
+// matriz.js — modo «Matriz de correlaciones»: r (o ρ) de cada par de indicadores elegidos, en un año y un nivel.
+// Cada casilla usa las unidades que tienen las dos cifras (y pasan los filtros): su n se dice al pasar.
+
+/* global d3 */
+import * as X from './cruce.js';
+import * as E from './estadistica.js';
+import { h, esc, num, r2, pTxt, entero, corto, seg, csv } from './comun.js';
+import { INFO } from './ayuda.js';
+import { botonIndicador } from './selector.js';
+import { yPorDefecto } from './dispersion.js';
+
+const MAX = 8;
+const EXTRA = ['poblacion_densidad', 'empleo_pct_agricultura', 'usos_olivar_pct', 'usos_labor_pct', 'usos_regadio_huerta_pct', 'geo_altitud_mean', 'geo_pendiente_media_10m', 'clima_prec'];
+const MZ = { ultimo: null };
+// divergente: almagre (negativo) · gris neutro · azulejo (positivo)
+// r por clases (siete, divergentes y simétricas alrededor de 0): almagre si van al revés, azul si van juntos
+export const CLASES_R = [
+  { hasta: -0.6, color: '#8e2f1f', txt: '−1 a −0,6' }, { hasta: -0.3, color: '#c4644c', txt: '−0,6 a −0,3' }, { hasta: -0.1, color: '#e6b3a5', txt: '−0,3 a −0,1' },
+  { hasta: 0.1, color: '#ecebe6', txt: '−0,1 a 0,1' }, { hasta: 0.3, color: '#a9c3dd', txt: '0,1 a 0,3' }, { hasta: 0.6, color: '#5a8bbd', txt: '0,3 a 0,6' }, { hasta: 1.01, color: '#1f4f86', txt: '0,6 a 1' },
+];
+const colorR = r => (CLASES_R.find(c => r <= c.hasta) || CLASES_R[CLASES_R.length - 1]).color;
+
+function lista(S) {
+  const x = S.A.ax, nivel = S.nivelDatos();
+  const ok = id => { const e = S.ctx.datos.indicador(id); return X.analizable(e) && X.enNivel(e, nivel); };
+  let l = S.A.ami ? S.A.ami.split(',').filter(ok) : [];
+  if (!l.length) {
+    const y = yPorDefecto(S, x, nivel), ex = S.ctx.datos.indicador(x);
+    const casa = id => ok(id) && X.compartenAnio(ex, S.ctx.datos.indicador(id), S.interp, S.ventana);
+    l = [y, ...EXTRA.filter(id => id !== x && id !== y && casa(id)).slice(0, 3)].filter(Boolean);
+  }
+  return [x, ...l.filter(id => id !== x)].slice(0, MAX);
+}
+
+export const matriz = {
+  aniosPropios: true,
+  plan(S) { const l = lista(S); return l.length >= 2 ? { ids: l } : { error: 'Elige al menos dos indicadores.' }; },
+  titulo(S) { return S.difAnios() ? { t: 'Matriz de correlaciones, años distintos', s: `${S.vars.length} indicadores: ${S.vars.map((v, j) => S.conAnio(j, corto(v.ent))).join(', ')}` } : { t: `Matriz de correlaciones${S.anio != null ? ', ' + S.anio : ''}`, s: `${S.vars.length} indicadores` }; },
+  panel(S) {
+    const l = lista(S), x = S.A.ax;
+    const quitar = id => S.setA({ ami: l.filter(q => q !== id && q !== x).join(',') });
+    const filas = l.map((id, k) => {
+      const e = S.ctx.datos.indicador(id);
+      return h('li', { class: 'an-p-li' }, h('span', { class: 'an-p-li__n' }, `${k + 1}. ${corto(e)}`),
+        l.length > 2 ? h('button', { type: 'button', class: 'an-p-li__x', 'aria-label': 'Quitar ' + corto(e), title: 'Quitar', onclick: () => (id === x ? S.setA({ ax: l.find(q => q !== x), ami: l.filter(q => q !== x).slice(1).join(',') }) : quitar(id)) }, '×') : null,
+        S.controlAnio(id));
+    });
+    const add = l.length < MAX ? botonIndicador(S, { valor: '', nivel: S.nivelDatos(), vacio: 'Añadir indicador…', excluir: l, titulo: 'Añadir indicador a la matriz', alElegir: v => { if (v) S.setA({ ami: [...l.filter(q => q !== x), v].join(',') }); } }) : h('small', {}, `Máximo ${MAX}`);
+    return [{ t: 'Indicadores (de 2 a 8)', n: [h('ol', { class: 'an-p-lista' }, ...filas), add] }];
+  },
+  ajustes(S) { return [{ t: 'Matriz', n: [seg('Coeficiente', [['p', 'Pearson'], ['s', 'Spearman']], S.A.amc, v => S.setA({ amc: v }), { titulo: 'Spearman usa el puesto de cada unidad: resiste mejor a los extremos', info: INFO.coeficiente })] }]; },
+  descargas: S => [h('button', { type: 'button', class: 'an-btn', onclick: () => exportar(S) }, 'CSV de la matriz')],
+  async pintar(S, cancelado) {
+    const cr = await X.cruzar(S.ctx, S.vars, S.nivelDatos(), S.anio, S.ventana);
+    if (cancelado()) return;
+    if (!cr) { S.sinUnidades(null, null); return; }
+    const fo = S.opcionesFiltro();
+    if (S.sinUnidades(cr, X.filtrar(cr, fo), 0)) return;
+    const vale = c => c.v != null && isFinite(c.v) && !(fo.est && X.esEst(c.f)) && !(fo.par && (c.f === '5' || c.parcial)) && !(fo.res && c.f === '2');
+    const k = S.vars.length, M = [];
+    for (let i = 0; i < k; i++) {
+      M.push([]);
+      for (let j = 0; j < k; j++) {
+        const xs = [], ys = [];
+        for (const r of cr.filas) if ((!fo.unidad || fo.unidad(r)) && vale(r.vals[i]) && vale(r.vals[j])) { xs.push(r.vals[i].v); ys.push(r.vals[j].v); }
+        const c = S.A.amc === 's' ? E.spearman(xs, ys) : E.pearson(xs, ys);
+        M[i].push({ r: S.A.amc === 's' ? c.rho : c.r, p: c.p, n: xs.length });
+      }
+    }
+    MZ.ultimo = { cr, M };
+    dibuja(S, cr, M);
+    resultados(S, cr, M);
+    const f = X.filtrar(cr, fo);
+    S.pintaCuenta(f.cuenta, S.vars, { unidad: 'unidades con todas las cifras', extra: 'cada casilla usa las que tienen sus dos cifras (pasa el ratón para ver cuántas)' });
+  },
+  redibujar(S) { if (MZ.ultimo) dibuja(S, MZ.ultimo.cr, MZ.ultimo.M); },
+};
+
+// ---------------------------------------------------------------- dibujo: llena el área, con los rótulos enteros
+let LIENZO = null;
+const anchoTxt = (t, fs, fam) => { LIENZO = LIENZO || document.createElement('canvas').getContext('2d'); LIENZO.font = `500 ${fs}px ${fam}`; return LIENZO.measureText(t).width * 1.04; };
+/** Parte un texto en líneas que no pasan de `ancho` (por palabras: nunca se corta). */
+function parte(t, ancho, fs, fam) {
+  const out = [];
+  let l = '';
+  for (const w of t.replace(/\(% /g, '(%\u00a0').split(' ')) { const q = l ? `${l} ${w}` : w; if (!l || anchoTxt(q, fs, fam) <= ancho) l = q; else { out.push(l); l = w; } }
+  if (l) out.push(l);
+  return out;
+}
+/** Reparte el ancho y el alto: la columna de rótulos más estrecha en que todos caben enteros; el resto, para las casillas. */
+function reparte({ W, H, k, filas, cols, movil, fam, arriba }) {
+  const der = 6, minC = movil ? 31 : 44;
+  const prueba = (izq, fs, tope) => {
+    const lh = Math.round(fs * 1.22), cw = (W - izq - der) / k, conNombres = cw >= 92;
+    const lCol = conNombres ? cols.map(t => parte(t, cw - 10, fs - 0.5, fam)) : null;
+    const cab = conNombres ? Math.max(...lCol.map(l => l.length)) * lh + 7 : 20;
+    const lFil = filas.map(t => parte(t, izq - 12, fs, fam)), nl = Math.max(...lFil.map(l => l.length));
+    const ch = (H - arriba - cab - 4) / k;
+    return nl <= tope && nl * lh <= ch - 3 ? { izq, fs, lh, cw, ch, cab, lCol, lFil, conNombres, der } : null;
+  };
+  const tamanos = movil ? [11, 10.5, 10] : [Math.max(12, Math.min(14, W / 90)), 12, 11.5, 11, 10.5];
+  for (const tope of [3, 5, 9]) for (const fs of tamanos) {
+    const ini = Math.ceil(Math.max(...filas.flatMap(t => t.split(' ').map(w => anchoTxt(w, fs, fam)))) + 14);
+    const fin = Math.max(ini, Math.min(W * (movil ? 0.42 : 0.42), W - der - k * minC));
+    for (let izq = Math.max(ini, movil ? 92 : 128); izq <= fin; izq += 8) { const r = prueba(izq, fs, tope); if (r) return r; }
+  }
+  // no cabe en el alto que hay: las casillas conservan su tamaño y el gráfico se desplaza (nunca se corta un rótulo)
+  const fs = movil ? 10.5 : 11.5, lh = Math.round(fs * 1.22);
+  const izq = Math.round(Math.max(Math.max(...filas.flatMap(t => t.split(' ').map(w => anchoTxt(w, fs, fam)))) + 14, Math.min(W * 0.4, W - der - k * minC)));
+  const cw = (W - izq - der) / k, lFil = filas.map(t => parte(t, izq - 12, fs, fam));
+  return { izq, fs, lh, cw, ch: Math.max(...lFil.map(l => l.length)) * lh + 6, cab: 20, lCol: null, lFil, conNombres: false, der };
+}
+const TOOLTIP = (S, i, j, c) => `<strong>${esc(corto(S.vars[i].ent))}<br>y ${esc(corto(S.vars[j].ent))}</strong><div class="an-tt-f"><span>${S.A.amc === 's' ? 'ρ' : 'r'}</span><b>${r2(c.r)}</b></div><div class="an-tt-m">p ${pTxt(c.p)} · ${entero(c.n)} unidades con las dos cifras</div><div class="an-tt-m">Clic: verlo en dispersión</div>`;
+function lineas(sel, ls, x, cy, lh) {
+  ls.forEach((t, q) => sel.append('tspan').attr('x', x).attr('y', cy + (q - (ls.length - 1) / 2) * lh + lh * 0.34).text(t));
+}
+function dibuja(S, cr, M) {
+  const graf = S.ui.graf;
+  graf.textContent = '';
+  const k = S.vars.length;
+  const W = Math.max(280, graf.clientWidth), H0 = Math.max(240, graf.clientHeight);
+  const movil = W < 520, fam = getComputedStyle(graf).fontFamily;
+  const titulo = `${S.A.amc === 's' ? 'ρ de Spearman' : 'r de Pearson'} · ${S.difAnios() ? 'años distintos' : S.anio} · negrita: p < 0,05`;
+  // la leyenda va con el gráfico (también en el PNG): en la fila del título si cabe; si no, debajo
+  const celda = movil ? 26 : 34, lw = celda * CLASES_R.length, lados = 148;
+  const dosFilas = anchoTxt(titulo, 12, fam) + lw + lados + 28 > W;
+  const arriba = dosFilas ? 68 : 40;
+  const rFilas = S.vars.map((v, i) => `${i + 1}. ${corto(v.ent)}`), rCols = S.vars.map(v => corto(v.ent));
+  const L = reparte({ W, H: H0, k, filas: rFilas, cols: rCols, movil, fam, arriba });
+  const { izq, cw, ch, cab, lh, fs } = L;
+  const H = Math.max(H0, Math.ceil(arriba + cab + k * ch + 4));
+  const fsCel = Math.max(10, Math.min(30, cw * 0.24, ch * 0.34));
+  const svg = d3.select(graf).append('svg').attr('class', 'an-svg an-mz' + (H > H0 ? ' an-mz--alta' : '')).attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img').attr('aria-label', 'Matriz de correlaciones');
+  svg.append('text').attr('class', 'an-eje-t').attr('x', 14).attr('y', 18).text(titulo);
+  const gl = svg.append('g').attr('transform', `translate(${dosFilas ? (W - lw) / 2 : W - L.der - lw - 66},${dosFilas ? 26 : 2})`);
+  CLASES_R.forEach((c, q) => { gl.append('rect').attr('x', q * celda).attr('width', celda - 1).attr('height', 12).attr('fill', c.color).append('title').text(c.txt); });
+  ['−0,6', '−0,3', '−0,1', '0,1', '0,3', '0,6'].forEach((t, q) => gl.append('text').attr('class', 'an-mz-c').attr('x', (q + 1) * celda - 0.5).attr('y', 25).attr('text-anchor', 'middle').text(t));
+  gl.append('text').attr('class', 'an-mz-c').attr('x', -6).attr('y', 10).attr('text-anchor', 'end').text('van al revés');
+  gl.append('text').attr('class', 'an-mz-c').attr('x', lw + 5).attr('y', 10).text('van juntos');
+  const y0 = arriba + cab;
+  const g = svg.append('g').attr('transform', `translate(${izq},${y0})`);
+  for (let i = 0; i < k; i++) {
+    const t = svg.append('text').attr('class', 'an-mz-f').style('font-size', `${fs}px`, 'important').attr('text-anchor', 'end');
+    lineas(t, L.lFil[i], izq - 8, y0 + i * ch + (ch - 2) / 2, lh);
+    if (L.conNombres) {
+      const c = svg.append('text').attr('class', 'an-mz-f').style('font-size', `${fs - 0.5}px`, 'important').attr('text-anchor', 'middle');
+      L.lCol[i].forEach((q, n) => c.append('tspan').attr('x', izq + i * cw + (cw - 2) / 2).attr('y', y0 - 6 - (L.lCol[i].length - 1 - n) * lh).text(q));
+    } else svg.append('text').attr('class', 'an-mz-c').attr('x', izq + i * cw + (cw - 2) / 2).attr('y', y0 - 6).attr('text-anchor', 'middle').text(i + 1);
+  }
+  for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) {
+    const c = M[i][j];
+    const cel = g.append('g').attr('transform', `translate(${j * cw},${i * ch})`).attr('class', i === j ? 'an-mz-diag' : 'an-mz-cel');
+    cel.append('rect').attr('width', cw - 2).attr('height', ch - 2).attr('fill', i === j ? '#ffffff' : isFinite(c.r) ? colorR(c.r) : 'url(#an-t-nd)').attr('stroke', i === j ? '#e3e3e3' : 'none');
+    if (i !== j) {
+      cel.append('text').attr('x', (cw - 2) / 2).attr('y', (ch - 2) / 2 + fsCel * 0.36).attr('text-anchor', 'middle').style('font-size', `${fsCel}px`, 'important')
+        .attr('class', (c.p < 0.05 ? 'is-sig ' : '') + (Math.abs(c.r) > 0.55 ? 'is-claro' : '')).text(isFinite(c.r) ? r2(c.r) : '—');
+      cel.style('cursor', 'pointer')
+        .on('mousemove', ev => S.ctx.tooltip.mostrar(TOOLTIP(S, i, j, c), ev.clientX, ev.clientY))
+        .on('mouseleave', () => S.ctx.tooltip.ocultar())
+        .on('click', () => { S.ctx.tooltip.ocultar(); S.para(); const xi = S.vars[j].id, yi = S.vars[i].id; S.setA({ am: 'disp', ax: xi, ay: yi }, { historial: true }); });
+    } else if (!L.conNombres) cel.append('text').attr('x', (cw - 2) / 2).attr('y', (ch - 2) / 2 + 4).attr('text-anchor', 'middle').attr('class', 'an-mz-c').text(i + 1);
+  }
+}
+
+function resultados(S, cr, M) {
+  const k = S.vars.length, pares = [];
+  for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) if (isFinite(M[i][j].r)) pares.push({ i, j, ...M[i][j] });
+  pares.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+  const np = k * (k - 1) / 2;
+  const ns = pares.map(p => p.n);
+  S.ui.res.innerHTML = `
+    <p class="an-r__k">Los pares más fuertes</p>
+    <ol class="an-pares">${pares.slice(0, 5).map(p => `<li><b>${r2(p.r)}</b> ${esc(corto(S.vars[p.i].ent))} y ${esc(corto(S.vars[p.j].ent))} <small>(n ${entero(p.n)}, p ${pTxt(p.p)})</small></li>`).join('')}</ol>
+    <dl class="an-dl"><dt>Pares</dt><dd>${np}</dd><dt>Unidades por casilla</dt><dd>${ns.length ? `${entero(Math.min(...ns))} a ${entero(Math.max(...ns))}` : '—'}${S.textoFiltro() ? ` <small>(filtrado: ${esc(S.textoFiltro())})</small>` : ''}</dd><dt>Peso</dt><dd>sin ponderar</dd></dl>
+    <p class="an-nota${np >= 10 ? ' an-nota--aviso' : ''}">${np > 1 ? `Con ${np} pares, alguno puede salir «significativo» por azar (al 5 %, uno de cada veinte). ` : ''}Una r alta entre dos indicadores puede deberse a un tercero.</p>
+    ${S.avisoAnios(cr.usados) ? `<p class="an-nota an-nota--aviso">${esc(S.avisoAnios(cr.usados))}</p>` : ''}`;
+  S.ponFuentes(S.fuentesCruce(cr));
+}
+
+function exportar(S) {
+  const u = MZ.ultimo; if (!u) return;
+  const filas = [['indicador_1', 'anio_1', 'indicador_2', 'anio_2', S.A.amc === 's' ? 'rho_spearman' : 'r_pearson', 'p', 'n_unidades', 'nivel', 'fuente_original_1', 'fuente_original_2']];
+  const k = S.vars.length, fu = j => (u.cr.fuentes[j] || []).map(i => S.ctx.fuentes.nombreFuente(i)).join('; ');
+  for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) filas.push([S.vars[i].id, S.vars[i].fijo ? 'fija' : u.cr.usados[i], S.vars[j].id, S.vars[j].fijo ? 'fija' : u.cr.usados[j], u.M[i][j].r, u.M[i][j].p, u.M[i][j].n, S.nivelDatos(), fu(i), fu(j)]);
+  if (S.avisoAnios(u.cr.usados)) filas.push([], [`# ${S.avisoAnios(u.cr.usados)}`]);
+  csv(`analisis_matriz__${S.nivelDatos()}__${S.anio}.csv`, filas);
+}

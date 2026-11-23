@@ -1,0 +1,79 @@
+// mapa.js — mapa SVG de la vista «Análisis» (bivariante, agrupamientos LISA y residuos).
+// Los recintos son los del nivel (en `termino`, los del corte del año); el encuadre, el contorno de Andalucía, igual en
+// todos los niveles. SVG y no Canvas: así el botón «PNG» del visor lo recoge y cada recinto lleva su título accesible.
+
+/* global d3, topojson */
+import { cargar } from '../../atlas2/data.js';
+import { rasgos, proyeccionAndalucia } from '../../atlas2/mapa.js';
+
+const NS = 'http://www.w3.org/2000/svg';
+const CACHE = new Map();
+let BASE = null;
+const base = () => (BASE ||= cargar('geo/municipios.topo.json'));
+
+/** Alto / ancho del contorno de Andalucía en la proyección del Atlas (para dar al mapa el alto que necesita). */
+let ASPECTO = null;
+export async function aspectoMapa() {
+  if (ASPECTO) return ASPECTO;
+  const bt = await base();
+  const c = topojson.feature(bt, bt.objects.andalucia);
+  const b = d3.geoPath(proyeccionAndalucia(c, 1000, 1000, 0)).bounds(c);
+  ASPECTO = (b[1][1] - b[0][1]) / (b[1][0] - b[0][0]);
+  return ASPECTO;
+}
+
+/** Tramas comunes (en un <defs>): estimado (rayado), sin dato (gris cruzado), reserva (puntos ocres). */
+export function defsTramas(svg) {
+  const d = d3.select(svg).append('defs');
+  const pat = (id, paso, fn) => { const p = d.append('pattern').attr('id', id).attr('width', paso).attr('height', paso).attr('patternUnits', 'userSpaceOnUse'); fn(p); };
+  pat('an-t-est', 5, p => p.attr('patternTransform', 'rotate(45)').append('line').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 5).attr('stroke', 'rgba(16,16,16,.55)').attr('stroke-width', 1.1));
+  pat('an-t-nd', 6, p => { p.append('rect').attr('width', 6).attr('height', 6).attr('fill', '#e4e4e2'); p.append('path').attr('d', 'M0 0L6 6M6 0L0 6').attr('stroke', '#bdbdbd').attr('stroke-width', .8); });
+  pat('an-t-res', 5, p => p.append('circle').attr('cx', 2.5).attr('cy', 2.5).attr('r', 1.1).attr('fill', '#c27c0e'));
+  return d;
+}
+
+/** Pinta el mapa. relleno(id) → {color, trama: 'est' | 'res' | null} o null (sin dato). Devuelve {repintar, sel}. */
+export async function pintarMapa(el, uni, { relleno, alPasar, alSalir, alPinchar, sel = [], etiqueta = 'Mapa' }) {
+  const W = Math.max(200, el.clientWidth), H = Math.max(200, el.clientHeight);
+  const bt = await base();
+  const clave = `${uni.clave}|${W}x${H}`;
+  if (!CACHE.has(clave)) {
+    const contorno = topojson.feature(bt, bt.objects.andalucia);
+    const proj = proyeccionAndalucia(contorno, W, H, 8);
+    const path = d3.geoPath(proj);
+    const fs = rasgos(uni.topo, uni.objeto);
+    const d = fs.map(f => ({ id: String(uni.idDe(f.properties || {})), d: path(f) || '' }));
+    const prov = path(topojson.mesh(bt, bt.objects.provincias, (a, b) => a !== b));
+    const borde = path(topojson.mesh(bt, bt.objects.andalucia, (a, b) => a === b));
+    CACHE.set(clave, { d, prov, borde });
+    if (CACHE.size > 12) CACHE.delete(CACHE.keys().next().value);
+  }
+  const C = CACHE.get(clave);
+  el.textContent = '';
+  const svg = d3.select(el).append('svg').attr('class', 'an-mapa').attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img').attr('aria-label', etiqueta);
+  defsTramas(svg.node());
+  const gF = svg.append('g'), gT = svg.append('g').style('pointer-events', 'none');
+  const gL = svg.append('g').style('pointer-events', 'none');
+  gL.append('path').attr('d', C.prov).attr('fill', 'none').attr('stroke', '#101010').attr('stroke-width', .9).attr('stroke-opacity', .55);
+  gL.append('path').attr('d', C.borde).attr('fill', 'none').attr('stroke', '#101010').attr('stroke-width', 1.2);
+  const gS = svg.append('g').style('pointer-events', 'none');
+  const caminos = gF.selectAll('path').data(C.d, d => d.id).join('path').attr('d', d => d.d).attr('stroke', '#ffffff').attr('stroke-width', .35).attr('vector-effect', 'non-scaling-stroke');
+  caminos.append('title');
+  const hover = svg.append('path').attr('fill', 'none').attr('stroke', '#101010').attr('stroke-width', 1.6).style('pointer-events', 'none');
+  caminos.on('mousemove', (ev, d) => { hover.attr('d', d.d); if (alPasar) alPasar(d.id, ev); })
+    .on('mouseleave', () => { hover.attr('d', null); if (alSalir) alSalir(); })
+    .on('click', (ev, d) => { if (alPinchar) alPinchar(d.id, ev); });
+  function repintar(fn = relleno, selIds = sel) {
+    caminos.each(function (d) {
+      const r = fn(d.id);
+      this.setAttribute('fill', r ? r.color : 'url(#an-t-nd)');
+      this.firstChild.textContent = r && r.titulo ? r.titulo : '';
+    });
+    gT.selectAll('path').data(C.d.filter(d => { const r = fn(d.id); return r && r.trama; }), d => d.id).join('path').attr('d', d => d.d)
+      .attr('fill', d => (fn(d.id).trama === 'res' ? 'url(#an-t-res)' : 'url(#an-t-est)'));
+    const s = new Set(selIds.map(String));
+    gS.selectAll('path').data(C.d.filter(d => s.has(d.id)), d => d.id).join('path').attr('d', d => d.d).attr('fill', 'none').attr('stroke', '#101010').attr('stroke-width', 2.4);
+  }
+  repintar();
+  return { repintar, svg: svg.node() };
+}

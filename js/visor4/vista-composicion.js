@@ -1,0 +1,391 @@
+// vista-composicion.js — vista «Composición» (Juan, 23-nov-2026): reparto a lo largo del tiempo de los grupos de usos del
+// suelo y de los sectores de empleo, por unidad. En % usa el dibujo común, js/comun/composicion.js; en número de ocupados,
+// un área apilada con el total como contorno (ese dibujo no pasa de 100). Ámbito: Andalucía, las 8 provincias o las unidades
+// elegidas. Elegir una categoría la resalta sin cambiar de gráfica. Lo interpolado o de modelo se ve difuminado y nunca sale
+// como cifra: ni en la tabla, ni en el puntero, ni en el CSV. Null es «sin dato», nunca cero.
+
+import { registrarVista } from '../visor3/registro.js';
+import { emit } from '../visor3/estado.js';
+import * as K from '../visor3/vistas/comun.js';
+import { pintarComposicion, modeloComposicion, marcasAnio, seInterpola } from '../comun/composicion.js';
+import { pictoDeIndicador } from '../pictos/agro.js';
+import { tramosSinInterp, notaTramo } from '../visor3/datos.js';
+import { marcaMinimo, esSinCuadrar, esSuma, alPunteroComposicion } from '../visor3/minimo1752.js';   // minimo1752
+
+const { esc } = K;
+const TOPE = 8;
+const TEXTO_RESTO = 'sin dato en hectáreas (no declarado, no convertible o error de medida)';
+const GRIS_RESTO = '#e4e4df';
+const CLASE = { 0: 'observado', 3: 'calculado de originales', 1: 'estimado', 4: 'parcialmente estimado', 5: 'suma parcial', 2: 'en revisión' };
+const SECTORES = [['agricultura', 'Agricultura', '#b98a2e', '#101010'], ['industria', 'Industria', '#6d6f73', '#fff'], ['servicios', 'Servicios', '#2a5a85', '#fff']];
+const NOTA_EMPLEO = 'Las columnas son años con cifra de fuente; con trama, solo una parte de la cifra lo es. Entre ellas, el color difuminado es modelo de la base o interpolación: no es dato y no se da como cifra.';
+
+const USOS = {
+  clave: 'usos', titulo: 'Usos del suelo por grupos', unidad: '% de la superficie', dominio: [1752, 2020],
+  nota: 'Cada columna es una fecha con dato.',
+  cats: [
+    { id: 'usos_g_tierra_de_labor_pct', rotulo: 'Tierra de labor', color: '#d2a24c' },
+    { id: 'usos_g_rotacion_larga_solo_1752_pct', rotulo: 'Labor de rotación larga (solo 1752)', color: '#e8cf97' },
+    { id: 'usos_g_dehesa_agricola_sin_asignar_pct', rotulo: 'Dehesa agrícola sin asignar', color: '#a08a45' },
+    { id: 'usos_g_lenosos_pct', rotulo: 'Leñosos', color: '#66803a', tinta: '#fff' },
+    { id: 'usos_g_monte_y_pasto_pct', rotulo: 'Monte y pasto', color: '#2c6549', tinta: '#fff' },
+    { id: 'usos_g_inculto_y_no_agrario_pct', rotulo: 'Inculto y no agrario', color: '#a9a496' },
+    { id: 'usos_g_sin_clasificar_pct', rotulo: 'Sin clasificar', color: '#d9d5ca' },
+  ],
+};
+const sectores = pre => SECTORES.map(([s, rotulo, color, tinta]) => ({ id: `${pre}${s}`, rotulo, color, tinta }));
+const EMPLEO = { clave: 'empleo', titulo: 'Empleo por sectores', unidad: '% de los ocupados', nota: NOTA_EMPLEO, cats: sectores('empleo_pct_') };
+const EMPLEO_N = { clave: 'empleo_n', titulo: 'Ocupados por sector', unidad: 'ocupados', numero: true, total: 'empleo_n_total', nota: `${NOTA_EMPLEO} La línea negra es el total de ocupados.`, cats: sectores('empleo_n_') };
+const familia = ent => (!ent ? null : /^usos_/.test(ent.id) ? USOS : /^empleo_n_/.test(ent.id) ? EMPLEO_N : /^empleo_/.test(ent.id) ? EMPLEO : null);
+const catDe = (F, id) => { const x = String(id).replace(/^(usos_g_.+)_ha$/, '$1_pct'); return F.cats.some(c => c.id === x) ? x : null; };
+
+const S = { ctx: null, el: null, seq: 0, clave: '', graficas: [], quitado: null, alto: 0, ro: null, tm: 0, periodo: null, F: null };
+const limpia = () => { S.graficas.forEach(x => x.g.destruir()); S.graficas = []; };
+const firme = p => p.f === '0' || p.f === '3';
+const abrevia = v => (v >= 1e6 ? `${(v / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 1 })} M` : v >= 1e3 ? `${K.entero(v / 1e3)} mil` : K.entero(v));
+const atenua = c => window.d3.interpolateRgb(c, '#f1f0eb')(0.62);
+
+// Provincia, partido, comarca y Andalucía: cada `_pct` divide solo entre los municipios con cifra de ESE grupo, así que sus
+// denominadores no casan y no se pueden apilar. El reparto sale de las hectáreas de la misma unidad y fecha, sobre la
+// superficie de la unidad: la suma de sus grupos en 2007, fecha que cierra en todas. No se normaliza ninguna columna.
+const NIVELES_AGREGADOS = new Set(['andalucia', 'provincia', 'comarca_agraria', 'pj1834', 'pj1888', 'pjactual']);
+const ANIO_SUPERFICIE = 2007;
+function repartoSobreSuperficie(ds) {
+  const sup = new Map();
+  for (const d of ds) {
+    if (!d || !d.ids || !d.v) continue;
+    const i = d.anios.map(Number).indexOf(ANIO_SUPERFICIE);
+    if (i < 0) continue;
+    d.ids.forEach((id, k) => { const v = (d.v[i] || [])[k]; if (v != null && isFinite(v)) sup.set(String(id), (sup.get(String(id)) || 0) + +v); });
+  }
+  return ds.map(d => (!d || !d.ids || !d.v ? d : { ...d, v: d.v.map(fila => (fila || []).map((v, k) => {
+    const t = sup.get(String(d.ids[k]));
+    return v == null || !isFinite(v) || !t ? null : Math.round(+v / t * 1e4) / 100;
+  })) }));
+}
+
+function indice(d) {
+  const anios = (d.anios || []).map(Number);
+  return { d, ia: new Map(anios.map((a, i) => [a, i])), ik: new Map((d.ids || []).map((id, k) => [String(id), k])) };
+}
+function celda(x, anio, id) {
+  const nada = { v: null, f: '.', pe: null };
+  if (!x) return nada;
+  const i = x.ia.get(anio), k = x.ik.get(String(id));
+  if (i == null || k == null) return nada;
+  const v = (x.d.v[i] || [])[k], f = String((x.d.f[i] || [])[k] ?? '.'), pe = x.d.pe && x.d.pe[i] ? x.d.pe[i][k] : null;
+  return v == null || !isFinite(v) ? nada : { v: +v, f, pe: pe == null ? null : +pe };
+}
+
+function opciones(F, xs, xT, id, ctx, nivel = '') {
+  const agregado = NIVELES_AGREGADOS.has(nivel);
+  let anios = [...new Set(xs.filter(Boolean).flatMap(x => [...x.ia.keys()]))].filter(isFinite).sort((p, q) => p - q);
+  // 1787 va aparte de la serie de empleo: una fecha vacía corta el área
+  if (F !== USOS && anios[0] === 1787 && anios[1] > 1788) anios = [1787, 1788, ...anios.slice(1)];
+  const celdas = F.cats.map((c, j) => anios.map(a => celda(xs[j], a, id)));
+  // «Solo observado»: fuera la fecha entera si alguna parte es estimada (una pila incompleta engañaría)
+  if (ctx.estado.obs) anios.forEach((a, i) => { if (celdas.some(cc => cc[i].f === '1' || cc[i].f === '4')) celdas.forEach(cc => { cc[i] = { v: null, f: '.', pe: null }; }); });
+  const con = anios.filter((a, i) => celdas.some(cc => cc[i].v != null));
+  if (!con.length) return null;
+  const o = {
+    anios, unidad: F.unidad, tabla: true, aria: `${F.titulo}, a lo largo del tiempo`, con,
+    dominio: F.dominio || [con[0], con[con.length - 1]],
+    categorias: F.cats.map((c, j) => ({ id: c.id, rotulo: c.rotulo, color: c.color, base: c.color, tinta: c.tinta || '#101010', picto: F === USOS ? (pictoDeIndicador(c.id, { tam: 22, titulo: '' }) || '') : '',
+      valores: celdas[j].map(x => x.v), clases: celdas[j].map(x => x.f) })),
+  };
+  // dónde no se interpola cada categoría: lo que diga el catálogo de su indicador, con su nota
+  o.notasFuente = [];
+  o.categorias.forEach(c => {
+    const e = ctx.datos.indicador(c.id), tr = tramosSinInterp(e);
+    c.sinInterpolar = tr;
+    c.notasSinInterpolar = Object.fromEntries(tr.map(([a, b]) => [`${a}-${b}`, notaTramo(e, a, b)]));
+    for (const [a, b] of tr) o.notasFuente.push({ id: `${c.id}|${a}-${b}`, rotulo: c.rotulo, nota: notaTramo(e, a, b) });
+  });
+  if (F === USOS) {
+    const suma = i => celdas.reduce((s, cc) => s + (cc[i].v || 0), 0);
+    // más del 105 % en otra fecha: la columna lo reparte sobre 100 y se dice en la nota
+    // minimo1752: decir que declara más que su término solo si la unidad va como «sin cuadrar»
+    const sinCuadrar = agregado && esSinCuadrar(F.cats[0].id, nivel, 1752, id);
+    o.avisosSuma = anios.map((a, i) => [a, suma(i)]).filter(([a, x]) => (a === 1752 ? sinCuadrar && x > 100.05 : x > 105)).map(([a, x]) => (a === 1752
+      ? `1752: las partes suman el ${K.entero(x)} % de la superficie de la unidad, porque declara más que su término; la columna las reparte sobre 100.`
+      : `${a === 1880 ? 'h. 1880' : a}: las partes suman el ${K.entero(x)} %; la columna las reparte sobre 100.`));
+    { // minimo1752: la marca de 1752 y, en los niveles agregados, un corte en vez del difuminado hasta h. 1880
+      const i52 = anios.indexOf(1752), mn = i52 >= 0 && celdas.some(cc => cc[i52].v != null) ? marcaMinimo(F.cats[0].id, nivel, 1752, id) : '';
+      if (mn) {
+        o.minimo = mn;
+        if (agregado) {
+          o.categorias.forEach(c => { c.sinInterpolar = [...c.sinInterpolar, [1752, 1880]]; });
+          o.huecos = [{ desde: 1753, hasta: 1879, rotulo: esSuma(F.cats[0].id, nivel, 1752, id) ? 'corte en 1752' : 'corte: 1752 no suma 100 %', corto: 'corte' }];
+        }
+      }
+    }
+    o.rotuloAnio = a => (a === 1880 ? 'h. 1880' : String(a));
+    o.cierre = { anios: [1752], resto: { rotulo: TEXTO_RESTO, color: GRIS_RESTO },
+      exceso: s => (agregado ? (sinCuadrar ? `declara el ${K.entero(s)} % de su superficie` : esSuma(F.cats[0].id, nivel, 1752, id) ? marcaMinimo(F.cats[0].id, nivel, 1752, id) : `suma el ${s.toLocaleString('es-ES', { maximumFractionDigits: 1 })} %`)
+        : nivel === 'municipio' ? `suman el ${K.entero(s)} % del término`      // la cifra municipal es un reparto: no «declara»
+          : nivel === 'ue1842' ? `suman el ${K.entero(s)} % de su superficie` : `declara el ${K.entero(s)} % del término`) };
+    o.textos = { dato: 'columna en color pleno: fecha con dato', interpolado: 'color difuminado: interpolado, no es dato' };
+    return o;
+  }
+  // empleo: columna si la cifra es de fuente, entera o en parte (pe < 1); un año solo de modelo, nunca
+  const ent = ctx.datos.indicador('empleo_pct_agricultura') || {}, af = new Set((ent.anios_fuente || []).map(Number));
+  const parte = new Map(), cols = new Set();
+  anios.forEach((a, i) => {
+    const ps = celdas.map(cc => cc[i]).filter(p => p.v != null);
+    if (!ps.length) return;
+    const entera = ps.every(firme);
+    if (!(a === 1787 || entera || (af.has(a) && ps.every(p => firme(p) || p.f === '4' || (p.pe != null && p.pe < 1))))) return;
+    cols.add(a);
+    if (!entera && ps.every(p => p.pe != null)) parte.set(a, Math.round((1 - Math.max(...ps.map(p => p.pe))) * 100));
+  });
+  o.parte = parte;
+  o.columna = a => cols.has(a);
+  o.textos = { dato: 'columna: año con cifra de fuente', interpolado: 'color difuminado: modelo o interpolación, no es dato', tipInterpolado: 'modelo o interpolación, no es dato' };
+  if (F.numero) o.total = { valores: anios.map(a => celda(xT, a, id).v), clases: anios.map(a => celda(xT, a, id).f) };
+  return o;
+}
+
+// ---------------------------------------------------------------- área apilada en número, con el total como contorno
+let nPat = 0;
+function pintaNumero(el, inicial, ctx) {
+  let o = inicial, W = 0, tm = 0;
+  el.innerHTML = '<div class="cn-g"></div>';
+  const g = el.firstChild, d3 = window.d3, idp = ++nPat;
+  const dato = (i) => o.categorias.map(c => (c.valores[i] == null ? null : { c, v: c.valores[i], f: String(c.clases[i] ?? '0') }));
+  const dibuja = () => {
+    g.innerHTML = '';
+    const H = o.alto || 300, m = { t: 12, r: 10, b: 24, l: 50 }, dom = o.dominio;
+    const cols = o.anios.map((a, i) => ({ a, i })).filter(q => o.columna(q.a) && dato(q.i).some(Boolean));
+    const x = d3.scaleLinear().domain(dom).range([m.l + 4, W - m.r - 3]), y = d3.scaleLinear().domain([0, o.max]).range([H - m.b, m.t]);
+    const xs = cols.map(q => x(q.a)), gap = xs.length > 1 ? d3.min(xs.slice(1).map((v, k) => v - xs[k])) : 30, bw = Math.max(2.5, Math.min(18, gap * 0.84));
+    const svg = d3.select(g).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img').attr('aria-label', o.aria);
+    const pat = svg.append('defs').append('pattern').attr('id', `cn-e${idp}`).attr('width', 5).attr('height', 5).attr('patternUnits', 'userSpaceOnUse').attr('patternTransform', 'rotate(45)');
+    pat.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 5).attr('stroke', '#fff').attr('stroke-width', 1.5).attr('stroke-opacity', 0.62);
+    y.ticks(H < 190 ? 3 : 5).forEach(v => {
+      svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(v)).attr('y2', y(v)).attr('stroke', v === 0 ? '#101010' : '#e3e3e3');
+      svg.append('text').attr('class', 'cn-t').attr('x', m.l - 5).attr('y', y(v) + 4).attr('text-anchor', 'end').text(abrevia(v));
+    });
+    const pila = o.anios.map((a, i) => { let ac = 0; return dato(i).map(p => { if (!p) return null; const r = [ac, ac + p.v]; ac += p.v; return r; }); });
+    o.categorias.forEach((c, k) => {
+      let d = '';
+      for (let i = 0; i < o.anios.length - 1; i++) {
+        const p = pila[i][k], q = pila[i + 1][k]; if (!p || !q || !seInterpola(c, o.anios[i], o.anios[i + 1])) continue;
+        d += `M${x(o.anios[i]).toFixed(1)},${y(p[1]).toFixed(1)}L${x(o.anios[i + 1]).toFixed(1)},${y(q[1]).toFixed(1)}L${x(o.anios[i + 1]).toFixed(1)},${y(q[0]).toFixed(1)}L${x(o.anios[i]).toFixed(1)},${y(p[0]).toFixed(1)}Z`;
+      }
+      if (d) svg.append('path').attr('d', d).attr('fill', c.color).attr('fill-opacity', 0.3);
+    });
+    for (const q of cols) dato(q.i).forEach((p, k) => {
+      if (!p) return;
+      const [a, b] = pila[q.i][k], h = Math.max(0.4, y(a) - y(b));
+      svg.append('rect').attr('x', x(q.a) - bw / 2).attr('y', y(b)).attr('width', bw).attr('height', h).attr('fill', p.c.color);
+      if (!firme(p)) svg.append('rect').attr('x', x(q.a) - bw / 2).attr('y', y(b)).attr('width', bw).attr('height', h).attr('fill', `url(#cn-e${idp})`);
+    });
+    // el total: contorno continuo entre años de fuente; discontinuo donde hay modelo
+    const T = o.total ? o.total.valores : [];
+    for (let i = 0; i < T.length - 1; i++) {
+      if (T[i] == null || T[i + 1] == null) continue;
+      const ok = o.columna(o.anios[i]) && o.columna(o.anios[i + 1]);
+      svg.append('line').attr('x1', x(o.anios[i])).attr('x2', x(o.anios[i + 1])).attr('y1', y(T[i])).attr('y2', y(T[i + 1])).attr('stroke', '#101010').attr('stroke-width', 1.5).attr('stroke-opacity', ok ? 1 : 0.6).attr('stroke-dasharray', ok ? null : '3 2');
+    }
+    marcasAnio(dom[0], dom[1], x, { minPx: 38 }).forEach(({ a }) => {
+      const X = x(a), an = a === dom[0] ? 'start' : a === dom[1] ? 'end' : 'middle';
+      svg.append('text').attr('class', 'cn-t').attr('x', a === dom[0] ? Math.max(m.l, X - 4) : X).attr('y', H - m.b + 16).attr('text-anchor', an).text(String(a));
+    });
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', Math.max(0, W - m.l - m.r)).attr('height', H - m.t - m.b).attr('fill', 'transparent')
+      .on('pointermove', ev => {
+        const px = d3.pointer(ev)[0], q = cols.find(z => Math.abs(x(z.a) - px) <= bw / 2 + 1.5);
+        if (!q) { ctx.tooltip.mostrar(K.tipTitulo('Modelo o interpolación') + K.tipFila({ nombre: 'No es dato' }), ev.clientX, ev.clientY); return; }
+        const fs = dato(q.i).filter(Boolean).reverse().map(p => K.tipFila({ color: p.c.base, nombre: p.c.rotulo, valor: K.entero(p.v), marca: firme(p) ? '' : (CLASE[p.f] || '') }));
+        if (T[q.i] != null) fs.push(K.tipFila({ color: '#101010', nombre: 'Total', valor: K.entero(T[q.i]) }));
+        ctx.tooltip.mostrar(K.tipTitulo(q.a) + fs.join(''), ev.clientX, ev.clientY);
+      }).on('pointerleave', () => ctx.tooltip.ocultar());
+  };
+  const ro = new ResizeObserver(es => {
+    const n = Math.round(es[0].contentRect.width); if (!n || n === W) return;
+    const primera = !W; W = n; clearTimeout(tm);
+    if (primera) dibuja(); else tm = setTimeout(dibuja, 120);
+  });
+  ro.observe(g);
+  return {
+    actualizar: x => { o = { ...o, ...x }; if (W) dibuja(); },
+    filasDato: () => o.anios.flatMap((a, i) => {
+      if (!o.columna(a)) return [];
+      const fs = dato(i).filter(Boolean).map(p => ({ anio: a, categoria: p.c.id, rotulo: p.c.rotulo, valor: p.v, clase: p.f }));
+      if (o.total && o.total.valores[i] != null) fs.push({ anio: a, categoria: 'empleo_n_total', rotulo: 'Total de ocupados', valor: o.total.valores[i], clase: String(o.total.clases[i] ?? '0') });
+      return fs;
+    }),
+    destruir: () => { ro.disconnect(); clearTimeout(tm); ctx.tooltip.ocultar(); el.innerHTML = ''; },
+  };
+}
+
+// ---------------------------------------------------------------- resaltar una categoría, leyenda y alto
+// lo elegido en la lista se resalta; volver a elegirlo lo quita
+const resalte = () => { if (!S.ctx || !S.F) return null; const ind = S.ctx.estado.ind; return S.quitado === ind ? null : catDe(S.F, ind); };
+const colores = o => { const r = resalte(); return o.categorias.map(c => ({ ...c, color: !r || c.id === r ? c.base : atenua(c.base) })); };
+function aplica() {
+  S.graficas.forEach(x => x.g.actualizar({ categorias: colores(x.o), ...(S.alto ? { alto: S.alto } : {}) }));
+  const r = resalte();
+  if (S.el) S.el.querySelectorAll('[data-cat]').forEach(b => { const on = b.dataset.cat === r; b.setAttribute('aria-pressed', String(on)); b.classList.toggle('is-off', !!r && !on); });
+}
+function leyendaHTML(F, paneles) {
+  const con = paneles.filter(p => p.o);
+  const usadas = F.cats.filter(c => con.some(p => p.o.categorias.find(q => q.id === c.id).valores.some(v => v != null && v > 0)));
+  const hayResto = F === USOS && con.some(p => modeloComposicion(p.o).fechas.some(f => f.resto > 0));
+  const cat = usadas.map(c => { const pic = F === USOS ? pictoDeIndicador(c.id, { tam: 18, titulo: '' }) || '' : '';
+    return `<li><button type="button" data-cat="${esc(c.id)}" aria-pressed="false" title="Resaltar o quitar el resalte"><i style="background:${esc(c.color)};color:${esc(c.tinta || '#101010')}">${pic}</i>${esc(c.rotulo)}</button></li>`; }).join('');
+  const clave = [`<li><i class="cp-k cp-k--dato"></i>${esc(F === USOS ? 'columna: fecha con dato' : 'columna: año con cifra de fuente')}</li>`,
+    `<li><i class="cp-k cp-k--trama"></i>${esc(F === USOS ? 'con trama: estimado o en revisión' : 'con trama: solo parte de la cifra es de fuente')}</li>`,
+    `<li><i class="cp-k cp-k--dif"></i>${esc(F === USOS ? 'difuminado: interpolado, no es dato' : 'difuminado: modelo o interpolación, no es dato')}</li>`,
+    con.some(p => (p.o.notasFuente || []).length) ? '<li><i class="cp-k cp-k--fuente"></i>cambia lo que incluye alguna clase</li>' : '', F.numero ? '<li><i class="cp-k cp-k--total"></i>total de ocupados</li>' : '',
+    hayResto ? `<li><i class="cp-k" style="background:${GRIS_RESTO}"></i>${esc(TEXTO_RESTO)}</li>` : ''].join('');
+  return `<ul class="cp-ley">${cat}</ul><ul class="cp-clave">${clave}</ul>`;
+}
+// columnas según cuántos paneles hay y el ancho: dos paneles, dos columnas a lo ancho; ocho, cuatro (o menos si no caben)
+function colsDe(n, w) {
+  if (n <= 1) return 1;
+  const quiere = n === 2 ? 2 : n === 3 ? 3 : n === 4 ? 4 : n <= 6 ? 3 : 4, minimo = innerWidth < 760 ? 160 : n <= 4 ? 240 : n <= 6 ? 170 : 125;
+  return Math.max(1, Math.min(quiere, Math.floor((w + 16) / minimo)));
+}
+function ponCols() {
+  const pan = S.el && S.el.querySelector('.cp__paneles');
+  if (pan) pan.style.setProperty('--cp-cols', String(colsDe(pan.children.length, pan.clientWidth)));
+}
+function ajusta() {
+  ponCols();
+  const cp = S.el && S.el.querySelector('.cp'); if (!cp || !S.graficas.length || innerWidth < 760 || cp.querySelector('details[open]')) return;
+  const sv = cp.querySelector('.cp__p svg'); if (!sv) return;
+  const st = getComputedStyle(cp), disp = cp.clientHeight - parseFloat(st.paddingTop) - parseFloat(st.paddingBottom);
+  const cols = getComputedStyle(cp.querySelector('.cp__paneles')).gridTemplateColumns.split(' ').length;
+  const filas = Math.ceil(S.graficas.length / Math.max(1, cols)), h0 = sv.getBoundingClientRect().height;
+  // con varios paneles, el alto no pasa de lo que da su ancho: una gráfica estrecha y altísima no se lee
+  const anchoP = cp.querySelector('.cp__p').getBoundingClientRect().width, tope = S.graficas.length > 1 ? Math.max(150, Math.round(anchoP * 0.8)) : 1000;
+  const nuevo = Math.max(S.graficas.length > 1 ? 110 : 150, Math.min(1000, tope, Math.floor(h0 + (disp - cp.querySelector('.cp__in').getBoundingClientRect().height) / filas)));
+  if (Math.abs(nuevo - (S.alto || h0)) < 3) return;
+  S.alto = nuevo;
+  S.graficas.forEach(x => x.g.actualizar({ alto: nuevo }));
+}
+const ajustaLuego = (n = 0) => { if (!S.el) return; if (!S.el.querySelector('.cp__p svg') && n < 24) { requestAnimationFrame(() => ajustaLuego(n + 1)); return; } ajusta(); };
+
+// ---------------------------------------------------------------- pintar
+async function pintar(forzar = false) {
+  const ctx = S.ctx, el = S.el; if (!ctx || !el) return;
+  const e = ctx.estado, ent = ctx.datos.indicador(e.ind), F = familia(ent);
+  if (!F) { limpia(); el.innerHTML = ''; S.clave = ''; S.periodo = null; return; }
+  const toks = (e.csel || []).map(String).map(t => { const k = t.indexOf(':'); return { t, nivel: t.slice(0, k), id: t.slice(k + 1) }; }).filter(x => x.nivel && x.id).slice(0, TOPE);
+  const escala = e.cesc || 'andalucia';
+  const clave = [F.clave, toks.map(x => x.t).join(','), escala, e.obs ? 'o' : ''].join('|');
+  if (!forzar && clave === S.clave) { aplica(); return; }
+  const mi = ++S.seq;
+  // sin unidades elegidas: las ocho provincias con esa escala; en las demás, Andalucía hasta que se elija alguna
+  const niveles = toks.length ? [...new Set(toks.map(x => x.nivel))] : [escala === 'provincia' ? 'provincia' : 'andalucia'];
+  const ids0 = [...F.cats.map(c => c.id), ...(F.total ? [F.total] : [])];
+  const cargas = await Promise.all(niveles.map(async n => {
+    const enHa = F === USOS && NIVELES_AGREGADOS.has(n);
+    const leidos = await Promise.all(ids0.map(id => ctx.datos.valores(enHa ? id.replace(/_pct$/, '_ha') : id, n).catch(() => null)));
+    const ds = enHa ? repartoSobreSuperficie(leidos) : leidos;
+    const xs0 = ds.map(d => (d && d.ids && d.v ? indice(d) : null));
+    const unis = n !== 'andalucia' && xs0.some(Boolean) ? await K.unidades(ctx, n, e.anio).catch(() => null) : null;
+    return [n, { xs: xs0.slice(0, F.cats.length), xT: F.total ? xs0[F.cats.length] : null, unis }];
+  }));
+  if (mi !== S.seq || !S.el) return;
+  const porNivel = new Map(cargas);
+  S.clave = clave; S.F = F; S.alto = 0;
+  limpia();
+  const lista = toks.length ? toks : (() => { const c = porNivel.get(niveles[0]), x = c.xs.find(Boolean); if (!x) return []; const ids = x.d.ids.map(String); return (niveles[0] === 'provincia' ? ids.slice(0, TOPE) : [ids[0]]).map(id => ({ nivel: niveles[0], id })); })();
+  if (!lista.length) { S.periodo = null; el.innerHTML = '<p class="vv-vacio">Sin cifras de esta composición a este nivel.</p>'; emit('titulo-vista'); return; }
+  const nombre = (n, id, u) => (n === 'andalucia' ? 'Andalucía' : (u && u.get(id) || {}).nombre || id);
+  const ROT = { provincia: 'provincia', pj1888: 'partido', municipio: 'municipio', ue1842: 'municipio histórico' };
+  const mezcla = new Set(lista.map(x => x.nivel)).size > 1;
+  const paneles = lista.map(x => { const c = porNivel.get(x.nivel); return { id: x.id, nivel: x.nivel, nombre: nombre(x.nivel, x.id, c.unis) + (mezcla && ROT[x.nivel] ? ` · ${ROT[x.nivel]}` : ''), o: opciones(F, c.xs, c.xT, x.id, ctx, x.nivel) }; });
+  const vivos = paneles.filter(p => p.o);
+  const unidades = [...new Set(vivos.map(p => p.o.unidad))];
+  S.unidad = unidades.length > 1 ? '% de la superficie de cada unidad' : unidades[0] || F.unidad;
+  if (F.numero && vivos.length) {   // la misma escala en todos los paneles
+    let m = 0;
+    for (const p of vivos) p.o.anios.forEach((a, i) => { m = Math.max(m, p.o.total.valores[i] || 0, p.o.categorias.reduce((s, c) => s + (c.valores[i] || 0), 0)); });
+    const max = window.d3.scaleLinear().domain([0, m || 1]).nice().domain()[1];
+    vivos.forEach(p => { p.o.max = max; });
+  }
+  const todos = [...new Set(vivos.flatMap(p => p.o.con))].sort((a, b) => a - b);
+  S.periodo = todos.length ? { texto: todos.length > 1 ? `${todos[0]}–${todos[todos.length - 1]}` : String(todos[0]), n: todos.length } : null;
+  const multi = paneles.length > 1;
+  const parteTxt = !multi && vivos[0] && vivos[0].o.parte && vivos[0].o.parte.size ? `Parte de la cifra que es de fuente: ${[...vivos[0].o.parte].map(([a, p]) => `${a} (${p} %)`).join(', ')}.` : '';
+  const notasF = [...new Map(vivos.flatMap(p => p.o.notasFuente || []).map(n => [n.id, n])).values()];
+  el.innerHTML = `<div class="cp${multi ? ' cp--multi' : ''}${paneles.length === 8 ? ' cp--8' : ''}"><div class="cp__in">
+    <header class="cp__cab"><div><h2 class="cp__t">${esc(F.titulo)}</h2><p class="cp__s">${esc(S.unidad)}${multi ? ' · la misma escala en todos los paneles' : ''}</p></div></header>
+    <div class="cp__paneles">${paneles.map((p, k) => `<section class="cp__p"><h3 class="cp__u">${esc(p.nombre)}</h3>${p.o && p.o.minimo ? `<p class="cp__min">1752 · ${esc(p.o.minimo)}</p>` : ''}<div data-k="${k}">${p.o ? '' : '<p class="vv-vacio">Esta unidad no tiene cifras de este indicador.</p>'}</div></section>`).join('')}</div>
+    <div class="cp__pie">${leyendaHTML(F, paneles)}<p class="cp__nota">${esc(F.nota)}${parteTxt ? ` ${esc(parteTxt)}` : ''}${!multi && vivos[0] && (vivos[0].o.avisosSuma || []).length ? ` ${esc(vivos[0].o.avisosSuma.join(' '))}` : ''}</p>${notasF.length ? `<details class="cp__det"><summary>Qué cambia en cada clase (${notasF.length})</summary><ul>${notasF.map(n => `<li><b>${esc(n.rotulo)}:</b> ${esc(n.nota)}</li>`).join('')}</ul></details>` : ''}</div></div></div>`;
+  ponCols();
+  paneles.forEach((p, k) => {
+    if (!p.o) return;
+    const slot = el.querySelector(`[data-k="${k}"]`), o = { ...p.o, categorias: colores(p.o), alto: multi ? 170 : 300 };
+    S.graficas.push({ nombre: p.nombre, id: p.id, o: p.o, g: F.numero ? pintaNumero(slot, o, ctx) : pintarComposicion(slot, o) });
+    if (p.o.minimo) alPunteroComposicion(slot, p.o.minimo);   // minimo1752
+  });
+  aplica();
+  ajustaLuego();
+  emit('titulo-vista');
+}
+
+// el CSV: solo las cifras de las fechas con dato
+function exportar(ctx) {
+  const ent = ctx.datos.indicador(ctx.estado.ind), F = familia(ent); if (!F || !S.graficas.length) return;
+  const cel = x => (/[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : String(x));
+  const filas = S.graficas.flatMap(x => x.g.filasDato().map(r => [x.id, x.nombre, r.anio, r.categoria, r.rotulo, r.valor, CLASE[r.clase] || r.clase, x.o.parte && x.o.parte.has(r.anio) ? x.o.parte.get(r.anio) : '', ...(F === USOS ? [+r.anio === 1752 && x.o.minimo ? x.o.minimo : ''] : [])].map(cel).join(',')));
+  const txt = [`# Atlas Histórico de Andalucía · ${F.titulo} (${S.unidad || F.unidad}). Solo fechas con dato: lo interpolado o de modelo no se exporta. Una fila ausente es «sin dato», no un cero.`,
+    `id,unidad,anio,categoria,rotulo,valor,clase,pct_de_fuente${F === USOS ? ',aviso' : ''}`, ...filas].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' }));
+  a.download = `composicion_${F.clave}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function alClic(ev) {
+  const b = ev.target.closest('[data-cat]'); if (!b || !S.ctx) return;
+  const id = b.dataset.cat, ind = S.ctx.estado.ind;
+  if (resalte() === id) { S.quitado = ind; aplica(); return; }
+  S.quitado = null;
+  if (ind !== id) S.ctx.set({ ind: id }, { historial: true }); else aplica();
+}
+
+registrarVista({
+  id: 'composicion',
+  rotulo: 'Composición',
+  orden: 25,
+  usaAnio: false,
+  principal: true,
+  leyenda: false,
+  claves: { cesc: 'txt', csel: 'lista' },
+  icono: '<path d="M3.5 19.5h17M3.5 19.5V5M3.5 13l5-2.5 5 2 7-4M3.5 17l5-1.5 5 1 7-2.5"/>',
+  admite(ind, nivel) {
+    if (!familia(ind)) return 'Esta vista es para los grupos de usos del suelo y los sectores de empleo.';
+    if (nivel === 'termino') return 'Elige municipio, partido o provincia.';
+    return true;
+  },
+  // elegir en la lista: resalta; lo mismo otra vez, lo quita. true: no hay que cambiar de indicador
+  alElegir(id) {
+    if (!S.ctx) return false;
+    const F = familia(S.ctx.datos.indicador(id)); if (!F) return false;
+    if (id === S.ctx.estado.ind) { S.quitado = S.quitado === id ? null : id; if (S.F === F) aplica(); return true; }
+    S.quitado = null;
+    return false;
+  },
+  periodoTitulo: () => S.periodo,
+  mount(el, ctx) {
+    K.cssUnaVez();
+    S.ctx = ctx; S.el = el; S.clave = ''; S.quitado = null; S.F = null;
+    el.addEventListener('click', alClic);
+    S.ro = new ResizeObserver(() => { clearTimeout(S.tm); S.tm = setTimeout(ajusta, 140); });
+    S.ro.observe(el);
+    return pintar(true);
+  },
+  update(ctx, claves) { if (!claves || ['ind', 'csel', 'cesc', 'obs'].some(k => claves.has(k))) return pintar(); },
+  exportar,
+  destroy() {
+    S.seq++; limpia(); clearTimeout(S.tm);
+    if (S.ro) S.ro.disconnect();
+    if (S.el) { S.el.removeEventListener('click', alClic); S.el.innerHTML = ''; }
+    S.ro = null; S.ctx = null; S.el = null; S.clave = ''; S.periodo = null; S.F = null; S.quitado = null;
+  },
+});

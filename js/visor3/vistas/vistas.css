@@ -1,0 +1,213 @@
+/* Estilos de las vistas no cartográficas (js/visor3/vistas/). Solo tokens --a2-* del diseño común (css/atlas2.css). */
+.vv { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding-top: var(--v3-barra-h, 60px); box-sizing: border-box; display: flex; flex-direction: column; background: var(--a2-bg); color: var(--a2-ink); font-family: var(--a2-font-text); overflow: hidden; }
+.vv-bar { flex: none; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; padding: 10px clamp(12px, 2vw, 24px) 8px; background: var(--a2-surface); border-bottom: 1px solid var(--a2-line); }
+.vv-ctl { display: inline-flex; flex-direction: column; gap: 2px; font: 600 .68rem var(--a2-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--a2-ink-3); }
+.vv-ctl > span { padding-left: 4px; }
+.vv-seg button { padding: 5px 10px; font-size: .82rem; }
+.vv-controles { display: contents; }
+.vv-opciones { display: none; }
+.vv-sel { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 280px; min-width: 0; }
+.vv-buscar { min-width: 0; width: min(260px, 100%); }
+.vv-sug { position: absolute; z-index: 30; top: 100%; left: 0; width: min(320px, 100%); margin: 4px 0 0; padding: 4px; list-style: none; background: var(--a2-surface); border: 1px solid var(--a2-line-2); border-radius: var(--a2-radius); box-shadow: var(--a2-shadow); max-height: 50vh; overflow: auto; }
+.vv-sug button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 4px; font: inherit; color: var(--a2-ink); cursor: pointer; }
+.vv-sug button:hover, .vv-sug button:focus-visible { background: var(--a2-surface-2); }
+.vv-sug small { color: var(--a2-ink-3); }
+.vv-sug-vacio { padding: 8px 10px; color: var(--a2-ink-3); font-size: .86rem; }
+.vv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.vv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 8px; border: 1px solid var(--a2-line-2); border-radius: 999px; background: var(--a2-surface); color: var(--a2-ink); font: 500 .82rem var(--a2-font-text); cursor: pointer; }
+.vv-chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--a2-ink)); flex: none; }
+.vv-chip b { color: var(--a2-ink-3); font-weight: 400; padding: 0 2px; }
+.vv-chip:hover { border-color: var(--a2-accent); }
+.vv-chip-limpiar { border-style: dashed; color: var(--a2-ink-3); padding: 4px 10px; }
+.vv-nota { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px clamp(12px, 2vw, 24px); font-size: .82rem; color: var(--a2-ink-2); background: var(--a2-bg); border-bottom: 1px solid var(--a2-line); }
+.vv-nota:empty { display: none; }
+.vv-cuerpo { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 8px clamp(8px, 2vw, 24px) 0; }
+.vv-pie { flex: none; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding: 6px clamp(12px, 2vw, 24px) 8px; font-size: .78rem; color: var(--a2-ink-3); border-top: 1px solid var(--a2-line); background: var(--a2-surface); }
+.vv-pie b { color: var(--a2-ink-2); font-weight: 600; }
+.vv-lt { display: inline-flex; align-items: center; gap: 5px; color: var(--a2-ink-2); }
+.vv-lt-hueco { color: var(--a2-ink-3); }
+.vv-svg { display: block; width: 100%; height: 100%; }
+.vv-svg text { font-family: var(--a2-font-text); fill: var(--a2-ink-2); font-size: 11px; }
+.vv-svg .vv-eje path, .vv-svg .vv-eje line { stroke: var(--a2-line-2); }
+.vv-svg .vv-rej line { stroke: var(--a2-line); }
+.vv-svg .vv-num { font-family: var(--a2-font-mono); }
+.vv-svg .vv-tit { font-family: var(--a2-font-display); font-weight: 800; font-size: 13px; fill: var(--a2-ink); }
+.vv-svg .vv-guia { stroke: var(--a2-ink); stroke-width: 1; stroke-dasharray: 2 3; }
+.vv-svg .vv-linea { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.vv-facets { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; padding-bottom: 12px; }
+.vv-facet { position: relative; height: 230px; background: var(--a2-surface); border: 1px solid var(--a2-line); border-radius: var(--a2-radius); overflow: hidden; }
+.vv-facet.vv-facet-grande { grid-column: span 2; }
+.vv-vacio { padding: 3rem 1rem; text-align: center; color: var(--a2-ink-3); }
+.vv-tabla-wrap { overflow: auto; height: 100%; }
+.vv-tabla { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.vv-tabla th { position: sticky; top: 0; background: var(--a2-surface); text-align: left; font: 600 .7rem var(--a2-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--a2-ink-3); padding: 8px 10px; border-bottom: 1px solid var(--a2-line-2); cursor: pointer; white-space: nowrap; }
+.vv-tabla th[aria-sort] { color: var(--a2-ink); }
+.vv-tabla td { padding: 6px 10px; border-bottom: 1px solid var(--a2-line); }
+.vv-tabla td.vv-n { text-align: right; font-family: var(--a2-font-mono); font-variant-numeric: tabular-nums; }
+.vv-tabla tr:hover td { background: var(--a2-surface-2); }
+.vv-tabla tr.vv-sel-fila td { background: color-mix(in srgb, var(--a2-accent) 10%, transparent); }
+.vv-tabla tr.vv-sd td { color: var(--a2-ink-3); font-style: italic; }
+.vv-marca { display: inline-block; font: 600 .68rem var(--a2-font-mono); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--a2-line-2); white-space: nowrap; }
+.vv-marca-1 { background: color-mix(in srgb, var(--a2-ochre) 18%, transparent); border-color: var(--a2-ochre); }
+.vv-marca-2 { background: color-mix(in srgb, var(--a2-blue) 14%, transparent); border-color: var(--a2-blue); }
+.vv-marca-0 { background: color-mix(in srgb, var(--a2-teal) 14%, transparent); border-color: var(--a2-teal); }
+.vv-marca-x { color: var(--a2-ink-3); }
+@media (max-width: 640px) {
+  .vv-controles { display: none; }
+  .vv-abierta .vv-controles { display: flex; flex-wrap: wrap; gap: 6px 10px; width: 100%; }
+  .vv-opciones { display: inline-flex; min-height: 36px; padding: 0 12px; }
+  .vv-bar { gap: 6px 8px; padding: 8px 12px 6px; }
+  .vv-ctl { flex: 0 1 auto; }
+  .vv-seg button { padding: 4px 8px; font-size: .76rem; }
+  .vv-nota { max-height: 20vh; overflow: auto; }
+  .vv-seg { flex-wrap: wrap; }
+  .vv-facet.vv-facet-grande { grid-column: auto; }
+  .vv-tabla th:nth-child(2), .vv-tabla td:nth-child(2) { display: none; }
+  .vv-tabla th, .vv-tabla td { padding: 6px 6px; }
+  .vv-marca { font-size: .6rem; padding: 1px 5px; }
+  .vv-buscar { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .vv * { transition: none !important; animation: none !important; } }
+
+/* ---- Ronda v16 ---------------------------------------------------------------------------------------------------- */
+/* sin pie si no hay nada que decir (la fuente está en el botón «Fuente», arriba) */
+.vv-pie:empty { display: none; }
+/* series que se encienden y apagan al pincharlas; resaltar al pasar el puntero */
+.vv-pinchable { cursor: pointer; }
+.vv-pinchable:focus { outline: none; }
+.vv-pinchable:focus-visible { outline: 2px solid var(--a2-accent, #c8102e); outline-offset: 2px; }
+svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text-decoration: underline; }
+.vv-pinchable.is-apagada, .vv-pinchable.is-apagada text { text-decoration: line-through; }
+.vv-svg .vv-pinchable.is-apagada text, .vv-svg text.vv-pinchable.is-apagada { fill: var(--a2-ink-3) !important; font-weight: 400 !important; opacity: .75; }
+.vv-svg [data-serie] { transition: opacity .12s ease; }
+.vv-con-foco [data-serie]:not(.is-foco) { opacity: .16; }
+.vv-con-foco .vv-fila[data-serie]:not(.is-foco), .vv-con-foco .vv-fila-rot[data-serie]:not(.is-foco) { opacity: .38; }
+.vv-svg .vv-fila-rot { font-size: 12px; }
+/* recuadro flotante: solo datos */
+.vv-tt-t { display: block; margin-bottom: 2px; }
+.vv-tt-fila { display: flex; gap: 12px; justify-content: space-between; white-space: nowrap; line-height: 1.35; }
+.vv-tt-fila i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.vv-tt-v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.vv-tt-v small { font-weight: 400; opacity: .75; font-size: .92em; }
+.vv-tt-fila.is-foco { font-weight: 700; }
+.vv-tt-fila.is-sub { padding-left: 14px; font-size: .92em; opacity: .85; }
+.vv-tt-fila.is-sub .vv-tt-v { font-weight: 500; }
+/* Líneas: timelapse (año grande mientras se reproduce) */
+.vv .vv-svg text.vv-tl-anio { font: 800 30px var(--a2-font-display, sans-serif); fill: var(--a2-ink-3); opacity: .35; }
+.vv .vv-svg .vv-tl-guia { stroke: var(--a2-ink-2); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
+/* Líneas: selector de periodo (tira con dos asas) */
+.vv-tira { flex: none; display: flex; align-items: center; padding: 2px clamp(8px, 2vw, 24px) 6px; background: var(--a2-bg); }
+.vv-tira[hidden] { display: none; }
+.vv-tira svg { flex: 1 1 auto; min-width: 0; height: 46px; display: block; overflow: visible; }
+.vv-tira svg text { font: 500 11px var(--a2-font-text, sans-serif); fill: var(--a2-ink-3); }
+.vv-tira .vv-tira-per { font-weight: 700; fill: var(--a2-ink); paint-order: stroke; stroke: var(--a2-bg, #fff); stroke-width: 3px; }
+.vv-tira .selection { fill: var(--a2-accent, #c8102e); fill-opacity: .1; stroke: var(--a2-ink-2); stroke-opacity: .6; }
+.vv-tira .handle { fill: var(--a2-ink-2); fill-opacity: .75; }
+.vv-tira .overlay { cursor: crosshair; }
+.vv-tira-bot { flex: none; width: 142px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding-left: 8px; box-sizing: border-box; }
+.vv-tira-bot button { font: 600 11px var(--a2-font-text, sans-serif); padding: 2px 4px; border: 1px solid var(--a2-line-2); background: var(--a2-surface, #fff); color: var(--a2-ink-2); cursor: pointer; white-space: nowrap; border-radius: 3px; }
+.vv-tira-bot button[aria-pressed="true"] { background: var(--a2-ink); color: var(--a2-bg, #fff); border-color: var(--a2-ink); }
+.vv-tira-bot button:disabled { opacity: .4; cursor: default; }
+@media (max-width: 640px) {
+  .vv-tira { flex-wrap: wrap; }
+  .vv-tira-bot { order: -1; width: 100%; grid-template-columns: repeat(4, auto); justify-content: start; padding: 2px 0 2px; }
+}
+/* Líneas: «+2» de la leyenda de una faceta, como chip */
+.vv-svg .vv-chip-mas rect { fill: var(--a2-surface, #fff); stroke: var(--a2-line-2); }
+.vv-svg .vv-chip-mas text { font-size: 11px; font-weight: 600; fill: var(--a2-ink-2); }
+.vv-svg .vv-chip-mas:hover rect { stroke: var(--a2-ink); }
+/* Líneas (ronda v21): leyenda de series con casillas, a la derecha del gráfico o debajo si no cabe */
+.vv-graf { position: relative; flex: 1; min-height: 0; display: flex; }
+.vv-graf[hidden] { display: none; }
+.vv-graf > .vv-cuerpo { flex: 1 1 0; min-width: 0; }
+.vv-series { flex: none; box-sizing: border-box; width: calc(142px + clamp(8px, 2vw, 24px)); min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px clamp(8px, 2vw, 24px) 4px 8px; font: 500 12.5px/1.2 var(--a2-font-text, sans-serif); color: var(--a2-ink-2); }
+.vv-series[hidden] { display: none; }
+.vv-series-bot { flex: none; display: flex; gap: 4px; }
+.vv-series-bot button { flex: 1 1 auto; padding: 3px 6px; border: 1px solid var(--a2-line-2); border-radius: 3px; background: var(--a2-surface, #fff); color: var(--a2-ink-2); font: 600 11px var(--a2-font-text, sans-serif); cursor: pointer; }
+.vv-series-bot button:hover { border-color: var(--a2-ink); color: var(--a2-ink); }
+.vv-series-bot button:focus-visible { outline: 2px solid var(--a2-accent, #c8102e); outline-offset: 1px; }
+.vv-series-l { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.vv-series-l li { min-width: 0; }
+.vv-serie-it { position: relative; display: flex; align-items: center; gap: 7px; min-width: 0; padding: 3px 4px; border-radius: 3px; cursor: pointer; }
+.vv-serie-it:hover { background: var(--a2-surface-2); }
+.vv-serie-it input { position: absolute; left: 4px; width: 13px; height: 13px; margin: 0; opacity: 0; cursor: pointer; }
+.vv-serie-it i { position: relative; flex: none; box-sizing: border-box; width: 13px; height: 13px; border: 1.5px solid var(--c); border-radius: 2px; background: var(--c); }
+.vv-serie-it i::after { content: ''; position: absolute; left: 3px; top: 0; width: 3px; height: 7px; border: solid #fff; border-width: 0 1.6px 1.6px 0; transform: rotate(42deg); }
+.vv-serie-it input:focus-visible + i { outline: 2px solid var(--a2-accent, #c8102e); outline-offset: 2px; }
+.vv-serie-it span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vv-serie-it.is-off { color: var(--a2-ink-3); }
+.vv-serie-it.is-off span { text-decoration: line-through; }
+.vv-serie-it.is-off i { border-color: var(--a2-line-2); background: transparent; }
+.vv-serie-it.is-off i::after { display: none; }
+.vv-series-abajo .vv-graf { flex-direction: column; }
+.vv-series-abajo .vv-graf > .vv-cuerpo { flex: 1 1 0; min-height: 0; }
+.vv-series-abajo .vv-graf > .vv-series { width: auto; max-height: 34%; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 2px clamp(8px, 2vw, 24px) 4px; }
+.vv-series-abajo .vv-series-l { flex-direction: row; flex-wrap: wrap; gap: 1px 6px; }
+.vv-series-abajo .vv-series-bot button { flex: none; }
+.vv-series-abajo .vv-tira { flex-wrap: wrap; }
+.vv-series-abajo .vv-tira-bot { order: -1; width: 100%; grid-template-columns: repeat(4, auto); justify-content: start; padding: 2px 0; }
+.vv-svg text.vv-rot-tl { font-size: 11.5px; paint-order: stroke; stroke: var(--a2-bg, #fff); stroke-width: 3px; }
+/* Líneas en Comparar: dos paneles dibujados con la misma función */
+.vv-pares { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.vv-pares[hidden] { display: none; }
+.vv-pares .v4-par { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.vv-pares .v4-par + .v4-par { border-left: 1px solid var(--a2-line-2); }
+.vv-pares.is-apilado { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(430px, auto); overflow: auto; }
+.vv-pares.is-apilado .v4-par + .v4-par { border-left: 0; border-top: 1px solid var(--a2-line-2); }
+.vv-par-graf { position: relative; flex: 1 1 0; min-height: 130px; overflow: hidden; }
+.vv-tira.vv-tira-par { padding: 0 0 2px; }
+.vv-series.vv-series-par { width: auto; max-height: 84px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 2px 10px 6px; }
+.vv-series-par .vv-series-l { flex-direction: row; flex-wrap: wrap; gap: 1px 6px; }
+.vv-series-par .vv-series-bot button { flex: none; }
+
+/* «Frente a Andalucía» (ronda v23): la línea del cero, rotulada; columna aparte en la Tabla */
+.vv-svg .vv-cero { stroke: var(--a2-ink, #101010); stroke-width: 1.6; }
+.vv .vv-svg text.vv-cero-t { font-weight: 700; fill: var(--a2-ink, #101010); paint-order: stroke; stroke: var(--a2-bg, #fff); stroke-width: 3px; }
+.vv .vv-svg text.vv-val-fr { fill: var(--a2-ink); font-weight: 600; }
+.vv-tabla td.vv-fr { white-space: nowrap; }
+.vv-tabla-wrap.is-densa .vv-tabla td { padding-top: 2px; padding-bottom: 2px; line-height: 1.15; }
+.vv-tabla-wrap.is-densa .vv-tabla tbody tr { height: auto; }
+.vv-tabla-wrap.is-densa .vv-marca { padding-top: 0; padding-bottom: 0; }
+.vv-tabla-wrap.is-densa .vv-tabla td:last-child { white-space: nowrap; }
+.vv-tabla-wrap.is-densa .vv-tabla th, .vv-tabla-wrap.is-densa .vv-tabla td { padding-left: 6px; padding-right: 6px; }
+/* sin sitio para dos marcas: «9,0 % estimado» ya dice que la cifra es parcialmente estimada */
+.vv-tabla-wrap.is-densa .vv-marca-4:has(+ .vv-marca-x) { display: none; }
+.vv-fr-c { display: inline-block; width: 10px; height: 10px; margin-right: 6px; box-shadow: inset 0 0 0 1px rgba(28, 34, 30, .18); }
+.vv .vv-tabla tr.vv-fila-and td { font-weight: 700; background: var(--a2-surface-2); border-bottom: 1px solid var(--a2-line-2); }
+.vv-tt-frente { margin-top: 4px; font-weight: 600; white-space: normal; max-width: 300px; }
+
+/* «Todo interpolado» (ronda v19): lo que interpola el Atlas no es un dato; más claro y en cursiva */
+.vv-tabla tr.vv-interp td { font-style: italic; color: var(--a2-ink-3); }
+.vv .vv-marca.vv-marca-I { border-style: dashed; color: var(--a2-ink-3); font-style: italic; background: transparent; }
+.vv-clases .vv-sw-interp { background: linear-gradient(90deg, rgba(93, 102, 111, .9) 50%, rgba(93, 102, 111, .38) 50%); }
+.vv-tt-nota { margin-top: 4px; font-size: .86em; font-style: italic; opacity: .8; white-space: normal; max-width: 280px; }
+.vv-lt-interp { color: var(--a2-ink-2); }
+.vv-pie-interp { font-style: italic; }
+/* Tabla: con pocas filas, filas más altas (que no quede media pantalla vacía) */
+.vv-tabla tbody tr { height: var(--vv-fila-h, auto); }
+/* leyenda de las franjas: por clases, grande y pegada a ellas */
+.vv-fr-ley { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 6px 0 10px; color: var(--a2-ink-2); }
+.vv-fr-ley-t { flex: 0 0 auto; margin: 0; font-weight: 600; font-size: 13px; color: var(--a2-ink); white-space: nowrap; }
+.vv-clases { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 13.5px; }
+.vv-clases li { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vv-clases i { width: 22px; height: 22px; flex: none; box-shadow: inset 0 0 0 1px rgba(28, 34, 30, .16); }
+.vv-clases small { font-size: 11.5px; color: var(--a2-ink-3); }
+.vv-clases li.is-vacia { opacity: .45; }
+.vv-clases .vv-clases-extra { color: var(--a2-ink-3); }
+.vv-clases .vv-clases-extra i { width: 18px; height: 18px; }
+.vv-clases .vv-sw-est { background: repeating-linear-gradient(135deg, rgba(28, 34, 30, .5) 0 1.2px, transparent 1.2px 5px), var(--a2-surface-2, #eee); }
+.vv-clases .vv-sw-res { background: radial-gradient(circle, var(--a2-ochre, #b8860b) 1px, transparent 1.4px) 0 0 / 5px 5px, var(--a2-surface-2, #eee); }
+.vv-clases .vv-sw-nd { background: linear-gradient(45deg, transparent 46%, var(--a2-nodata-line, #aaa) 46% 54%, transparent 54%), linear-gradient(-45deg, transparent 46%, var(--a2-nodata-line, #aaa) 46% 54%, transparent 54%), var(--a2-nodata, #eee); background-size: 6px 6px; }
+.vv-fr-nota { font-size: 11.5px; color: var(--a2-ink-3); }
+/* la nota de la vista no corre por debajo de los botones flotantes «Fuente» e «Info» del visor v4 */
+@media (min-width: 760px) { body:has(#v4-fi) .vv > .vv-nota { padding-right: 160px; } body:has(#v4-fi) .vv.vv-en-cmp > .vv-nota { padding-right: 22px; } body:has(#v4-fi) .vv-tabla-vista > .vv-bar { padding-right: 160px; } body:has(#v4-fi) .vv.vv-tabla-vista > .vv-nota { padding-right: 22px; } }
+@media (max-width: 640px) {
+  .vv-clases { font-size: 12px; gap: 4px 10px; }
+  .vv-clases i { width: 16px; height: 16px; }
+}
+
+/* El armazón pone la barra fija arriba, la de tiempo abajo (solo en vistas que la usan) y la ficha a la derecha */
+.vv-tiempo { padding-bottom: var(--v3-tiempo-h, 74px); }
+body.v3-con-ficha .vv { right: min(400px, 92vw); }
+.vv-nota-salto { font: 600 11px/1 var(--v4-sans, sans-serif); fill: var(--v4-tinta-3, #6b6b6b); letter-spacing: .01em; }
+.vv-cambia-fuente rect { fill: var(--v4-tinta-3, #6b6b6b); fill-opacity: .09; }

@@ -1,0 +1,87 @@
+// poblamiento.js — población en diseminado. 1900 y 1991-2025 son definiciones distintas y no se empalman; en 2024 la fuente
+// pasa de empadronados a residentes. No hay cifra de Andalucía: se compara con la mediana y el puesto entre municipios.
+import { valores, serie, motivoDe } from './datos.js';
+import { d3, esc, decimal, entero, cifra, traza, tip, sinTip, alAncho, ejeAnios } from './util.js';
+
+const VERDE = '#007a3d';
+const CLAVE = [1900, 1991, 2001, 2011, 2021, 2023, 2025];
+
+export async function prepararPoblamiento(ctx) {
+  const d = await valores('dis_serie_cuota');
+  const s = serie(d, ctx.ine).map(x => (x.a >= 1842 && ctx.ex.fuera(x.a) ? { ...x, v: null, f: '.', fuera: true } : x));
+  const filas = s.map(x => {
+    const k = d._ka.get(x.a), ord = [];
+    d.ids.forEach((id, j) => { const v = d.v[k][j]; if (v != null && !ctx.exDe(String(id)).fuera(x.a)) ord.push(v); });
+    ord.sort(d3.ascending);
+    const n = ord.length, med = n ? d3.quantileSorted(ord, .5) : null;
+    if (x.v == null) return { ...x, n, med, ord };
+    const bajo = d3.bisectLeft(ord, x.v), igual = d3.bisectRight(ord, x.v) - bajo, sobre = n - bajo - igual;
+    return { ...x, n, med, ord, pos: { puesto: sobre + 1, n, pct: (bajo + igual / 2) / n * 100 } };
+  });
+  return { filas, m1900: motivoDe(d, ctx.ine, 1900), ultima: [...filas].reverse().find(x => x.v != null && x.a <= 2023) || null, en1900: filas.find(x => x.a === 1900 && x.v != null) || null };
+}
+
+export function textoPoblamiento(D) {
+  const t = [];
+  if (D.en1900) t.push(`<p>En 1900, con la definición del Nomenclátor de ese año, el ${cifra(`${decimal(D.en1900.v)} %`, D.en1900.f)} de sus residentes vivía en diseminado.</p>`);
+  else t.push(`<p>Para 1900 no hay cifra${D.m1900 ? `: ${esc(D.m1900)}` : ''}.</p>`);
+  if (D.ultima) t.push(`<p>En ${D.ultima.a}, con la definición del INE, el ${cifra(`${decimal(D.ultima.v)} %`, D.ultima.f)}.</p>`);
+  t.push('<p class="ma-cautela">Son dos definiciones distintas: las dos cifras no se restan ni se unen.</p>');
+  return t.join('');
+}
+
+export function textoPoblamientoComp(D) {
+  const t = [];
+  for (const x of [D.en1900, D.ultima].filter(Boolean)) {
+    t.push(`<p>En ${x.a} está ${x.v >= x.med ? 'por encima' : 'por debajo'} de la mediana de los municipios (${decimal(x.med)} %): el <b class="ma-c">${entero(x.pos.puesto)}.º</b> de ${entero(x.n)}.</p>`);
+  }
+  t.push('<p class="ma-cautela">No hay cifra de diseminado de Andalucía ni de las provincias; por eso se compara con la mediana de los municipios.</p>');
+  return t.join('');
+}
+
+export function pintarPoblamiento(caja, D) {
+  if (!D.filas.some(x => x.v != null)) { caja.innerHTML = '<p class="ma-pie">Sin cifras de diseminado.</p>'; return; }
+  caja.innerHTML = '<div class="ma-graf ma-dis"></div><p class="ma-pie">% de la población en diseminado. 1900 y 1991-2025 son definiciones distintas: la línea no las une, y también se corta en 2024, cuando la fuente pasa de empadronados a residentes. La línea gris es la mediana de los municipios.</p>';
+  const g = caja.querySelector('.ma-dis');
+  alAncho(g, W => dibuja(g, D, W));
+}
+
+function dibuja(g, D, W) {
+  const H = Math.max(230, Math.min(320, W * .46)), m = { t: 12, r: 18, b: 26, l: 40 };
+  const vals = D.filas.flatMap(x => [x.v, x.med]).filter(v => v != null);
+  const y = d3.scaleLinear().domain([0, Math.max(5, d3.max(vals) * 1.12)]).nice().range([H - m.b, m.t]);
+  const x = d3.scaleLinear().domain([1900, 2025]).range([m.l + 8, W - m.r]);
+  g.innerHTML = '';
+  const svg = d3.select(g).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img').attr('aria-label', 'Población en diseminado');
+  y.ticks(4).forEach(v => {
+    svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(v)).attr('y2', y(v)).attr('class', v === 0 ? 'ma-base' : 'ma-rej');
+    svg.append('text').attr('x', m.l - 6).attr('y', y(v) + 4).attr('text-anchor', 'end').attr('class', 'ma-eje-t').text(`${v}${v === y.ticks(4).slice(-1)[0] ? ' %' : ''}`);
+  });
+  const p1900 = D.filas.find(q => q.a === 1900), X0 = x(1900);
+  if (p1900 && p1900.med != null) svg.append('line').attr('x1', X0 - 7).attr('x2', X0 + 7).attr('y1', y(p1900.med)).attr('y2', y(p1900.med)).attr('stroke', '#8c8c86').attr('stroke-width', 2);
+  if (p1900 && p1900.v != null) {
+    svg.append('line').attr('x1', X0).attr('x2', X0).attr('y1', y(0)).attr('y2', y(p1900.v)).attr('stroke', VERDE).attr('stroke-width', 2.4);
+    svg.append('circle').attr('cx', X0).attr('cy', y(p1900.v)).attr('r', 4.4).attr('fill', VERDE);
+  }
+  ejeAnios(svg, x, H - m.b + 17, W, { dominio: [1900, 2025] });
+  for (const [a0, a1] of [[1991, 2023], [2024, 2025]]) {
+    const tr = D.filas.filter(q => q.a >= a0 && q.a <= a1);
+    traza(svg.append('g'), tr.map(q => ({ a: q.a, v: q.med, f: '3' })), x, y, '#8c8c86', 1.6);
+    traza(svg.append('g'), tr, x, y, VERDE, 2.6);
+    tr.filter(q => q.v != null).forEach(q => svg.append('circle').attr('cx', x(q.a)).attr('cy', y(q.v)).attr('r', 2.4).attr('fill', VERDE));
+  }
+  svg.append('rect').attr('x', x(1900) - 6).attr('y', m.t).attr('width', x(2025) - x(1900) + 6).attr('height', H - m.t - m.b).attr('fill', 'transparent')
+    .on('pointermove', ev => {
+      const a = x.invert(d3.pointer(ev)[0]), q = d3.least(D.filas, z => Math.abs(z.a - a));
+      tip(`<b>${q.a}</b><br>${q.v == null ? 'Sin cifra' : `Este municipio: ${decimal(q.v)} %${q.pos ? ` (${entero(q.pos.puesto)}.º de ${entero(q.n)})` : ''}`}<br>Mediana de municipios: ${decimal(q.med)} %`, ev);
+    }).on('pointerleave', sinTip);
+}
+
+export function pintarPoblamientoComp(caja, D) {
+  const filas = CLAVE.map(a => D.filas.find(x => x.a === a)).filter(x => x && x.med != null);
+  const mx = Math.max(5, d3.max(filas.flatMap(x => [x.v, x.med]).filter(v => v != null)) * 1.05);
+  caja.innerHTML = `<ul class="ma-pesa">${filas.map(x => `<li><span class="ma-pesa__a">${x.a}${x.a === 1900 ? ' <small>otra definición</small>' : ''}</span>
+    <span class="ma-pesa__b"><i class="ma-pesa__med" style="left:${x.med / mx * 100}%" title="Mediana de municipios: ${decimal(x.med)} %"></i>${x.v != null ? `<i class="ma-pesa__v" style="left:${x.v / mx * 100}%"></i>` : ''}</span>
+    <span class="ma-pesa__n">${x.v != null ? `${decimal(x.v)} % · ${entero(x.pos.puesto)}.º de ${entero(x.n)}` : 'sin cifra'}</span></li>`).join('')}</ul>
+    <p class="ma-pie">Punto verde: este municipio. Raya gris: la mediana de los municipios con dato en esa fecha.</p>`;
+}

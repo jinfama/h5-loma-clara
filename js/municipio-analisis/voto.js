@@ -1,0 +1,257 @@
+// voto.js — familia ganadora en las municipales y reparto del voto por elección, con los colores de partido del Atlas.
+// En elecciones no se habla de estimado: son resultados. Donde no era municipio propio, se dice y no se pinta.
+import { json, valores, serie, celda, codigoMotivo, motivoDe, avisoParcial } from './datos.js';
+import { madreEn, nacimientoEn, juntoEn } from './censos.js';
+import { d3, esc, decimal, entero, yLista, tip, sinTip, alAncho, ejeAnios } from './util.js';
+import { lineasComparadas } from './comparada.js';
+
+const FAMILIAS = ['psoe', 'pp_ap_ucd', 'iu_pce', 'andalucistas', 'cds', 'ciudadanos', 'vox', 'coaliciones_iu_podemos', 'podemos', 'adelante_andalucia', 'otros', 'sin_clasificar'];
+const NOMBRE = { psoe: 'PSOE', pp_ap_ucd: 'PP, AP y UCD', iu_pce: 'IU y PCE', andalucistas: 'Andalucistas', cds: 'CDS', ciudadanos: 'Ciudadanos', vox: 'Vox', coaliciones_iu_podemos: 'Coaliciones IU-Podemos', podemos: 'Podemos', adelante_andalucia: 'Adelante Andalucía', otros: 'Otros', sin_clasificar: 'Sin clasificar' };
+const TIPOS = [['municipales', 'Municipales'], ['generales', 'Generales'], ['europeas', 'Europeas']];
+
+// por qué una elección no tiene resultado propio: antes de existir, ya existente pero dado con otro, o sin resultado
+const mesDe = (ctx, id, a) => parseInt(((ctx.cat.get(id) || {}).meses_anio || {})[a], 10) || null;
+export function situacionVoto(ctx, vivos, a, id) {
+  const madre = madreEn(ctx.hist, ctx.ine, a, vivos);
+  if (madre) return { madre, ...nacimientoEn(ctx.hist, a, mesDe(ctx, id, a)) };
+  const junto = juntoEn(ctx.hist, ctx.ine, a, ctx.municipios || {});
+  return junto ? { q: 'junto', ...junto } : { q: 'sin' };
+}
+
+// sin resultado: si el fichero oficial de esa elección no trae el municipio, se dice con el texto de la base
+const conMotivo = (s, d, ine, a) => (s && s.q === 'sin' && codigoMotivo(d, ine, a) === 'nf' ? { ...s, motivo: motivoDe(d, ine, a) } : s);
+
+// el resultado de su término de entonces, en el municipio histórico de la fecha de esa elección
+const memoT = new Map();
+const leeTermino = id => { if (!memoT.has(id)) memoT.set(id, json(`visor/valores/${id}__termino.json`).catch(() => null)); return memoT.get(id); };
+export function enTermino(T, hist, a) {
+  const x = T && T.por_anio && T.por_anio[String(a)];
+  if (!x) return null;
+  const p = ((hist && hist.pt) || []).find(q => +q[0] <= +x.corte && +x.corte <= (q[1] === 'hoy' ? 9999 : +q[1]));
+  if (!p || p[2] == null) return null;
+  const k = (T.ids_por_corte[x.corte] || []).indexOf(`UE-${x.corte}-${p[2]}`);
+  return k < 0 || x.v[k] == null ? null : x.v[k];
+}
+const quienJunto = s => `${yLista(s.de)}${s.hoy.length ? `, con lo que hoy es ${yLista(s.hoy)}` : ''}`;
+
+export function fraseSin(s, n) {
+  if (!s) return 'sin resultado';
+  if (s.q === 'sin') return s.motivo || 'sin resultado';
+  if (s.q === 'junto') return `la fuente da un solo resultado para ${quienJunto(s)}`;
+  if (s.q === 'antes') return `${n} no era municipio propio: formaba parte de ${s.madre.n}, y sus votos están en ${s.madre.n}`;
+  if (s.q === 'ya') return `${n} ya era municipio${s.fecha ? ` desde ${s.fecha}` : ''}, pero la fuente da sus votos junto con los de ${s.madre.n}`;
+  return `la fuente no da el resultado de ${n} por separado: sus votos están con los de ${s.madre.n}`;
+}
+
+export async function prepararGanador(ctx) {
+  const [d, dv] = await Promise.all([valores('elec_ganador_municipales'), valores('elec_voto_municipales_psoe')]);   // el motivo va en los ficheros de voto
+  const cats = ctx.cat.get('elec_ganador_municipales').categorias;
+  const vivos = new Set(ctx.P.ine);
+  const base = serie(d, ctx.ine).map(x => ({ a: x.a, v: x.v, sit: x.v == null ? conMotivo(situacionVoto(ctx, vivos, x.a, 'elec_voto_municipales_psoe'), dv, ctx.ine, x.a) : null }));
+  const T = base.some(x => x.sit && x.sit.q === 'junto') ? await leeTermino('elec_ganador_municipales') : null;
+  const filas = base.map(x => {
+    const vt = x.v == null && x.sit.q === 'junto' ? enTermino(T, ctx.hist, x.a) : null;
+    const v = x.v == null ? vt : x.v;
+    return { a: x.a, cat: v == null ? null : cats[v], sit: x.sit, deTermino: x.v == null && vt != null, parcial: avisoParcial(d, ctx.ine, x.a) || avisoParcial(dv, ctx.ine, x.a) };
+  });
+  return { filas };
+}
+
+export async function repartoDe(tipo, ctx) {
+  const ids = FAMILIAS.map(f => `elec_voto_${tipo}_${f}`).filter(id => ctx.cat.has(id));
+  const [ds, dA, dP] = await Promise.all(['municipio', 'andalucia', 'provincia'].map(n => Promise.all(ids.map(id => valores(id, n)))));
+  const anios = ds[0].anios.map(Number), vivos = new Set(ctx.P.ine);
+  const fam = ids.map((id, k) => ({ id, clave: id.replace(`elec_voto_${tipo}_`, ''), c: ctx.cat.get(id).color, d: ds[k], A: dA[k], P: dP[k] }));
+  const sits = anios.map(a => (fam.some(x => celda(x.d, ctx.ine, a).v > 0) ? null : conMotivo(situacionVoto(ctx, vivos, a, ids[0]), ds[0], ctx.ine, a)));
+  const Ts = sits.some(q => q && q.q === 'junto') ? await Promise.all(fam.map(x => leeTermino(x.id))) : null;
+  const filas = anios.map((a, ka) => {
+    const sit = sits[ka], delTermino = !!(sit && sit.q === 'junto' && Ts);
+    const todas = fam.map((x, j) => {
+      const qa = celda(x.A, 'AND', a), qp = celda(x.P, ctx.prov, a);
+      return { clave: x.clave, r: NOMBRE[x.clave], c: x.c, v: delTermino ? enTermino(Ts[j], ctx.hist, a) : celda(x.d, ctx.ine, a).v, vA: qa.v, fA: qa.f, vP: qp.v, fP: qp.f };
+    });
+    const hay = todas.some(p => p.v != null && p.v > 0);   // un cero en todas las familias no es un resultado
+    const parcial = fam.map(x => avisoParcial(x.d, ctx.ine, a)).find(Boolean) || '';
+    return { a, hay, todas, partes: todas.filter(p => p.v != null && p.v > 0), sit, deTermino: delTermino && hay, parcial };
+  });
+  return { tipo, filas, nombre: ctx.nombre, variantes: ds[0].variantes_anio || {} };
+}
+
+const enlaceM = m => (m.ine ? `<a href="analisis-municipio.html?ine=${m.ine}">${esc(m.n)}</a>` : esc(m.n));
+
+export function textoVoto(G, ctx) {
+  // un resultado parcial se enseña, pero no cuenta como victoria en el resumen
+  const con = G.filas.filter(x => x.cat && !x.parcial), parciales = G.filas.filter(x => x.parcial);
+  const avisoP = parciales.map(x => `<p class="ma-aviso-b">Elección de ${x.a}. ${esc(x.parcial)} No cuenta en este resumen.</p>`).join('');
+  if (!con.length) return `<p>No hay resultados completos de elecciones municipales para este municipio.</p>${avisoP}`;
+  const cuenta = new Map();
+  con.forEach(x => cuenta.set(x.cat.rotulo, (cuenta.get(x.cat.rotulo) || 0) + 1));
+  const orden = [...cuenta.entries()].sort((a, b) => b[1] - a[1]);
+  const u = con[con.length - 1];
+  const t = [`<p>De las ${con.length} elecciones municipales con resultado${parciales.length ? ' completo' : ''}, ${orden.length === 1 ? `en todas ganó <b>${esc(orden[0][0])}</b>` : `<b>${esc(orden[0][0])}</b> fue la familia más votada en ${orden[0][1]}${orden[1] ? `; ${esc(orden[1][0])}, en ${orden[1][1]}` : ''}`}.</p>`,
+    `<p>En ${u.a} la más votada fue <b>${esc(u.cat.rotulo)}</b>.</p>`];
+  // una frase por situación, siempre con su nombre
+  const grupos = new Map();
+  G.filas.filter(x => x.sit && !x.parcial).forEach(x => {
+    const k = `${x.sit.q}|${x.sit.madre ? x.sit.madre.n : ''}|${x.sit.fecha || ''}|${(x.sit.de || []).join()}|${(x.sit.hoy || []).join()}|${x.sit.motivo || ''}|${x.deTermino ? 1 : 0}`;
+    if (!grupos.has(k)) grupos.set(k, { s: x.sit, as: [], term: x.deTermino });
+    grupos.get(k).as.push(x.a);
+  });
+  const N = esc(ctx.nombre);
+  for (const { s, as, term } of grupos.values()) {
+    const en = yLista(as.map(String));
+    if (s.q === 'antes') t.push(`<p class="ma-aviso-b">${N} no era municipio propio en ${en}: formaba parte de ${enlaceM(s.madre)}, y sus votos están en ${enlaceM(s.madre)}.</p>`);
+    else if (s.q === 'ya') t.push(`<p class="ma-aviso-b">En ${en}, ${N} ya era municipio${s.fecha ? ` (desde ${esc(s.fecha)})` : ''}, pero la fuente da sus votos junto con los de ${enlaceM(s.madre)}.</p>`);
+    else if (s.q === 'duda') t.push(`<p class="ma-aviso-b">En ${en}, la fuente no da el resultado de ${N} por separado: sus votos están con los de ${enlaceM(s.madre)}.</p>`);
+    else if (s.q === 'junto') t.push(`<p class="ma-aviso-b">En ${en}, ${term ? `el resultado es el de su término de entonces: la fuente da uno solo para ${esc(quienJunto(s))}. Va con borde discontinuo` : `la fuente da un solo resultado para ${esc(quienJunto(s))}, sin cifra`}.</p>`);
+    else if (s.motivo) t.push(`<p class="ma-aviso-b">En ${en}: ${esc(s.motivo)}.</p>`);
+    else t.push(`<p class="ma-cautela">Sin resultado en ${en}.</p>`);
+  }
+  return t.join('') + avisoP;
+}
+
+export function pintarVoto(caja, G, ctx, alCambiar = null) {
+  caja.innerHTML = `
+    <div class="ma-cinta" aria-label="Familia más votada en cada elección municipal">
+      ${G.filas.map(x => `<span class="ma-cinta__c${x.cat ? '' : ' ma-cinta__c--no'}${x.deTermino ? ' is-term' : ''}${x.parcial ? ' is-parcial' : ''}" ${x.cat ? `style="background:${x.cat.color};color:${d3.hsl(x.cat.color).l > .7 ? '#101010' : '#fff'}"` : ''} title="${x.a}: ${esc(x.parcial ? `${x.cat ? `${x.cat.rotulo}. ` : ''}${x.parcial}` : x.cat ? `${x.cat.rotulo}${x.deTermino ? `: ${fraseSin(x.sit, ctx.nombre)}` : ''}` : fraseSin(x.sit, ctx.nombre))}"><b>${String(x.a).slice(2)}</b></span>`).join('')}
+    </div>
+    <p class="ma-cinta__pie">Familia más votada en cada elección municipal, de ${G.filas[0].a} a ${G.filas[G.filas.length - 1].a}.</p>
+    <div class="ma-conmuta" role="group" aria-label="Tipo de elección">${TIPOS.map(([k, r], i) => `<button type="button" data-t="${k}" aria-pressed="${i === 0}">${r}</button>`).join('')}</div>
+    <div class="ma-graf ma-voto"></div>
+    <ul class="ma-ley ma-ley--color ma-voto-ley"></ul>
+    <p class="ma-aviso-b ma-voto-nota" hidden></p>
+    <p class="ma-pie">Porcentaje de los votos a candidaturas en cada elección. Una columna vacía es una elección sin resultado propio. Cuando la fuente da varios municipios juntos, la cifra es la del conjunto, repartida.</p>`;
+  const g = caja.querySelector('.ma-voto'), ley = caja.querySelector('.ma-voto-ley');
+  let actual = null, ancho = 0;
+  const pinta = () => { if (actual && ancho) columnas(g, actual, ancho); };
+  const elegir = async t => {
+    g.innerHTML = '<p class="ma-cargando">Leyendo las elecciones…</p>';
+    actual = await repartoDe(t, ctx);
+    if (alCambiar) alCambiar(actual);
+    // en generales y europeas, el motivo y el aviso de resultado parcial a la vista (los de municipales ya van en el texto de arriba)
+    const conM = t === 'municipales' ? [] : actual.filas.filter(f => f.sit && f.sit.motivo), conP = t === 'municipales' ? [] : actual.filas.filter(f => f.parcial), nota = caja.querySelector('.ma-voto-nota');
+    const lineas = [...(conM.length ? [`En ${yLista(conM.map(f => String(f.a)))}: ${conM[0].sit.motivo}.`] : []), ...conP.map(f => `Elección de ${f.a}. ${f.parcial}`)];
+    nota.hidden = !lineas.length;
+    nota.textContent = lineas.join(' ');
+    const usadas = new Map();
+    actual.filas.forEach(f => f.partes.forEach(p => usadas.set(p.clave, p)));
+    ley.innerHTML = FAMILIAS.filter(k => usadas.has(k)).map(k => `<li><i style="background:${usadas.get(k).c}"></i><span>${esc(NOMBRE[k])}</span></li>`).join('');
+    pinta();
+  };
+  caja.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => {
+    caja.querySelectorAll('[data-t]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    elegir(b.dataset.t);
+  }));
+  alAncho(g, w => { ancho = w; pinta(); });
+  elegir('municipales');
+}
+
+function columnas(g, R, W) {
+  const H = Math.max(240, Math.min(320, W * .34)), m = { t: 8, r: 8, b: 24, l: 42 }, as = R.filas.map(f => f.a);
+  const x = d3.scaleLinear().domain([as[0], as[as.length - 1]]).range([m.l + 8, W - m.r - 6]);
+  let bw = Math.max(3, Math.min(34, d3.min(as.slice(1).map((a, i) => x(a) - x(as[i]))) * .86));
+  x.range([m.l + bw / 2 + 3, W - m.r - bw / 2 - 1]);
+  bw = Math.max(3, Math.min(34, d3.min(as.slice(1).map((a, i) => x(a) - x(as[i]))) * .86));
+  const y = d3.scaleLinear().domain([0, 100]).range([H - m.b, m.t]);
+  g.innerHTML = '';
+  const svg = d3.select(g).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img').attr('aria-label', 'Reparto del voto en cada elección, sobre un eje de años');
+  [0, 50, 100].forEach(v => {
+    svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(v)).attr('y2', y(v)).attr('class', v === 0 ? 'ma-base' : 'ma-rej');
+    svg.append('text').attr('x', m.l - 5).attr('y', y(v) + 4).attr('text-anchor', 'end').attr('class', 'ma-eje-t').text(`${v}${v === 100 ? '\u00a0%' : ''}`);
+  });
+  ejeAnios(svg, x, H - m.b + 16, W, { dominio: [as[0], as[as.length - 1]] });
+  R.filas.forEach(f => {
+    const X = x(f.a) - bw / 2;
+    if (!f.hay) { svg.append('rect').attr('x', X).attr('y', y(100)).attr('width', bw).attr('height', y(0) - y(100)).attr('class', 'ma-vacio').on('pointermove', ev => tip(`<b>${f.a}</b><br>${esc(fraseSin(f.sit, R.nombre))}`, ev)).on('pointerleave', sinTip); return; }
+    let ac = 0;
+    const zona = svg.append('g').on('pointermove', ev => {
+      const var19 = R.variantes[String(f.a)] ? ` (${R.variantes[String(f.a)].defecto})` : '';
+      tip(`<b>${f.a}${var19}</b><br>${[...f.partes].sort((a, b) => b.v - a.v).map(p => `<i class="ma-pt" style="background:${p.c}"></i>${esc(p.r)}: ${decimal(p.v)}\u00a0%`).join('<br>')}${f.parcial ? `<br>${esc(f.parcial)}` : f.deTermino ? `<br>${esc(fraseSin(f.sit, R.nombre))}` : ''}`, ev);
+    }).on('pointerleave', sinTip);
+    for (const p of f.partes) {
+      zona.append('rect').attr('x', X).attr('y', y(ac + p.v)).attr('width', bw).attr('height', Math.max(.4, y(ac) - y(ac + p.v))).attr('fill', p.c);
+      ac += p.v;
+    }
+    if (f.parcial) zona.append('rect').attr('x', X - 1).attr('y', y(ac) - 1).attr('width', bw + 2).attr('height', y(0) - y(ac) + 2).attr('fill', 'none').attr('stroke', '#b9770e').attr('stroke-width', 2.2);
+    else if (f.deTermino) zona.append('rect').attr('x', X).attr('y', y(ac)).attr('width', bw).attr('height', y(0) - y(ac)).attr('fill', 'none').attr('stroke', '#101010').attr('stroke-width', 1.3).attr('stroke-dasharray', '4 2');
+  });
+}
+export { entero };
+
+// ---------------------------------------------------------------- su voto comparado, en puntos, por familia y elección
+const RESTO = new Set(['otros', 'sin_clasificar']);
+export function difVoto(R, comp) {
+  const k = comp === 'prov' ? 'vP' : 'vA';
+  const fams = FAMILIAS.filter(c => !RESTO.has(c) && R.filas.some(f => f.hay && f.todas.some(p => p.clave === c && p.v != null && p[k] != null && Math.max(p.v, p[k]) >= 2)));
+  return {
+    fams,
+    filas: R.filas.map(f => ({ a: f.a, hay: f.hay, deTermino: f.deTermino, parcial: f.parcial, cel: Object.fromEntries(f.todas.map(p => [p.clave, f.hay && p.v != null && p[k] != null && (p.v > 0 || p[k] > 0) ? { d: p.v - p[k], v: p.v, ref: p[k], c: p.c, r: p.r, fr: comp === 'prov' ? p.fP : p.fA } : null])) })),
+  };
+}
+
+export function textoVotoComp(R, comp, ctx) {
+  const D = difVoto(R, comp), nom = comp === 'prov' ? `la provincia de ${esc(ctx.provNombre)}` : 'Andalucía';
+  const con = D.filas.filter(f => f.hay && !f.parcial && D.fams.some(c => f.cel[c]));
+  if (!con.length) return '<p>No hay resultados completos con los que comparar.</p>';
+  const u = con[con.length - 1], xs = D.fams.map(c => u.cel[c]).filter(Boolean);
+  const alto = xs.reduce((a, b) => (b.d > a.d ? b : a)), bajo = xs.reduce((a, b) => (b.d < a.d ? b : a));
+  const t = [`<p>En las ${R.tipo} de ${u.a}, frente a ${nom}: <b>${esc(alto.r)}</b> ${decimal(Math.abs(alto.d))} puntos ${alto.d >= 0 ? 'más' : 'menos'}${bajo !== alto ? `; <b>${esc(bajo.r)}</b> ${decimal(Math.abs(bajo.d))} puntos ${bajo.d >= 0 ? 'más' : 'menos'}` : ''}.</p>`];
+  let mej = null;
+  for (const c of D.fams) {
+    const ser = con.filter(f => f.cel[c]);
+    if (ser.length < 2) continue;
+    const m = d3.mean(ser, f => Math.abs(f.cel[c].d));
+    if (!mej || m > mej.m) mej = { c, m, a: ser[0], b: ser[ser.length - 1] };
+  }
+  if (mej) {
+    const p = mej.a.cel[mej.c], q = mej.b.cel[mej.c], s = v => (Math.abs(v) < .05 ? '0,0' : `${v > 0 ? '+' : '−'}${decimal(Math.abs(v))}`);
+    t.push(`<p>Donde más se aparta es en <b>${esc(p.r)}</b>: ${s(p.d)} puntos en ${mej.a.a} y ${s(q.d)} en ${mej.b.a}.</p>`);
+  }
+  return t.join('');
+}
+
+export function pintarVotoComp(caja, R, ctx, txt) {
+  let comp = 'and';
+  caja.innerHTML = `<div class="ma-conmuta" role="group" aria-label="Con quién se compara"><button type="button" data-c="and" aria-pressed="true">Frente a Andalucía</button><button type="button" data-c="prov" aria-pressed="false">Frente a su provincia</button></div>
+    <div class="ma-vl"></div>
+    <h3 class="ma-h3">Diferencia en puntos, elección a elección</h3>
+    <div class="ma-dv"></div>
+    <p class="ma-pie">Puntos de diferencia en el porcentaje de voto. Con el color del partido, por encima; en gris, por debajo. Cuanto más intenso, mayor distancia. Vacío: la familia no se presentó en ninguno de los dos o no hay resultado propio.${R.filas.some(f => f.deTermino && !f.parcial) ? ' Con asterisco, el resultado de su término de entonces.' : ''}${R.filas.some(f => f.parcial) ? ' Con †, resultado parcial: no entra en las frases.' : ''}</p>`;
+  const el = caja.querySelector('.ma-dv'), vl = caja.querySelector('.ma-vl');
+  // las familias con más voto: municipio, provincia y Andalucía en todas las elecciones
+  const claves = FAMILIAS.filter(c => !RESTO.has(c)).map(c => ({ c, m: d3.max(R.filas, f => { const p = f.todas.find(q => q.clave === c); return p && p.v != null ? p.v : 0; }) })).filter(x => x.m >= 8).sort((a, b) => b.m - a.m).slice(0, 4);
+  vl.innerHTML = claves.map(x => `<figure class="ma-vl__f"><figcaption>${esc(NOMBRE[x.c])}</figcaption><div class="ma-graf" data-fam="${x.c}"></div></figure>`).join('');
+  for (const x of claves) {
+    const pts = (k, fk) => R.filas.map(f => { const p = f.todas.find(q => q.clave === x.c); return { a: f.a, v: f.hay && p && p[k] != null ? p[k] : null, f: fk ? (p ? p[fk] : '.') : f.parcial ? '5' : '3' }; });
+    lineasComparadas(vl.querySelector(`[data-fam="${x.c}"]`), { unidad: '%', compacto: true, series: [{ t: ctx.nombre, c: R.filas.flatMap(f => f.todas).find(p => p.clave === x.c).c, w: 2.6, pts: pts('v') }, { t: 'Provincia', c: '#8c8c86', pts: pts('vP', 'fP') }, { t: 'Andalucía', c: '#101010', pts: pts('vA', 'fA') }] });
+  }
+  const pinta = () => {
+    const D = difVoto(R, comp);
+    txt.innerHTML = textoVotoComp(R, comp, ctx);
+    el.style.setProperty('--cols', D.filas.length);
+    el.innerHTML = `<div class="ma-dv__f ma-dv__f--cab"><span></span>${D.filas.map(f => `<span${f.parcial ? ` title="${esc(f.parcial)}"` : ''}><b>${f.a}${f.parcial ? '†' : f.deTermino ? '*' : ''}</b><i>’${String(f.a).slice(2)}${f.parcial ? '†' : f.deTermino ? '*' : ''}</i></span>`).join('')}</div>${D.fams.map(c => {
+      const pr = D.filas.map(f => f.cel[c]).find(Boolean);
+      return `<div class="ma-dv__f"><span class="ma-dv__n"><i style="background:${pr ? pr.c : '#999'}"></i>${esc(NOMBRE[c])}</span>${D.filas.map(f => {
+        const x = f.cel[c];
+        if (!x) return `<span class="ma-dv__c${f.hay ? '' : ' ma-dv__c--no'}"></span>`;
+        const al = Math.min(1, .14 + Math.abs(x.d) / 18), col = x.d >= 0 ? d3.color(x.c) : d3.color('#55595c');
+        col.opacity = al;
+        const claro = al > .55;
+        return `<span class="ma-dv__c" style="background:${col.formatRgb()};color:${claro ? '#fff' : '#101010'}" title="${f.a} · ${esc(x.r)}: ${decimal(x.v)} % frente a ${decimal(x.ref)} %">${Math.abs(x.d) < .05 ? '0,0' : `${x.d > 0 ? '+' : '−'}${Math.abs(x.d) >= 9.95 ? entero(Math.abs(x.d)) : decimal(Math.abs(x.d))}`}</span>`;
+      }).join('')}</div>`;
+    }).join('')}`;
+  };
+  caja.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => {
+    comp = b.dataset.c;
+    caja.querySelectorAll('[data-c]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    pinta();
+  }));
+  pinta();
+}
+
+export function fraseVoto(R) {
+  const D = difVoto(R, 'and'), con = D.filas.filter(f => f.hay && !f.parcial && D.fams.some(c => f.cel[c]));
+  if (!con.length) return null;
+  const u = con[con.length - 1], x = D.fams.map(c => u.cel[c]).filter(Boolean).reduce((a, b) => (Math.abs(b.d) > Math.abs(a.d) ? b : a));
+  return `En las ${R.tipo} de ${u.a}, donde más se aparta de Andalucía es en el voto a ${esc(x.r)}: ${decimal(Math.abs(x.d))} puntos ${x.d >= 0 ? 'más' : 'menos'}.`;
+}

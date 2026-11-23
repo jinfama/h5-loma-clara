@@ -1,0 +1,24 @@
+// boton.js — el enlace «Analizar este municipio» de las fichas del visor. Lleva su propio estilo para no depender de la
+// hoja del visor.
+const CSS = `
+.ma-boton { display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 7px 14px; background: #0f3b2c; color: #fff !important; border: 2px solid #0f3b2c; font: 700 13.5px/1.1 "Instrument Sans", system-ui, sans-serif; text-decoration: none !important; white-space: nowrap; box-shadow: 4px 4px 0 #d2a24c; transition: transform .12s, box-shadow .12s; }
+.ma-boton:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #d2a24c; color: #fff !important; }
+.ma-boton:focus-visible { outline: 2px solid #007a3d; outline-offset: 3px; }
+.ma-boton svg { width: 15px; height: 15px; flex: none; }
+.mu-cab .ma-boton { order: 1; margin-left: auto; }
+.mu-cab .ma-boton + .mu-volver, .mu-cab .mu-volver { margin-left: 0; }
+.ma-boton--ficha { display: flex; justify-content: center; margin: 2px 4px 10px 0; white-space: normal; }
+@media (max-width: 640px) { .mu-cab .ma-boton { order: 3; margin-left: 0; width: calc(100% - 4px); justify-content: center; } }
+`;
+function ponerEstilo() {
+  if (document.getElementById('ma-boton-css')) return;
+  const s = document.createElement('style');
+  s.id = 'ma-boton-css'; s.textContent = CSS;
+  document.head.appendChild(s);
+}
+const ICONO = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M1.5 13.5h13"/><path d="M2.5 10.5 6 6.5l3 2.5 4.5-6"/></svg>';
+
+export function botonAnalisis(ine, clase = '') {
+  ponerEstilo();
+  return `<a class="ma-boton ${clase}" href="analisis-municipio.html?ine=${encodeURIComponent(ine)}">${ICONO}Analizar este municipio</a>`;
+}

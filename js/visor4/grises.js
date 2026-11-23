@@ -1,0 +1,96 @@
+// grises.js — los términos grises del municipio histórico (1752, 1787, 1842): unidades en las que la fuente de la fecha
+// no cuenta ningún pueblo. «andalucía: límites» propone a quién pertenecían (data/v2/geo/grises.json). Aquí solo se
+// ROTULAN: siguen grises (no se les pinta ninguna cifra), con un dibujo sutil por clase, su rótulo al pasar el puntero,
+// su propuesta en la ficha y, en la clase B, una línea fina hacia el término propuesto. Si grises.json no está, nada.
+
+/* global d3 */
+import { cargarSiHay } from '../atlas2/data.js';
+import { esc } from '../atlas2/fmt.js';
+import { M } from '../visor3/motor.js';
+
+let G = null;
+export const INSIGNIA = 'Propuesta de la base, en estudio; no son cifras';
+export const CLASES = {
+  A: { rotulo: 'línea en revisión en territorio', paso: 7, ang: 0 },
+  B: { rotulo: 'probablemente parte de otro término (propuesta en estudio)', paso: 6, ang: 45 },
+  C: { rotulo: 'municipio propio sin línea en la fuente', paso: 5, ang: 'punto' },
+};
+export const cargarGrises = () => (G ? Promise.resolve(G) : cargarSiHay('geo/grises.json').then(j => (G = j || {})));
+cargarGrises();
+
+// corte del fotograma activo cuando el mapa enseña términos (nivel termino o indicadores de fronteras)
+let enFronteras = false;
+export function grisesEnFronteras(v) { enFronteras = !!v; }
+export function corteActivo() {
+  const f = M.F[M.i];
+  if (!f || !M.prov) return null;
+  if (/^fronteras/.test(String(M.ind || '')) && !enFronteras) return null;
+  const c = f.corte != null ? String(f.corte) : null;
+  return c && G && G[c] ? c : null;
+}
+export function grisDe(id) {
+  const c = /^UE-([^-]+)-/.exec(String(id || ''));
+  if (!G || !c || !G[c[1]]) return null;
+  return G[c[1]][String(id)] || null;
+}
+export function cuentaClases() {
+  const c = corteActivo(); if (!c) return null;
+  const n = { A: 0, B: 0, C: 0 };
+  for (const x of Object.values(G[c])) if (n[x.clase] != null) n[x.clase]++;
+  return n;
+}
+
+// tramas sutiles: rayas horizontales (A), diagonales (B) y puntos (C), en gris oscuro muy suave
+const tramas = new Map();
+function trama(clase) {
+  if (tramas.has(clase)) return tramas.get(clase);
+  const k = CLASES[clase], s = 12, cv = document.createElement('canvas'); cv.width = cv.height = s;
+  const g = cv.getContext('2d'); g.strokeStyle = 'rgba(16,16,16,.42)'; g.fillStyle = 'rgba(16,16,16,.5)'; g.lineWidth = 1;
+  if (k.ang === 'punto') { g.beginPath(); g.arc(3, 3, 1.1, 0, 2 * Math.PI); g.arc(9, 9, 1.1, 0, 2 * Math.PI); g.fill(); }
+  else if (k.ang === 0) { g.beginPath(); g.moveTo(0, 3.5); g.lineTo(s, 3.5); g.moveTo(0, 9.5); g.lineTo(s, 9.5); g.stroke(); }
+  else { g.beginPath(); g.moveTo(-2, s + 2); g.lineTo(s + 2, -2); g.moveTo(-2, 2); g.lineTo(2, -2); g.moveTo(s - 2, s + 2); g.lineTo(s + 2, s - 2); g.stroke(); }
+  const p = cv.getContext('2d').createPattern(cv, 'repeat');
+  tramas.set(clase, p);
+  return p;
+}
+
+// dibujo encima del mapa (mapa.capa): trama por clase, contorno discontinuo y, al pasar por una B, línea al propuesto
+export function dibujarGrises(ctx, path, proj, feats, hover) {
+  const c = corteActivo(); if (!c) return;
+  const tabla = G[c];
+  ctx.save();
+  for (const d of feats) {
+    const x = tabla[d.c]; if (!x) continue;
+    ctx.fillStyle = trama(x.clase); ctx.fill(d.path);
+    ctx.setLineDash([3, 2]); ctx.strokeStyle = 'rgba(16,16,16,.55)'; ctx.lineWidth = 0.9; ctx.stroke(d.path); ctx.setLineDash([]);
+  }
+  const h = hover && tabla[hover];
+  if (h && h.clase === 'B' && h.ine_propuesto) {
+    const a = feats.find(d => d.c === hover);
+    const b = feats.find(d => (d.props && (d.props.pz || []).map(String).includes(String(h.ine_propuesto))));
+    if (a && b && a.f && b.f) {
+      const gp = d3.geoPath(proj);
+      const p0 = gp.centroid(a.f), p1 = gp.centroid(b.f);
+      if (isFinite(p0[0]) && isFinite(p1[0])) {
+        ctx.strokeStyle = '#007a3d'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#007a3d'; ctx.beginPath(); ctx.arc(p1[0], p1[1], 3.4, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = '#007a3d'; ctx.lineWidth = 2; ctx.stroke(b.path);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+export function lineasTooltip(id) {
+  const x = grisDe(id); if (!x) return '';
+  return `<p class="t4-gris"><b>${esc(x.rotulo)}</b></p><p class="t4-l">${esc(INSIGNIA)}</p>`;
+}
+export function bloqueFicha(id) {
+  const x = grisDe(id); if (!x) return '';
+  const fila = (k, v) => (v ? `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>` : '');
+  return `<section class="g4-ficha"><p class="v3fi-k">Término gris · clase ${esc(x.clase)}</p>
+    <p class="g4-rot">${esc(x.rotulo)}</p>
+    <p class="g4-ins"><span class="a2-badge a2-badge--candidata">${esc(INSIGNIA)}</span></p>
+    <table class="r4-tabla">${fila('Propuesta', x.propuesta)}${fila('Término propuesto', x.termino_propuesto)}${fila('INE propuesto', x.ine_propuesto)}${fila('Confianza', x.confianza)}${fila('Testigos', x.testigos)}${fila('Quién lo resuelve', x.quien_lo_resuelve)}</table></section>`;
+}

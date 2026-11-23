@@ -1,0 +1,84 @@
+/* =====================================================================================================================
+   Portada de Info (info.html) y contenido de Equipo (equipo.html) y Publicaciones (publicaciones.html). Va sobre paginas6.css.
+   ===================================================================================================================== */
+
+/* presentación */
+.in-cab .p6-lede + .p6-lede { margin-top: 12px; font-weight: 400; }
+.in-cab .p6-lede { position: relative; z-index: 1; }
+/* el alicatado de la cabecera llega al borde de la pantalla sin ensanchar la página */
+.in-cab::after { right: calc(-1 * clamp(16px, 4vw, 48px)); }
+
+/* tarjetas de acceso: seis, de tres en tres */
+.in-accesos { padding: 32px 0 36px; border-bottom: 2px solid var(--p6-tinta); }
+.in-tarjetas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.in-tarjetas > li { display: flex; min-width: 0; }
+.p6 a.in-tarjeta { display: flex; flex-direction: column; gap: 8px; width: 100%; min-height: 164px; padding: 18px 20px 14px; border: 1px solid var(--p6-tinta); border-top: 4px solid var(--verde-andaluz); background: #fff; color: var(--p6-tinta); text-decoration: none; transition: transform .16s ease, box-shadow .16s ease; }
+.p6 a.in-tarjeta:hover { color: var(--p6-tinta); transform: translateY(-2px); box-shadow: 4px 4px 0 var(--verde-hondo); }
+.p6 .in-tarjeta h3 { margin: 0; font: 800 clamp(20px, 1.9vw, 25px)/1.05 var(--p6-disp); letter-spacing: -.025em; overflow-wrap: anywhere; }
+.in-tarjeta__d { color: #333; font-size: 14.5px; line-height: 1.4; }
+.in-tarjeta__ir { margin-top: auto; color: var(--verde-andaluz); font: 700 20px/1 var(--p6-txt); }
+.p6 a.in-tarjeta--contacto { border-color: var(--verde-hondo); border-top-color: #7fd3a3; background: var(--verde-hondo); color: #fff; }
+.p6 a.in-tarjeta--contacto:hover { color: #fff; box-shadow: 4px 4px 0 var(--verde-andaluz); }
+.in-tarjeta--contacto .in-tarjeta__d { color: #e6efe9; }
+.in-tarjeta--contacto .in-tarjeta__ir { color: #7fd3a3; }
+
+/* contacto */
+.in-fin { border-bottom: 0; padding-bottom: 56px; scroll-margin-top: 72px; }
+.in-contacto { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 20px 48px; align-items: start; margin-top: 14px; }
+.in-contacto__txt { margin: 0; max-width: 58ch; font-size: clamp(16px, 1.3vw, 18px); line-height: 1.5; }
+.in-correo { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 14px 18px; border-left: 4px solid var(--verde-andaluz); background: var(--p6-panel); }
+.in-correo__n { font-weight: 700; }
+.in-correo a { font: 700 clamp(18px, 1.7vw, 22px)/1.2 var(--p6-txt); overflow-wrap: anywhere; }
+
+/* equipo: persona destacada */
+.in-lider { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 44px; align-items: end; padding: 36px 0 40px; border-bottom: 2px solid var(--p6-tinta); }
+.in-lider .p6-foto { margin-bottom: 12px; }
+.p6 .in-lider h2 { margin: 0 0 8px; font: 800 clamp(30px, 4vw, 54px)/.98 var(--p6-disp); letter-spacing: -.035em; text-transform: uppercase; overflow-wrap: anywhere; }
+.in-afil { margin: 0; color: #333; font-size: clamp(15px, 1.25vw, 17px); font-weight: 500; }
+.in-datos { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 16px 0 0; padding: 0; list-style: none; }
+.in-datos li { min-width: 0; overflow-wrap: anywhere; }
+.in-datos span { margin-right: 6px; color: var(--p6-gris); font: 700 11px var(--p6-txt); letter-spacing: .1em; text-transform: uppercase; }
+.in-datos a { font-weight: 600; }
+
+/* equipo: el resto */
+.in-resto { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 28px 0 32px; border-bottom: 2px solid var(--p6-tinta); list-style: none; }
+.in-resto li { min-width: 0; padding: 16px 18px; border: 1px solid var(--p6-tinta); border-top: 4px solid var(--verde-andaluz); }
+.p6 .in-resto h3 { margin: 0 0 4px; font: 800 clamp(19px, 1.7vw, 23px)/1.08 var(--p6-disp); letter-spacing: -.02em; overflow-wrap: anywhere; }
+
+/* publicaciones */
+.p6 .in-cab--larga h1 { font-size: clamp(32px, 5.4vw, 72px); line-height: .95; }
+.in-pubs { padding: 32px 0 8px; }
+.in-pubs .p6-bib li { display: block; padding: 16px 0; }
+.in-pubs .p6-autor, .in-pubs .p6-cita, .in-pubs .p6-uso { display: block; }
+.in-pubs .p6-cita { margin-top: 3px; font-size: 16px; line-height: 1.45; }
+.in-pubs .p6-uso { margin-top: 4px; }
+.in-doi { display: inline-block; margin-top: 5px; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+
+/* autoría de las bases */
+.in-autorias { margin: 0; border-top: 2px solid var(--p6-tinta); }
+.in-autorias > div { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 4px 24px; padding: 12px 0; border-bottom: 1px solid var(--p6-linea); }
+.in-autorias dt { font-weight: 700; }
+.in-autorias dd { margin: 0; }
+.in-autorias small { display: block; margin-top: 2px; color: var(--p6-gris); font-size: 12.5px; }
+.in-sinjs { margin: 28px 0; padding-left: 18px; }
+
+@media (max-width: 900px) {
+  .in-tarjetas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .p6 a.in-tarjeta { min-height: 148px; }
+  .in-contacto { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .in-lider { grid-template-columns: 1fr; gap: 26px; }
+  .in-resto, .in-autorias > div { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .in-tarjetas { grid-template-columns: 1fr; }
+  .p6 a.in-tarjeta { min-height: 0; }
+  .in-tarjeta__ir { margin-top: 2px; }
+  /* «Publicaciones» es una palabra muy ancha en esta letra: cabe entera en el móvil */
+  .p6 .in-cab--larga h1 { font-size: 6.6vw; line-height: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .p6 a.in-tarjeta { transition: none; }
+  .p6 a.in-tarjeta:hover { transform: none; }
+}

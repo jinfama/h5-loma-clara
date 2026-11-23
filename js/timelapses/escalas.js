@@ -1,0 +1,175 @@
+// escalas.js — escalas de color (una por tema, interpoladas en espacio Lab para que el paso de color sea
+// perceptualmente regular), formato de números en español y leyendas en DOM.
+
+/* global d3 */
+
+const lab = (stops) => d3.piecewise(d3.interpolateLab, stops);
+
+// Rampas secuenciales: luminosidad monótona de un extremo a otro, legibles sobre fondo claro y oscuro.
+export const RAMPAS = {
+  // población: de índigo profundo a ámbar claro (familia magma, recortada para no tocar el negro)
+  poblacion: t => d3.interpolateMagma(0.14 + 0.84 * t),
+  olivar: lab(['#f2efcf', '#d3d48c', '#9fb25a', '#66903c', '#3a6a33', '#1d4529']),
+  labor: lab(['#fbf0d0', '#f1d184', '#dba446', '#b77425', '#834b17', '#4b2a10']),
+  vina: lab(['#f8e7ee', '#e9b2c6', '#cc7397', '#a2416b', '#6d2147', '#3d1029']),
+  regadio: lab(['#e8f3fb', '#a9d2ef', '#5fa8dc', '#2f7bb8', '#1a5287', '#0f2f55']),
+  monte: lab(['#e7f2ea', '#a9d3b5', '#62a97d', '#2f7a55', '#1b5240', '#0f2f27']),
+  ganado: lab(['#f6ecdd', '#e5c69c', '#c99761', '#a06a3a', '#6d4424', '#3c2414']),
+  trabajo: lab(['#e8f5f2', '#a8dcd1', '#5cb8aa', '#2c8a86', '#1c5e6b', '#143a4b']),
+  cereal: lab(['#fbf2d4', '#f2d68b', '#ddab47', '#b8792a', '#83501b', '#4a2c10']),
+  aceite: lab(['#f3f1d2', '#d8d68e', '#a6b45a', '#6e933d', '#3f6c34', '#1f472a']),
+  vino: lab(['#f8e6ed', '#eab0c4', '#cf6f93', '#a43d66', '#6e1f44', '#3d0f27']),
+};
+
+// Divergentes (anomalías): azul-rojo para temperatura, marrón-verde azulado para lluvia.
+export const DIVERGENTES = {
+  temperatura: t => d3.interpolateRdBu(1 - t),
+  lluvia: t => d3.interpolateBrBG(t),
+};
+
+// Categorías de uso del suelo (uso dominante): tonos distinguibles, ninguno gris (el gris es «sin dato»).
+export const CAT_USOS = {
+  olivar: '#7f9c3a',
+  labor: '#e2b448',
+  cereal: '#e2b448',
+  'viña': '#9b3f68',
+  vina: '#9b3f68',
+  monte: '#2e7059',
+  forestal: '#2e7059',
+  dehesa: '#b48a57',
+  pastos: '#c9a774',
+  prados: '#c9a774',
+  regadio: '#3b8fd0',
+  'regadío': '#3b8fd0',
+  frutales: '#d0663f',
+  huerta: '#4fb3a8',
+  improductivo: '#6f6a7d',
+  otros: '#8a7fa8',
+};
+
+const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+
+export const fmt = {
+  n: v => v == null || !isFinite(v) ? '—' : nf0.format(v),
+  d1: v => v == null || !isFinite(v) ? '—' : nf1.format(v),
+  d2: v => v == null || !isFinite(v) ? '—' : nf2.format(v),
+  pct: v => v == null || !isFinite(v) ? '—' : nf0.format(v * 100) + ' %',
+  pct1: v => v == null || !isFinite(v) ? '—' : nf1.format(v * 100) + ' %',
+  signo: (v, dec = 1) => {
+    if (v == null || !isFinite(v)) return '—';
+    const s = new Intl.NumberFormat('es-ES', { maximumFractionDigits: dec, minimumFractionDigits: dec }).format(Math.abs(v));
+    return (v > 0 ? '+' : v < 0 ? '−' : '±') + s;
+  },
+  grande: v => {
+    if (v == null || !isFinite(v)) return { v: '—', u: '' };
+    if (Math.abs(v) >= 1e6) return { v: nf2.format(v / 1e6), u: 'millones' };
+    if (Math.abs(v) >= 1e4) return { v: nf0.format(v / 1e3), u: 'mil' };
+    return { v: nf0.format(v), u: '' };
+  },
+};
+
+// Escala logarítmica con cortes «redondos» (1, 2, 5 × 10^k) que cubren el dominio.
+export function escalaLog(min, max, interp) {
+  const lo = Math.max(min, 1e-6), hi = Math.max(max, lo * 10);
+  const s = d3.scaleSequentialLog(interp).domain([lo, hi]).clamp(true);
+  const ticks = [];
+  for (let k = Math.floor(Math.log10(lo)); k <= Math.ceil(Math.log10(hi)); k++) {
+    for (const m of [1, 2, 5]) {
+      const v = m * 10 ** k;
+      if (v >= lo * 0.999 && v <= hi * 1.001) ticks.push(v);
+    }
+  }
+  s.ticksRedondos = ticks;
+  return s;
+}
+
+export function escalaLineal(min, max, interp) {
+  const s = d3.scaleSequential(interp).domain([min, max]).clamp(true);
+  s.ticksRedondos = d3.ticks(min, max, 4);
+  return s;
+}
+
+export function escalaDiv(lim, interp) {
+  const s = d3.scaleDiverging(interp).domain([-lim, 0, lim]).clamp(true);
+  s.ticksRedondos = [-lim, -lim / 2, 0, lim / 2, lim];
+  return s;
+}
+
+// Cuantil robusto (sin nulos), útil para fijar dominios sin que un solo valor extremo lo aplaste todo.
+export function cuantil(vals, q) {
+  const a = vals.filter(v => v != null && isFinite(v)).sort((x, y) => x - y);
+  return a.length ? d3.quantileSorted(a, q) : null;
+}
+
+// Leyenda en DOM.
+// spec: {tipo:'continua', escala, titulo, formato, log, nota} | {tipo:'categorias', items:[{color, etiqueta}], titulo}
+export function pintaLeyenda(el, spec, { conEstimado = true, textoEstimado = 'estimado', conReserva = null } = {}) {
+  el.innerHTML = '';
+  if (!spec) return;
+  const h = document.createElement('div');
+  h.className = 'lg-titulo';
+  h.textContent = spec.titulo || '';
+  el.appendChild(h);
+  if (spec.tipo === 'continua') {
+    const s = spec.escala;
+    const [a, b] = [s.domain()[0], s.domain()[s.domain().length - 1]];
+    const bar = document.createElement('div');
+    bar.className = 'lg-barra';
+    const stops = [];
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12;
+      const v = spec.log ? Math.exp(Math.log(a) + t * (Math.log(b) - Math.log(a))) : a + t * (b - a);
+      stops.push(`${s(v)} ${(t * 100).toFixed(1)}%`);
+    }
+    bar.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+    el.appendChild(bar);
+    const tk = document.createElement('div');
+    tk.className = 'lg-ticks';
+    const ticks = spec.ticks || s.ticksRedondos || [a, b];
+    for (const v of ticks) {
+      const t = spec.log ? (Math.log(v) - Math.log(a)) / (Math.log(b) - Math.log(a)) : (v - a) / (b - a);
+      if (t < -0.001 || t > 1.001) continue;
+      const sp = document.createElement('span');
+      sp.style.left = (t * 100) + '%';
+      sp.textContent = (spec.formato || fmt.n)(v);
+      tk.appendChild(sp);
+    }
+    el.appendChild(tk);
+  } else if (spec.tipo === 'categorias') {
+    const ul = document.createElement('ul');
+    ul.className = 'lg-cats';
+    for (const it of spec.items) {
+      const li = document.createElement('li');
+      li.innerHTML = `<i style="background:${it.color}"></i><span></span>`;
+      li.querySelector('span').textContent = it.etiqueta;
+      ul.appendChild(li);
+    }
+    el.appendChild(ul);
+  }
+  const ex = document.createElement('ul');
+  ex.className = 'lg-extra';
+  if (conEstimado) {
+    // la muestra de «estimado» lleva un color de la propia escala, con la trama encima
+    let base = null;
+    if (spec.tipo === 'continua') { const d = spec.escala.domain(); base = spec.escala(spec.log ? Math.sqrt(d[0] * d[d.length - 1]) : (d[0] + d[d.length - 1]) * 0.6); }
+    else if (spec.items && spec.items[0]) base = spec.items[0].color;
+    ex.innerHTML += `<li><i class="sw-est"${base ? ` style="background-color:${base}"` : ''}></i><span>${textoEstimado}</span></li>`;
+  }
+  ex.innerHTML += `<li><i class="sw-nd"></i><span>sin dato (no es cero)</span></li>`;
+  if (conReserva) {
+    const li = document.createElement('li');
+    li.className = 'lg-res';
+    li.innerHTML = '<i class="sw-res"></i><span></span>';
+    li.querySelector('span').textContent = conReserva;
+    ex.appendChild(li);
+  }
+  el.appendChild(ex);
+  if (spec.nota) {
+    const n = document.createElement('p');
+    n.className = 'lg-nota';
+    n.textContent = spec.nota;
+    el.appendChild(n);
+  }
+}

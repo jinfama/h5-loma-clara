@@ -1,0 +1,12 @@
+// publicaciones.js — pinta en publicaciones.html la lista de js/visor4/creditos.js, para que no haya dos listas.
+import { CREDITOS } from '../visor4/creditos.js';
+import { esc, enlaceDe } from './comun.js';
+
+const L = (CREDITOS.publicaciones || []).filter(x => x && x.titulo);
+document.getElementById('in-publicaciones').innerHTML = L.map(x => {
+  const u = enlaceDe(x);
+  return `<li><span class="p6-autor">${esc(x.autores)}${x.anio ? ` (${esc(x.anio)})` : ''}</span>`
+    + `<span class="p6-cita">${esc(x.titulo)}${x.revista ? `. <i>${esc(x.revista)}</i>` : ''}.</span>`
+    + `${u ? `<a class="in-doi" href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>` : ''}`
+    + `${x.nota ? `<span class="p6-uso">${esc(x.nota)}</span>` : ''}</li>`;
+}).join('');

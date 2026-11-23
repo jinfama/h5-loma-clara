@@ -1,0 +1,173 @@
+// trabajo.js — tema «Trabajo»: peso de cada sector (campo, industria, servicios) en el empleo de cada municipio.
+// Datos: data/v2/series/empleo.json → v[sector][ine][año]; e, m, x por municipio (un carácter por año);
+// excepciones = [ine, año, sector, m, q, e] cuando un sector se aparta del resto.
+
+import { RAMPAS, escalaLineal, fmt } from '../escalas.js';
+import { estadoPorReady, AVISO } from './base.js';
+import { entero } from '../../atlas2/fmt.js';
+
+const SECT = {
+  agricultura: { etiqueta: 'Campo', largo: 'agricultura', rampa: RAMPAS.trabajo },
+  industria: { etiqueta: 'Industria', largo: 'industria', rampa: RAMPAS.regadio },
+  servicios: { etiqueta: 'Servicios', largo: 'servicios', rampa: RAMPAS.vina },
+};
+
+const T = {
+  id: 'trabajo',
+  kicker: 'Timelapse 06 · Trabajo',
+  titulo: 'Trabajo',
+  subtitulo: 'Qué parte del empleo de cada municipio estaba en el campo, y cómo se fue vaciando.',
+  entradilla: 'Parte del empleo de cada municipio en cada sector. Los años marcados son los de censo; entre medias, la serie sale de un modelo (no de una recta) y va rayada.',
+  periodo: '1787 – 2025',
+  acento: '#2c8a86',
+  rampa: RAMPAS.trabajo,
+  estado: estadoPorReady(['empleo'], 'data/v2/series/empleo.json', '1787 en revisión'),
+  vistas: [
+    { id: 'agricultura', etiqueta: 'Campo' },
+    { id: 'anual', etiqueta: 'Campo, año a año' },
+    { id: 'industria', etiqueta: 'Industria' },
+    { id: 'servicios', etiqueta: 'Servicios' },
+  ],
+  textoEstimado: 'estimado (modelo, reparto o proxy)',
+};
+
+let D, NOMBRE, EXC, ESC = {};
+
+T.cargar = async ({ cargar, geo }) => {
+  D = await cargar('series/empleo.json');
+  NOMBRE = new Map(geo.objects.municipios.geometries.map(g => [g.properties.c, g.properties.n]));
+  EXC = new Map(D.excepciones.map(([c, a, s, m, q, e]) => [`${c}|${a}|${s}`, { m, q, e }]));
+  for (const [k, s] of Object.entries(SECT)) ESC[k] = escalaLineal(0, 1, s.rampa);
+};
+
+const sectorDe = v => v === 'anual' ? 'agricultura' : v;
+
+// motivo de un hueco: 'n' (no consta en el diccionario en esa fecha) o 'p' (municipio posterior a la fecha); esas celdas son
+// «sin dato» aunque el modelo tuviera cifra: no se pintan, no se suman y no cuentan como municipios con dato
+const motivo = (c, j) => { const m = D.motivo_null && D.motivo_null[c] && D.motivo_null[c][j]; return m === 'n' || m === 'p' ? m : null; };
+
+function cuota(c, j, sec) {
+  if (motivo(c, j)) return null;
+  let tot = 0, x = null;
+  for (const s of D.sectores) {
+    const v = D.v[s][c] && D.v[s][c][j];
+    if (v == null) return null;
+    tot += v;
+    if (s === sec) x = v;
+  }
+  return tot > 0 ? { v: x / tot, x, tot } : null;
+}
+function estimado(c, j, a) {
+  let e = D.e[c] && D.e[c][j] === '1';
+  for (const s of D.sectores) { const ex = EXC.get(`${c}|${a}|${s}`); if (ex && ex.e === 1) e = true; }
+  return e;
+}
+
+T.preparar = (vista) => {
+  const obs = D.anios_observados;
+  const ultimo = D.anios[D.anios.length - 1];
+  const anios = vista === 'anual' ? D.anios : [...obs, ...(obs.includes(ultimo) ? [] : [ultimo])];
+  T.fotogramas = anios.map(a => {
+    const j = D.anios.indexOf(a);
+    const fo = D.fuentes_observadas[String(a)];
+    const f = { clave: String(a), anio: a, etiqueta: String(a), j, hito: obs.includes(a), avisos: [] };
+    f.fuentes = fo ? fo.map(x => x[0]) : [];
+    if (fo) f.nota = `Qué se cuenta: ${fo.map(x => x[1]).join('; ')}. Cada censo define el empleo a su manera: la comparación es aproximada.`;
+    else {
+      const cnt = {}; for (const c of D.ine) { const m = D.m[c][j]; cnt[m] = (cnt[m] || 0) + 1; }
+      const dom = Object.entries(cnt).sort((x, y) => y[1] - x[1])[0][0];
+      f.nota = `Año sin censo: ${D.metodos[dom] ? D.metodos[dom].texto : dom}.`;
+      f.avisos.push(AVISO.estimado('Año sin censo: estimado'));
+      f.estimado = true;
+    }
+    if (a < 1842) { f.revision = true; f.avisos.unshift(AVISO.revision); }
+    if (a === 1787) f.avisos.push(AVISO.accent('Solo varones, por oficio'));
+    return f;
+  });
+  T.temporal = true;
+  T.frases = frases(vista);
+};
+
+T.relleno = (i, vista) => {
+  const f = T.fotogramas[i], sec = sectorDe(vista), s = ESC[sec];
+  return (c) => {
+    const r = cuota(c, f.j, sec);
+    return r ? { color: s(r.v), est: estimado(c, f.j, f.anio) } : { nd: true };
+  };
+};
+
+function region(j, sec) {
+  let x = 0, t = 0, n = 0, ne = 0, nm = 0;
+  for (const c of D.ine) {
+    if (motivo(c, j)) { nm++; continue; }
+    const r = cuota(c, j, sec); if (!r) continue;
+    x += r.x; t += r.tot; n++; if (estimado(c, j, D.anios[j])) ne++;
+  }
+  return { v: t ? x / t : null, t, n, ne, nm };
+}
+
+T.cifra = (i, vista) => {
+  const f = T.fotogramas[i], sec = sectorDe(vista), r = region(f.j, sec);
+  return { valor: fmt.pct(r.v), unidad: '', etiqueta: `del empleo de Andalucía en ${SECT[sec].largo} · ${entero(r.n)} municipios con dato${r.ne ? `, ${entero(r.ne)} estimados` : ''}${r.nm ? ` · ${entero(r.nm)} sin dato porque no constan o aún no existían` : ''}` };
+};
+
+T.serie = (vista) => T.fotogramas.map((f, i) => ({ i, v: region(f.j, sectorDe(vista)).v }));
+T.sparkCero = true;
+T.valor = (i, c, vista) => {
+  const f = T.fotogramas[i], r = cuota(c, f.j, sectorDe(vista));
+  return r ? { v: r.v, est: estimado(c, f.j, f.anio) } : null;
+};
+T.unidadDe = () => '% del empleo';
+T.escalaDe = (vista) => ESC[sectorDe(vista)] || null;
+
+T.leyenda = (i, vista) => ({ tipo: 'continua', escala: ESC[sectorDe(vista)], titulo: `${SECT[sectorDe(vista)].etiqueta} · % del empleo del municipio`, formato: v => fmt.pct(v), ticks: [0, 0.25, 0.5, 0.75, 1] });
+
+T.detalle = (i, c, d) => {
+  const f = T.fotogramas[i], nombre = NOMBRE.get(c) || d.n;
+  const vista = T._v || 'agricultura';
+  const r = cuota(c, f.j, sectorDe(vista));
+  const mo = motivo(c, f.j);
+  if (mo) return { titulo: nombre, sub: f.clave, nd: true, lineas: [(D.motivos_null && D.motivos_null[mo]) || (mo === 'n' ? 'No consta en el diccionario en esa fecha' : 'Municipio posterior a la fecha')] };
+  if (!r) return { titulo: nombre, sub: f.clave, nd: true };
+  const l = D.sectores.map(s => `${SECT[s].etiqueta}: ${entero(D.v[s][c][f.j])}`);
+  const m = D.metodos[D.m[c][f.j]];
+  if (estimado(c, f.j, f.anio) && m) l.push(m.texto);
+  const x = D.x[c] && D.x[c][f.j];
+  if (x === 'n') l.push('El diccionario territorial no recoge este municipio en esa fecha');
+  return { titulo: nombre, sub: f.clave, valor: `${fmt.pct(r.v)} en ${SECT[sectorDe(vista)].etiqueta.toLowerCase()}`, est: estimado(c, f.j, f.anio), lineas: l };
+};
+const prep = T.preparar; T.preparar = (v) => { T._v = v; prep(v); };
+
+T.acentoDe = (v, oscuro) => SECT[sectorDe(v)].rampa(oscuro ? 0.42 : 0.72);
+T.ritmo = (i, vista) => {
+  const f = T.fotogramas[i];
+  if (vista === 'anual') return f.hito ? 900 : 90;
+  return f.anio === 1787 ? 3200 : 2000;
+};
+T.visor = (i, v) => `visor.html#cat=empleo&ind=${{ industria: 'pct_ind', servicios: 'pct_ser' }[v] || 'pct_agr'}&view=map&year=${T.fotogramas[i].anio}`;
+
+function frases(vista) {
+  const sec = sectorDe(vista), F = T.fotogramas, out = [];
+  const R = F.map(f => region(f.j, sec).v);
+  const at = a => F.findIndex(f => f.anio === a);
+  if (sec === 'agricultura') {
+    const r0 = region(F[0].j, sec);
+    out.push({ i: 0, texto: `1787: el Censo de Floridablanca cuenta oficios de varones. En los ${entero(r0.n)} municipios con dato, el ${fmt.pct(R[0])} trabaja en el campo.` });
+    const k = R.findIndex((v, n) => n > 0 && v != null && v < 0.5);
+    if (k > 0) out.push({ i: k, texto: `${F[k].clave}: por primera vez en la serie, menos de la mitad del empleo está en el campo.` });
+    const k60 = at(1960), ku = F.length - 1;
+    const mayoria = j => D.ine.filter(c => { const r = cuota(c, j, 'agricultura'); return r && r.v > 0.5; }).length;
+    if (k60 >= 0) out.push({ i: k60, texto: `1960: en ${entero(mayoria(F[k60].j))} municipios más de la mitad del empleo sigue siendo del campo.` });
+    out.push({ i: ku, texto: `${F[ku].clave}: el campo da el ${fmt.pct(R[ku])} del empleo; en ${entero(mayoria(F[ku].j))} municipios aún es más de la mitad.` });
+  } else {
+    out.push({ i: 0, texto: `1787: ${SECT[sec].largo}, el ${fmt.pct(R[0])} de los oficios.` });
+    const ku = F.length - 1;
+    out.push({ i: ku, texto: `${F[ku].clave}: ${SECT[sec].largo}, el ${fmt.pct(R[ku])} del empleo de Andalucía.` });
+  }
+  out.sort((a, b) => a.i - b.i);
+  const span = vista === 'anual' ? 25 : 2;
+  out.forEach((x, n) => { const nx = out[n + 1] ? out[n + 1].i - 1 : F.length - 1; x.hasta = Math.min(nx, x.i + span - 1); });
+  return out;
+}
+
+export default T;

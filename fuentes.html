@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fuentes y método · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Qué indicadores tiene el Atlas Histórico de Andalucía, de qué fuentes salen, con su enlace, y cómo leer el visor.">
+  <meta name="theme-color" content="#0f3b2c">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/atlas2.css">
+  <link rel="stylesheet" href="css/fuentes.css">
+  <link rel="stylesheet" href="css/paginas6.css">
+</head>
+<body class="p6">
+  <nav class="p6-nav" aria-label="Atlas">
+    <a class="p6-marca" href="index.html"><span class="p6-sello" aria-hidden="true"></span>Atlas Histórico de Andalucía</a>
+    <ul>
+      <li><a href="visor.html">Visor</a></li>
+      <li><a href="info.html" aria-current="true">Info</a></li>
+    </ul>
+  </nav>
+  <main id="main">
+    <div class="p6-wrap">
+    <header class="p6-cab">
+      <p class="p6-pre">Fuentes y método</p>
+      <h1>De dónde sale cada cifra</h1>
+      <p class="p6-lede">Los indicadores del atlas, qué mide cada uno y de qué fuente sale; la lista de fuentes con su enlace;
+        y cómo leer lo que enseña el visor.</p>
+      <p class="p6-nota" id="autoria">Datos: unidad Andalucía histórica (Juan Infante-Amate y equipo); visor: Atlas Histórico de Andalucía v2.</p>
+      <ul class="p6-toc" aria-label="En esta página">
+        <li><a href="#indicadores">Indicadores</a></li><li><a href="#fuentes">Fuentes</a></li>
+        <li><a href="#origen">De dónde sale cada dato</a></li><li><a href="#leer">Cómo leer el visor</a></li>
+      </ul>
+    </header>
+
+    <section class="p6-sec" id="indicadores" aria-labelledby="h-ind">
+      <h2 id="h-ind">Indicadores</h2>
+      <p class="p6-intro">Por tema, lo que el visor enseña: qué mide cada indicador, en qué unidad, qué años cubre, por qué
+        unidades territoriales se puede ver y de qué fuente original sale. <span id="n-indicadores"></span></p>
+      <div id="indicadores-lista"><p class="p6-nota">Leyendo el catálogo…</p></div>
+    </section>
+
+    <section class="p6-sec" id="fuentes" aria-labelledby="h-fu">
+      <h2 id="h-fu">Fuentes</h2>
+      <p class="p6-intro">Las fuentes originales de las cifras y de las capas, con su enlace (DOI o dirección web) cuando
+        consta. Donde no hay enlace comprobado se dice. <span id="n-fuentes"></span></p>
+      <label class="p6-sr" for="bib-buscar">Buscar una fuente</label>
+      <input class="p6-buscar" id="bib-buscar" type="search" placeholder="Buscar: Ensenada, INE, censo, ganado…">
+      <ul class="p6-bib" id="bib-lista"></ul>
+    </section>
+
+    <section class="p6-sec" id="origen" aria-labelledby="h-origen">
+      <h2 id="h-origen">De dónde sale cada dato</h2>
+      <p class="p6-intro">Qué se toma de otros trabajos y qué se estima aquí, bloque a bloque.</p>
+      <dl class="p6-origen" id="origen-lista"></dl>
+    </section>
+
+    <section class="p6-sec" id="leer" aria-labelledby="h-leer">
+      <h2 id="h-leer">Cómo leer el visor</h2>
+      <p class="p6-intro">Cada cifra lleva su clase. El mapa sale liso; la ficha y el recuadro al pasar el puntero dicen
+        siempre la clase de cada cifra.</p>
+      <div class="p6-leer">
+        <div><b><i class="p6-sw" style="background:#8a9a8c"></i>Observado</b>La cifra tal como la da la fuente.</div>
+        <div><b><i class="p6-sw" style="background:#8a9a8c"></i>Calculado de originales</b>Una suma, una conversión de unidades o un estadístico de una capa, sin ningún supuesto. Va liso, como lo observado.</div>
+        <div><b><i class="p6-sw" style="background:color-mix(in srgb,#8a9a8c 48%,#fff)"></i>Estimado</b>Lleva un supuesto: interpolación entre censos, reparto, modelo.</div>
+        <div><b><i class="p6-sw" style="background:color-mix(in srgb,#8a9a8c 74%,#fff)"></i>Parcialmente estimado</b>Solo en provincias, partidos y Andalucía: una parte de la cifra es estimada. La ficha da el porcentaje.</div>
+        <div><b><i class="p6-sw" style="background:#c6c2b6;outline:1.4px dashed #3a403b;outline-offset:-1.4px"></i>Suma parcial</b>Un total al que le faltan unidades: «suma parcial: 592 de 654». No es el total.</div>
+        <div><b><i class="p6-sw" style="background:#8a9a8c;box-shadow:inset 0 0 0 2px #c27c0e"></i>Con reserva</b>La base acepta la tabla con una reserva, cuyo texto literal sale en los avisos. En el mapa, un contorno ocre.</div>
+        <div><b>1752 y 1787</b>La población de esas fechas está construida con las decisiones firmadas; pendiente de la aceptación de conjunto del responsable de la base. Se dice en los avisos de cada año.</div>
+        <div><b><i class="p6-sw a2-trama-sindato"></i>Sin dato</b>Casilla vacía. No es un cero: gris con trama cruzada.</div>
+        <div><b>Sin dato a este nivel</b>La fuente no da esa cifra para esa unidad territorial (por ejemplo, el ganado de 1891 por municipio). Prueba otra.</div>
+        <div><b>Geometría histórica</b>Los términos históricos se dibujan uniendo recintos de hoy (geometría aceptada por decisión firmada del responsable de la base): no son los límites observados y cada línea dice su fiabilidad; los de 1752 y 1787, con límites supuestos.</div>
+        <div><b>Años interpolados</b>La barra de tiempo enseña los años con cifra de fuente; el interruptor «Años interpolados» añade los demás. Donde la base no interpola, la pista lo dice.</div>
+        <div><b>Capas</b>Relieve, ríos, transporte y fronteras son capas, no datos por municipio. Las de transporte son heredadas o candidatas, sin revisar: no sirven para análisis.</div>
+      </div>
+    </section>
+    </div>
+
+    <div class="p6-wrap">
+    </div>
+
+    <footer class="p6-wrap p6-pie" id="pie"></footer>
+  </main>
+  <script type="module" src="js/fuentes/main.js"></script>
+</body>
+</html>

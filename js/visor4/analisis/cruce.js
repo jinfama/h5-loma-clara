@@ -1,0 +1,258 @@
+// cruce.js — junta las cifras de varios indicadores por unidad, con su marca, para la vista «Análisis».
+// Reglas (docs/v2/ANALISIS_PRUEBAS.md, «Reglas de cruce»):
+//  · solo se cruzan cifras del MISMO nivel y del mismo año; con ventana, del año más cercano dentro de ella (se dice cuál);
+//  · cada variable usa su año (anios.js): el del análisis, uno fijo o la media de un periodo; un indicador fijo («de
+//    hoy», geografía) vale para cualquier año y se dice;
+//  · lo que no tiene cifra no entra (nunca se convierte en cero) y se cuenta;
+//  · cada cifra lleva su marca (observada, calculada, estimada, parcialmente estimada, suma parcial, con reserva).
+// Nada de aquí estima cifras: solo lee y empareja.
+
+/* global topojson */
+import { masCercano, aniosComunes, anioUsado, etiquetaAnio, mediaPeriodo, aniosDelPeriodo } from './anios.js';
+import { cargar } from '../../atlas2/data.js';
+import { esCategorico } from '../../visor3/escala.js';
+import { aniosBase } from '../../visor3/datos.js';
+import { etiquetaFecha } from '../../fronteras/datos.js';
+
+export const PROV = ['04', '11', '14', '18', '21', '23', '29', '41'];
+export const NOMBRE_PROV = { '04': 'Almería', '11': 'Cádiz', '14': 'Córdoba', '18': 'Granada', '21': 'Huelva', '23': 'Jaén', '29': 'Málaga', '41': 'Sevilla' };
+// ocho tonos para las provincias, sin verdes (el verde andaluz queda para la interfaz). Validados TODOS los pares (no solo
+// los vecinos: en un gráfico de dispersión o con el filtro cualquier pareja puede salir junta) con el validador de la
+// skill dataviz: visión normal ΔE ≥ 16,4; protanopía y deuteranopía ΔE ≥ 8,0; tritanopía ≥ 10,1. Tres tonos claros
+// (celeste, oro, rosa) quedan por debajo de 3:1 sobre blanco: van siempre con leyenda y nombre al lado.
+export const COLOR_PROV = { '04': '#db640e', '11': '#22bef3', '14': '#77319b', '18': '#c01249', '21': '#c8ad2f', '23': '#2a5cda', '29': '#f97cc1', '41': '#9d6fe3' };
+
+export const MARCA = { 0: 'observada', 3: 'calculada de originales', 1: 'estimada', 4: 'parcialmente estimada', 5: 'suma parcial', 2: 'con reserva o en revisión', '.': 'sin dato' };
+export { esEst } from './filtro.js';
+
+// ---------------------------------------------------------------- catálogo
+/** ¿Se puede analizar? Indicadores con cifras (no capas, no categorías, no normales mensuales). */
+export function analizable(ent) {
+  return !!ent && !ent.proveedor && !ent.mensual && !esCategorico(ent) && !/^capa_|^fronteras$/.test(ent.id) && Array.isArray(ent.anios) && ent.anios.length > 0;
+}
+/** ¿Tiene fichero con cifras en ese nivel? */
+export function enNivel(ent, nivel) {
+  if (!ent) return false;
+  const sin = ent.niveles_sin_dato || [];
+  if (sin.includes(nivel)) return false;
+  return (ent.niveles_en_disco || ent.niveles || []).includes(nivel);
+}
+/** ¿Tienen algún año en común (dentro de la ventana) según el catálogo? Un indicador fijo casa con cualquiera. */
+export function compartenAnio(a, b, interp = false, ventana = 0) {
+  if (!a || !b) return false;
+  if (fijo(a) || fijo(b)) return true;
+  const ys = e => ((!interp && Array.isArray(e.anios_fuente) && e.anios_fuente.length ? e.anios_fuente : e.anios) || []).map(Number);
+  const yb = ys(b);
+  return ys(a).some(x => yb.some(y => Math.abs(x - y) <= ventana));
+}
+export const fijo = ent => !!(ent && (ent.estatico || (ent.anios || []).length === 1 && +ent.anios[0] >= 2026));
+
+/** Años que se pueden usar de un indicador: los de fuente (o todos, con «años interpolados»). */
+export function aniosUsables(ent, file, interp) {
+  const base = (file ? aniosBase(file) : ent.anios || []).filter(a => /^\d{4}$/.test(String(a))).map(Number);
+  if (interp || !Array.isArray(ent.anios_fuente) || !ent.anios_fuente.length) return base;
+  const f = new Set(ent.anios_fuente.map(Number));
+  const r = base.filter(a => f.has(a));
+  return r.length ? r : base;
+}
+// el año de cada variable (reglas, plan de años, media de un periodo): anios.js, puro
+export { masCercano, anioUsado, etiquetaAnio, planAnios, leerReglas, textoReglas, avisoAnios, aniosDelPeriodo } from './anios.js';
+/** Distancia mínima entre dos listas de años (para decir qué ventana haría falta). */
+export function distanciaMinima(a, b) {
+  let d = Infinity;
+  for (const x of a) for (const y of b) d = Math.min(d, Math.abs(x - y));
+  return d;
+}
+
+// ---------------------------------------------------------------- unidades de un nivel (nombre, provincia, superficie)
+const UNI = new Map();
+/** Map id → {id, nombre, prov, ha} y la geometría ({topo, objeto, idDe}) del nivel (en `termino`, del corte). */
+export async function unidades(ctx, nivel, { corte = null, geoRuta = null } = {}) {
+  const clave = nivel === 'termino' ? `termino:${corte}` : nivel;
+  if (UNI.has(clave)) return UNI.get(clave);
+  const p = (async () => {
+    let topo, objeto, idDe;
+    if (nivel === 'termino') {
+      topo = await cargar(geoRuta || `geo/terminos/${corte}.topo.json`);
+      objeto = 'terminos'; idDe = q => q.u;
+    } else {
+      const g = await ctx.niveles.geometria(nivel);
+      topo = g.topo; objeto = g.objeto; idDe = g.idDe;
+    }
+    const m = new Map();
+    let haProv = null;
+    if (nivel === 'provincia') {
+      haProv = {};
+      for (const g of topo.objects.municipios.geometries) { const q = g.properties || {}; if (q.ha != null) haProv[q.p] = (haProv[q.p] || 0) + q.ha; }
+    }
+    for (const g of topo.objects[objeto].geometries) {
+      const q = g.properties || {};
+      const id = String(idDe(q));
+      let nombre = q.n || q.nombre || id;
+      if (nivel === 'termino' || /^ue\d{4}$/.test(nivel)) nombre = etiquetaFecha(q) || nombre;
+      const prov = nivel === 'provincia' ? id : String(q.p || q.pv || (q.pz && q.pz[0]) || (/^\d{5}$/.test(id) ? id : '')).slice(0, 2) || null;
+      m.set(id, { id, nombre, prov: PROV.includes(prov) ? prov : null, ha: nivel === 'provincia' ? haProv[id] ?? null : (q.ha ?? null) });
+    }
+    return { mapa: m, topo, objeto, idDe, clave };
+  })();
+  UNI.set(clave, p);
+  p.catch(() => UNI.delete(clave));
+  return p;
+}
+
+// ---------------------------------------------------------------- una cifra con su marca
+function celdaDe(c, k) {
+  const v = c.v[k];
+  const f = v == null ? '.' : ((c.f || '')[k] || '0');
+  const ex = c.extra ? c.extra(k) : {};
+  const parcial = (ex.parcial && ex.parcial.n != null && ex.parcial.n < ex.parcial.m) ? ex.parcial : (f === '5' ? { n: null, m: null } : null);
+  let res = null;
+  if (f === '2') { const r = c.res && c.res.get(k); res = r ? (r.rotulo || 'con reserva') : 'en revisión'; }
+  const mot = v == null && c.mot && c.mot.get(k) ? c.textoMotivo(c.mot.get(k)) : null;
+  return { v: v == null ? null : +v, f, parcial, pe: ex.pe ?? null, res, mot, q: ex.q || null };
+}
+
+// ---------------------------------------------------------------- cruce
+const FILE = new Map();
+export async function fichero(ctx, ind, nivel) {
+  const k = ind + '__' + nivel;
+  if (!FILE.has(k)) { const p = ctx.datos.valores(ind, nivel).catch(() => null); FILE.set(k, p); }
+  return FILE.get(k);
+}
+
+/** Prepara las variables: {ent, file, usables, fijo} de cada id. Error en texto si alguna no está en el nivel. */
+export async function preparar(ctx, ids, nivel, interp) {
+  const out = [];
+  for (const id of ids) {
+    const ent = ctx.datos.indicador(id);
+    if (!analizable(ent)) return { error: `«${ent ? ent.rotulo : id}» no es una cifra que se pueda cruzar.` };
+    if (!enNivel(ent, nivel)) return { error: `«${ent.rotulo}» no tiene cifras por esta unidad territorial.`, falta: id };
+    const file = await fichero(ctx, id, nivel);
+    if (!file) return { error: `No se ha podido leer «${ent.rotulo}» por esta unidad territorial.`, falta: id };
+    out.push({ id, ent, file, usables: aniosUsables(ent, file, interp), fijo: fijo(ent) });
+  }
+  return { vars: out };
+}
+
+/** Años en que se puede cruzar: los años de cualquiera de los indicadores en que todos tienen cifra en ese año o, con
+ *  ventana, en uno a esa distancia como mucho. Si dos años dan la misma combinación de años usados, queda el primero
+ *  (la reproducción no repite fotogramas). Los indicadores fijos («de hoy») valen para cualquier año. */
+export function aniosCruce(vars, ventana) { return aniosComunes(vars, ventana); }
+
+/** Media de un periodo como si fuera un corte más (ids, v, f, motivos y fuentes de sus años). No en municipio histórico. */
+const MEDIA = new Map();
+export function corteMedia(ctx, v, r, nivel) {
+  const clave = [v.id, nivel, r.d, r.h, v.usables.join('|')].join('__');
+  if (MEDIA.has(clave)) return MEDIA.get(clave);
+  const porAnio = [], fuentes = new Set();
+  for (const a of aniosDelPeriodo(v, r)) {
+    const c = ctx.datos.corteDe(v.file, a);
+    if (!c) continue;
+    const celdas = new Map();
+    c.ids.forEach((id, k) => { if (c.v[k] != null) celdas.set(String(id), { v: +c.v[k], f: (c.f || '')[k] || '0' }); });
+    porAnio.push({ anio: a, celdas });
+    (c.fuentes || []).forEach(f => fuentes.add(f));
+  }
+  const med = mediaPeriodo(porAnio);
+  const ids = [...med.keys()];
+  const mot = new Map(), res = new Map();
+  ids.forEach((id, k) => {
+    const q = med.get(id);
+    if (q.v == null) mot.set(k, `con cifra en ${q.n} de los ${q.m} años del periodo: hace falta el 80 %`);
+    if (q.f === '2') res.set(k, { rotulo: 'alguna cifra del periodo tiene reserva o está en revisión' });
+  });
+  const c = {
+    corte: null, ids, v: ids.map(id => med.get(id).v), f: ids.map(id => med.get(id).f), mot, res, textoMotivo: x => x,
+    fuentes: fuentes.size ? [...fuentes] : v.ent.fuentes || [], nota: `media de ${porAnio.length} años (${r.d}-${r.h}) por unidad, si tiene cifra en al menos el 80 % de ellos`,
+    media: { d: r.d, h: r.h, m: porAnio.length },
+  };
+  MEDIA.set(clave, c);
+  return c;
+}
+
+/** Filas del cruce en el año t: una por unidad del universo (las del nivel; en `termino`, las del corte de la variable
+ *  de referencia). Cada variable usa su año según su regla (anios.js): el del análisis, uno fijo o la media de un periodo. */
+export async function cruzar(ctx, vars, nivel, t, ventana) {
+  const usos = vars.map(v => anioUsado(v, t, v.ventana ?? ventana));
+  if (usos.some(a => a == null)) return null;
+  const usados = usos.map(u => (typeof u === 'object' ? etiquetaAnio(u) : u));
+  const cortes = vars.map((v, j) => (typeof usos[j] === 'object' ? corteMedia(ctx, v, usos[j], nivel) : ctx.datos.corteDe(v.file, usos[j])));
+  if (cortes.some(c => !c)) return null;
+  const conCorte = j => typeof usos[j] === 'number';
+  const ancla = vars.find((v, j) => v.ancla && conCorte(j)) || vars.find((v, j) => !v.fijo && conCorte(j)) || vars[0];
+  const cA = cortes[vars.indexOf(ancla)];
+  const uni = await unidades(ctx, nivel, nivel === 'termino' ? { corte: cA.corte, geoRuta: cA.geo } : {});
+  const pos = cortes.map(c => new Map(c.ids.map((id, k) => [String(id), k])));
+  const filas = [];
+  for (const [id, u] of uni.mapa) {
+    const vals = cortes.map((c, j) => { const k = pos[j].get(id); return k == null ? { v: null, f: '.', parcial: null, res: null, mot: 'la unidad no está en el fichero de este año', pe: null } : celdaDe(c, k); });
+    filas.push({ ...u, vals });
+  }
+  const cortesDistintos = nivel === 'termino' && new Set(cortes.filter((c, j) => !vars[j].fijo && conCorte(j)).map(c => c.corte)).size > 1;
+  return {
+    anio: t, usados, filas, uni, cortes, cortesDistintos,
+    fuentes: vars.map((v, j) => (cortes[j].fuentes && cortes[j].fuentes.length ? cortes[j].fuentes : v.ent.fuentes || [])),
+    notas: vars.map((v, j) => cortes[j].nota || ''),
+  };
+}
+
+// ---------------------------------------------------------------- filtros y recuento (js/visor4/analisis/filtro.js, puro)
+export { filtrar, predicadoFiltro } from './filtro.js';
+
+/** Partido judicial de 1888 de cada unidad (Map id → id de partido), de visor/pertenencia.json: municipio de hoy,
+ *  partido (él mismo) o término de un corte (el partido que reúne más municipios de la unidad). null si no se puede. */
+export async function partidosDe(ctx, nivel, corte = null) {
+  const per = await ctx.datos.pertenencia();
+  if (!per || !per.niveles || !per.niveles.pj1888) return null;
+  const ids = per.niveles.pj1888.ids, m = new Map();
+  if (nivel === 'municipio' && per.municipio && per.municipio.pj1888) per.ine.forEach((c, k) => m.set(String(c), per.municipio.pj1888[k]));
+  else if (nivel === 'pj1888') ids.forEach(id => m.set(String(id), id));
+  else if (nivel === 'termino' && corte && per.unidades_por_corte && per.unidades_por_corte[corte] && per.unidad_a_partido && per.unidad_a_partido.pj1888 && per.unidad_a_partido.pj1888[corte]) {
+    const us = per.unidades_por_corte[corte], ap = per.unidad_a_partido.pj1888[corte];
+    us.forEach((u, k) => { if (ap[k] != null && ap[k] >= 0) m.set(String(u), ids[ap[k]]); });
+  } else return null;
+  return m.size ? m : null;
+}
+/** Lista de partidos judiciales de 1888: [{id, nombre}]. */
+export async function listaPartidos(ctx) {
+  const per = await ctx.datos.pertenencia();
+  const n = per && per.niveles && per.niveles.pj1888;
+  return n ? n.ids.map((id, k) => ({ id, nombre: n.nombres[k] })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')) : [];
+}
+
+// ---------------------------------------------------------------- pesos
+/** Pesos por unidad: población (habitantes del mismo nivel, del año más cercano con cifra) o superficie oficial
+ *  (superficie_ha de la base; en provincia, la suma de la de sus municipios). */
+export async function pesos(ctx, tipo, nivel, cr) {
+  if (!tipo) return null;
+  if (tipo === 'sup') {
+    const m = new Map();
+    for (const [id, u] of cr.uni.mapa) if (u.ha > 0) m.set(id, u.ha);
+    return { mapa: m, texto: nivel === 'provincia' ? 'superficie oficial (suma de la de sus municipios)' : 'superficie oficial del término', anio: null, fuentes: [] };
+  }
+  const ent = ctx.datos.indicador('poblacion_hab');
+  if (!ent || !enNivel(ent, nivel)) return { mapa: new Map(), texto: 'población (no hay cifras de habitantes por esta unidad)', anio: null, fuentes: [] };
+  const file = await fichero(ctx, 'poblacion_hab', nivel);
+  if (!file) return { mapa: new Map(), texto: 'población (sin fichero)', anio: null, fuentes: [] };
+  const lista = aniosBase(file).map(Number);
+  const a = masCercano(lista, cr.anio, 1e9);
+  const c = ctx.datos.corteDe(file, a);
+  const m = new Map();
+  c.ids.forEach((id, k) => { if (c.v[k] > 0) m.set(String(id), +c.v[k]); });
+  return { mapa: m, texto: `habitantes de ${a}${a !== cr.anio ? ' (el año más cercano con cifra)' : ''}`, anio: a, fuentes: c.fuentes || ent.fuentes || [] };
+}
+
+// ---------------------------------------------------------------- vecindad por contigüidad (topojson.neighbors)
+const VEC = new WeakMap();
+/** Vecinos de cada unidad del nivel: las que comparten un tramo de límite (contigüidad «de torre» por arcos
+ *  compartidos del TopoJSON). Map id → [ids]. */
+export function vecinos(uni) {
+  if (VEC.has(uni)) return VEC.get(uni);
+  const geoms = uni.topo.objects[uni.objeto].geometries;
+  const nb = topojson.neighbors(geoms);
+  const ids = geoms.map(g => String(uni.idDe(g.properties || {})));
+  const m = new Map();
+  ids.forEach((id, i) => m.set(id, [...new Set(nb[i].map(j => ids[j]).filter(x => x !== id))]));
+  VEC.set(uni, m);
+  return m;
+}

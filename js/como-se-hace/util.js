@@ -1,0 +1,86 @@
+// Atlas Histórico de Andalucía · «Cómo se hace»: utilidades de dibujo comunes a las seis escenas.
+export const d3 = window.d3;
+export const topojson = window.topojson;
+
+export const COLOR = {
+  fuente: '#007a3d', tomado: '#2f6fa8', estimado: '#c46f14', mal: '#b3261e',
+  tinta: '#101010', gris: '#6b6b6b', linea: '#e3e3e3', panel: '#f4f4f1', papel: '#f7f2e6',
+  obs: '#e5484d', est: '#f4aeb1',   // color fuerte y claro con que el visor pinta la población
+};
+
+/** Número con punto de millares y coma decimal, también con cuatro cifras (Intl no agrupa 2.170 en español). */
+export function N(x, d = 0) {
+  const [e, f] = Math.abs(x).toFixed(d).split('.');
+  return (x < 0 ? '−' : '') + e.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '');
+}
+export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/** Marca un elemento como visible solo entre los subpasos a y b. */
+export const vis = (sel, a, b = 99) => sel.attr('data-a', a).attr('data-b', b);
+export function aplicar(root, sub) {
+  root.querySelectorAll('[data-a]').forEach(el => {
+    el.classList.toggle('on', sub >= +el.dataset.a && sub <= +el.dataset.b);
+  });
+}
+
+export function txt(g, x, y, s, cls = '', anchor = 'start') {
+  return g.append('text').attr('x', x).attr('y', y).attr('class', cls).attr('text-anchor', anchor).text(s);
+}
+
+/** Reduce la letra de un texto SVG hasta que quepa en max píxeles. */
+export function ajusta(sel, max) {
+  const n = sel.node(), L = n.getComputedTextLength();
+  if (L > max && max > 0) sel.style('font-size', (parseFloat(getComputedStyle(n).fontSize) * max / L).toFixed(1) + 'px');
+  return sel;
+}
+
+// ---------- tooltip ---------------------------------------------------------------------------------------------------
+const tipEl = () => document.getElementById('ch-tip');
+export function tipVer(ev, html) {
+  const t = tipEl();
+  t.innerHTML = html;
+  t.hidden = false;
+  const r = t.getBoundingClientRect();
+  const x = Math.min(ev.clientX + 14, innerWidth - r.width - 8);
+  const y = ev.clientY - r.height - 12 < 8 ? ev.clientY + 16 : ev.clientY - r.height - 12;
+  t.style.left = Math.max(8, x) + 'px';
+  t.style.top = y + 'px';
+}
+export function tipOcultar() { const t = tipEl(); if (t) t.hidden = true; }
+export function tip(sel, fn) {
+  sel.on('pointerenter pointermove', (ev, d) => tipVer(ev, fn(d))).on('pointerleave', tipOcultar);
+  return sel;
+}
+
+// ---------- ejes -------------------------------------------------------------------------------------------------------
+export function ejeX(g, x, y, marcas) {
+  g.append('line').attr('class', 'g-base').attr('x1', x.range()[0]).attr('x2', x.range()[1]).attr('y1', y).attr('y2', y);
+  marcas.forEach(m => {
+    g.append('line').attr('class', 'g-base').attr('x1', x(m)).attr('x2', x(m)).attr('y1', y).attr('y2', y + 4);
+    txt(g, x(m), y + 17, String(m), 't-eje', 'middle');
+  });
+}
+export function ejeY(g, y, x0, x1, marcas, fmt = v => N(v)) {
+  marcas.forEach(m => {
+    g.append('line').attr('class', 'g-rej').attr('x1', x0).attr('x2', x1).attr('y1', y(m)).attr('y2', y(m));
+    txt(g, x0, y(m) - 4, fmt(m), 't-eje');
+  });
+}
+
+/** Cruz con tooltip: al mover el puntero se elige el punto más cercano en horizontal. */
+export function cruz(g, x, y, puntos, y0, y1, html, a, b) {
+  const c = vis(g.append('g').attr('class', 'ch-cruz'), a, b);
+  const l = c.append('line').attr('y1', y0).attr('y2', y1).style('display', 'none');
+  const p = c.append('circle').attr('r', 5).attr('fill', '#fff').attr('stroke', COLOR.tinta).attr('stroke-width', 2).style('display', 'none');
+  const fuera = () => { l.style('display', 'none'); p.style('display', 'none'); tipOcultar(); };
+  c.append('rect').attr('class', 'ch-hit').attr('x', x.range()[0]).attr('width', x.range()[1] - x.range()[0])
+    .attr('y', y0).attr('height', Math.max(0, y1 - y0))
+    .on('pointerenter pointermove', ev => {
+      const mx = d3.pointer(ev)[0];
+      const d = puntos.reduce((m, q) => (Math.abs(x(q.y) - mx) < Math.abs(x(m.y) - mx) ? q : m));
+      l.attr('x1', x(d.y)).attr('x2', x(d.y)).style('display', null);
+      p.attr('cx', x(d.y)).attr('cy', y(d.v)).style('display', null);
+      tipVer(ev, html(d));
+    })
+    .on('pointerleave', fuera);
+}

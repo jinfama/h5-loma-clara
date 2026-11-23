@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatos · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Relatos con datos del Atlas Histórico de Andalucía: cómo creció y se concentró la población y cómo ha cambiado el olivar, con cada cifra leída de las series del Atlas.">
+  <meta name="theme-color" content="#0f3b2c">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/paginas6.css">
+  <link rel="stylesheet" href="css/relatos.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+  <script type="module" src="js/relatos/main.js"></script>
+</head>
+<body class="p6 rl">
+  <nav class="p6-nav" id="rl-nav" aria-label="Atlas">
+    <a class="p6-marca" href="index.html"><span class="p6-sello" aria-hidden="true"></span>Atlas Histórico de Andalucía</a>
+    <ul>
+      <li><a href="visor.html">Visor</a></li>
+      <li><a href="info.html">Info</a></li>
+    </ul>
+  </nav>
+
+  <main id="main">
+    <div class="p6-wrap rl-wrap">
+      <header class="p6-cab rl-cab" id="rl-cab">
+        <p class="p6-pre" id="rl-pre">Análisis</p>
+        <h1 id="rl-h1">Relatos</h1>
+        <p class="p6-lede" id="rl-lede">Lo que cuentan las series del Atlas cuando se leen de principio a fin. Cada relato parte de un hallazgo, lo sigue con gráficos y mapas al bajar por la página y termina en el visor, donde se puede comprobar.</p>
+        <ul class="rl-tres" id="rl-tres" aria-label="Cómo se marca cada cifra">
+          <li><i class="rl-m rl-m--obs" aria-hidden="true"></i><span><b>Observada</b> en la fuente</span></li>
+          <li><i class="rl-m rl-m--pest" aria-hidden="true"></i><span><b>En parte estimada</b></span></li>
+          <li><i class="rl-m rl-m--est" aria-hidden="true"></i><span><b>Estimada</b> o suma parcial</span></li>
+          <li><i class="rl-m rl-m--sin" aria-hidden="true"></i><span><b>Sin dato</b>, que no es cero</span></li>
+        </ul>
+      </header>
+    </div>
+
+    <noscript><p class="p6-aviso rl-aviso">Esta página necesita JavaScript para leer las cifras y dibujar los gráficos.</p></noscript>
+    <p class="p6-aviso rl-aviso" id="rl-error" role="alert" hidden>No se han podido leer las cifras del Atlas. Recarga la página; sin ellas no se muestra ningún relato.</p>
+    <p class="rl-cargando" id="rl-cargando">Leyendo las cifras del Atlas…</p>
+
+    <section class="p6-wrap rl-wrap rl-portada" id="rl-portada" aria-label="Relatos disponibles" hidden></section>
+
+    <div class="rl-relato" id="rl-relato" hidden>
+      <div class="rl-lienzo" id="rl-lienzo">
+        <div class="rl-lienzo__cab">
+          <p class="rl-lienzo__tit"><span id="rl-num"></span> <b id="rl-titulo"></b></p>
+          <ol class="rl-prog" id="rl-prog" aria-label="Pasos"></ol>
+        </div>
+        <figure class="rl-fig" id="rl-fig" role="img" aria-label="Gráfico del relato">
+          <svg id="rl-svg" class="rl-svg" aria-hidden="true"></svg>
+          <div id="rl-html" class="rl-html"></div>
+        </figure>
+        <p class="rl-fuente" id="rl-fuente"></p>
+      </div>
+      <div class="rl-texto" id="rl-texto"></div>
+    </div>
+
+    <section class="p6-wrap rl-wrap rl-final" id="rl-final" hidden></section>
+  </main>
+
+  <div class="rl-tip" id="rl-tip" role="status" hidden></div>
+</body>
+</html>

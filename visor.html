@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Visor · Atlas Histórico de Andalucía</title>
+  <meta name="description" content="Visor del Atlas Histórico de Andalucía: población, usos del suelo, cosechas, ganado, clima, trabajo, geografía y fronteras, por provincia, partido judicial, municipio histórico y municipio actual, de 1752 a hoy.">
+  <meta name="theme-color" content="#101010">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/visor4.css">
+  <link rel="preload" href="data/v2/visor/indicadores.json" as="fetch" crossorigin="anonymous">
+  <script>
+  // arranque en paralelo: todos los módulos a la vez, y las cifras del mapa inicial sin esperar a nada
+  ['visor4/main.js','visor4/paleta.js','timelapses/escalas.js','visor3/vistas/comun.js','atlas2/fmt.js','visor3/escala.js','visor3/datos.js','atlas2/data.js','visor3/registro.js','visor3/estado.js','visor3/frente.js','visor4/vistas-familia.js','visor3/niveles.js','visor3/motor.js','visor3/proveedores/generico.js','atlas2/leyenda.js','fronteras/datos.js','atlas2/mapa.js','timelapses/temas/base.js','visor3/proveedores/timelapses.js','timelapses/temas/index.js','timelapses/temas/poblacion.js','timelapses/temas/tierra.js','timelapses/temas/cosechas.js','timelapses/temas/ganado.js','timelapses/temas/clima.js','timelapses/temas/trabajo.js','atlas2/fuentes.js','visor4/catalogo.js','visor4/iconos.js','visor4/leyenda.js','visor4/buscador.js','pictos/agro.js','visor4/comparar.js','timelapses/mapa.js','visor4/grises.js','visor4/limites.js','visor4/mapa.js','visor4/representa.js','visor4/relieve3d.js','visor4/acciones.js','visor4/capas.js','visor4/municipio.js','visor3/fronteras/base.js','visor3/ficha/serie.js','fronteras/ficha.js','municipio-analisis/boton.js','visor4/seleccion.js','visor3/vistas/index.js','visor3/vistas/lineas.js','visor3/vistas/tabla.js','visor3/vistas/ranking.js','visor3/vistas/franjas.js','visor3/vistas/climograma.js','visor3/vistas/distribucion.js','visor3/fronteras/index.js','visor3/fronteras/indicador.js','visor3/fronteras/panel.js','fronteras/graficos.js','visor3/mapa/index.js','visor3/ficha/index.js','visor4/isotipo.js','visor4/vista-composicion.js','comun/composicion.js'].forEach(function (m) { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = 'js/' + m; document.head.appendChild(l); });
+  (location.search || location.hash ? [] : ['visor/valores/poblacion_densidad__termino.json', 'visor/valores/poblacion_densidad__andalucia.json', 'geo/terminos/1752.topo.json']).concat(['geo/municipios.topo.json', 'geo/cortes.json', 'reservas.json', 'fuentes.json']).forEach(function (f) { var l = document.createElement('link'); l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = 'anonymous'; l.href = 'data/v2/' + f; document.head.appendChild(l); });
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+</head>
+<body class="v4">
+<a class="v4-saltar" href="#v4-escena">Saltar al mapa</a>
+
+<div class="v4-app" id="v4-app">
+
+  <!-- ======== Barra izquierda: temas ======== -->
+  <nav class="v4-rail" id="v4-rail" aria-label="Temas">
+    <a class="v4-marca" href="index.html" title="Portada del Atlas Histórico de Andalucía">
+      <span class="v4-marca__sello" aria-hidden="true"></span>
+      <span class="v4-marca__txt">Atlas <br>Histórico<br>de Andalucía</span>
+    </a>
+    <button class="v4-rail__todos" id="v4-buscador-abrir" type="button" aria-haspopup="dialog" aria-expanded="false" title="Buscar entre todos los indicadores, con filtros por tema y por escala"><span data-icono="buscar"></span><span class="v4-rail__todos-t">Todos los indicadores</span></button>
+    <ul class="v4-temas" id="v4-temas" role="list"></ul>
+    <div class="v4-rail__pie">
+      <a class="v4-rail__btn v4-rail__info" id="v4-info-abrir" href="info.html" title="Cobertura, cómo se hace, fuentes, equipo, publicaciones y contacto"><span data-icono="info"></span><span>Info</span></a>
+    </div>
+  </nav>
+
+  <!-- ======== Subindicadores del tema ======== -->
+  <aside class="v4-sub" id="v4-sub" aria-labelledby="v4-sub-titulo">
+    <header class="v4-sub__cab">
+      <p class="v4-k">Tema</p>
+      <h2 class="v4-sub__titulo" id="v4-sub-titulo">…</h2>
+      <p class="v4-sub__lead" id="v4-sub-lead"></p>
+    </header>
+    <!-- ronda v12 (Juan): una sola barra a la izquierda; arriba los indicadores del tema, debajo las opciones -->
+    <div class="v4-sub__cuerpo" id="v4-sub-cuerpo">
+    <section class="v4-sec v4-sec--lista" id="v4-sec-lista" aria-labelledby="v4-h-lista">
+      <h2 class="v4-sec__h" id="v4-h-lista">Indicadores</h2>
+      <label class="v4-buscar v4-buscar--sec">
+        <span data-icono="buscar"></span>
+        <input id="v4-buscar" type="search" placeholder="Buscar indicador" autocomplete="off" aria-label="Buscar indicador en todos los temas">
+      </label>
+      <div class="v4-sub__lista" id="v4-sub-lista"></div>
+    </section>
+    </div>
+    <div class="v4-tirador v4-tirador--sub" id="v4-tirador-sub" role="separator" aria-orientation="vertical" aria-controls="v4-sub" aria-label="Ancho de la lista de indicadores: arrastra, o flechas; doble clic para el ancho de serie" tabindex="0"></div>
+    <button class="v4-sub__plegar" id="v4-sub-plegar" type="button" aria-controls="v4-sub" aria-expanded="true" title="Ocultar la barra (tecla O)"><span data-icono="plegarIzq"></span><span class="v4-sr">Ocultar la barra</span></button>
+  </aside>
+
+  <!-- ======== Opciones del mapa (ronda v17, Juan: «que se diferencie indicadores de opciones»): a la derecha ======== -->
+  <aside class="v4-opc" id="v4-opc" aria-labelledby="v4-opc-t">
+    <div class="v4-opc__tirador" id="v4-opc-tirador" role="separator" aria-orientation="vertical" aria-controls="v4-opc" aria-label="Ancho de las opciones: arrastra, o flechas izquierda y derecha; doble clic para el ancho de serie" tabindex="0"></div>
+    <header class="v4-opc__cab">
+      <h2 class="v4-opc__t" id="v4-opc-t">Opciones del mapa</h2>
+      <button type="button" class="v4-opc__cerrar" id="v4-opc-cerrar" aria-controls="v4-opc" title="Plegar las opciones (tecla O)"><span class="v4-sr">Plegar las opciones</span><span data-icono="plegarDer"></span></button>
+    </header>
+    <div class="v4-opc__cuerpo" id="v4-opc-cuerpo">
+    <div class="v4-der__pane" id="v4-pane-opc" aria-label="Opciones">
+      <section class="v4-sec" id="v4-sec-ind" aria-labelledby="v4-h-ind">
+        <h2 class="v4-sec__h" id="v4-h-ind">Opciones de visualización</h2>
+        <div id="v4-ind"></div>
+      </section>
+      <section class="v4-sec" id="v4-sec-vista" aria-labelledby="v4-h-vista" hidden>
+        <h2 class="v4-sec__h" id="v4-h-vista">Opciones de la vista</h2>
+        <div class="v4-opc-vista" id="v4-opc-vista"></div>
+      </section>
+      <section class="v4-sec" aria-labelledby="v4-h-niv">
+        <h2 class="v4-sec__h" id="v4-h-niv">Límites y unidad</h2>
+        <div class="v4-niveles" id="v4-niveles" role="radiogroup" aria-labelledby="v4-h-niv"></div>
+        <p class="v4-niveles__nota" id="v4-niveles-nota"></p>
+        <p class="v4-niveles__nota v4-niveles__aviso" id="v4-niveles-aviso" hidden></p>
+      </section>
+      <section class="v4-sec" id="v4-sec-capas" aria-labelledby="v4-h-capas" data-plegada="1">
+        <h2 class="v4-sec__h" id="v4-h-capas">Capas</h2>
+        <div class="c4" id="v4-capas"></div>
+      </section>
+      <section class="v4-sec v4-sec--fondo" id="v4-sec-fondo" aria-labelledby="v4-h-fondo" data-plegada="1">
+        <h2 class="v4-sec__h" id="v4-h-fondo">Fondo</h2>
+        <div class="c4" id="v4-fondo"></div>
+      </section>
+      <section class="v4-sec" id="v4-sec-panel" aria-labelledby="v4-h-panel" hidden>
+        <h2 class="v4-sec__h" id="v4-h-panel">Recuento y Ensenada</h2>
+        <div id="v4-panel-ind"></div>
+      </section>
+      <section class="v4-sec" id="v4-sec-ley" aria-labelledby="v4-h-ley" data-plegada="1">
+        <h2 class="v4-sec__h" id="v4-h-ley">Calidad del dato</h2>
+        <button type="button" class="v4-interruptor" id="v4-cal" aria-pressed="false" title="Enciende o apaga los degradados de estimado, parcialmente estimado y suma parcial. La ficha y el puntero dicen siempre la clase."><i aria-hidden="true"></i><span>Señalar la calidad del dato</span></button>
+      </section>
+      <section class="v4-sec" id="v4-sec-avisos" aria-labelledby="v4-h-av" data-plegada="1">
+        <h2 class="v4-sec__h" id="v4-h-av">Avisos</h2>
+        <div class="v4-avisos" id="v4-avisos"></div>
+      </section>
+      <section class="v4-sec" id="v4-sec-fu" aria-labelledby="v4-h-fu" data-plegada="1">
+        <h2 class="v4-sec__h" id="v4-h-fu">Fuente original</h2>
+        <div class="v4-fuente" id="v4-fuente"></div>
+      </section>
+    </div>
+    </div>
+  </aside>
+
+  <button type="button" class="v4-opc__asa" id="v4-opc-asa" aria-controls="v4-opc" aria-expanded="false" title="Abrir o plegar las opciones (tecla O)"><span class="v4-opc__asa-t">Opciones</span></button>
+
+  <!-- ======== Centro ======== -->
+  <main class="v4-centro" id="main">
+    <header class="v4-cab">
+      <button class="v4-cab__btn v4-solo-movil" id="v4-abrir-temas" type="button" aria-controls="v4-sub" aria-expanded="false"><span data-icono="menu"></span><span>Temas</span></button>
+      <div class="v4-titulo">
+        <span class="v4-titulo__picto" id="v4-titulo-picto" aria-hidden="true" hidden></span>
+        <p class="v4-titulo__k" id="v4-titulo-k"></p>
+        <h1 class="v4-titulo__h" id="v4-titulo-h">Cargando…</h1>
+        <p class="v4-titulo__s" id="v4-titulo-s"></p>
+        <p class="v4-titulo__rev" id="v4-titulo-rev" hidden></p>
+      </div>
+      <div class="v4-vistas" id="v4-vistas" role="tablist" aria-label="Vista"></div>
+      <button class="v4-cab__btn v4-salir-modo" id="v4-salir-modo" type="button" title="Salir del análisis y volver al tema y al indicador de antes">← Volver a los mapas</button>
+      <button class="v4-cab__btn v4-buscar-movil" id="v4-buscador-movil" type="button" aria-haspopup="dialog" title="Todos los indicadores"><span data-icono="buscar"></span><span class="v4-sr">Todos los indicadores</span></button>
+      <a class="v4-cab__btn v4-info-movil" id="v4-info-movil" href="info.html" title="Info: cobertura, cómo se hace, fuentes, equipo, publicaciones y contacto"><span data-icono="info"></span><span class="v4-sr">Info</span></a>
+      <button class="v4-cab__btn" id="v4-abrir-der" type="button" aria-controls="v4-der" aria-expanded="true"><span data-icono="opciones"></span><span>Opciones</span></button>
+    </header>
+
+    <div class="v4-selbar" id="v4-selbar" role="group" aria-label="Selección"></div>
+    <div class="v4-par__h" id="v4-par-a" hidden></div>
+    <div class="v4-escena" id="v4-escena" tabindex="-1"></div>
+    <section class="v4-cmp" id="v4-cmp" aria-label="Panel de comparación" hidden></section>
+    <div class="v4-fi" id="v4-fi" role="group" aria-label="Fuente e información del indicador">
+      <button type="button" class="v4-fi__b" data-fi="fuente" aria-expanded="false" aria-controls="v4-fi-pop" title="La fuente original del año que estás viendo">Fuente</button>
+      <button type="button" class="v4-fi__b" data-fi="info" aria-expanded="false" aria-controls="v4-fi-pop" title="Qué mide el indicador y cómo leer sus marcas"><span data-icono="info"></span>Info</button>
+      <div class="v4-fi__pop" id="v4-fi-pop" role="dialog" hidden></div>
+    </div>
+    <div class="v4-ley-bajo" id="v4-ley-bajo" role="group" aria-label="Leyenda"><button type="button" class="v4-ley-pil" id="v4-ley-pil" aria-expanded="false" aria-controls="v4-leyenda">Leyenda</button><div class="l4 l4--bajo" id="v4-leyenda"></div></div>
+    <p class="v4-cargando" id="v4-cargando" role="status">Cargando datos…</p>
+    <section class="mu" id="v4-mun" hidden aria-label="Ficha del municipio"></section>
+
+    <footer class="v4-pie">
+      <div class="v4-tiempo" id="v4-tiempo" role="group" aria-label="Tiempo">
+        <div class="v4-tiempo__btns">
+          <button id="v4-prev" class="v4-ctl" type="button" aria-label="Año anterior"><span data-icono="previo"></span></button>
+          <button id="v4-play" class="v4-ctl v4-ctl--play" type="button" aria-label="Reproducir" aria-pressed="false"><span class="i-play" data-icono="play"></span><span class="i-pausa" data-icono="pausa"></span></button>
+          <button id="v4-next" class="v4-ctl" type="button" aria-label="Año siguiente"><span data-icono="siguiente"></span></button>
+        </div>
+        <div class="v4-pista" id="v4-pista">
+          <canvas id="v4-pista-color" class="v4-pista__color" aria-hidden="true" hidden></canvas>
+          <input id="v4-range" class="v4-range" type="range" min="0" max="1" step="1" value="0" aria-label="Año">
+          <div id="v4-marcas" class="v4-marcas"></div>
+          <span class="v4-pomo" id="v4-pomo" aria-hidden="true"></span>
+          <span class="v4-globo" id="v4-globo" aria-hidden="true" hidden></span>
+        </div>
+        <p class="v4-tiempo__anio" id="v4-anio" aria-hidden="true">—</p>
+
+      </div>
+      <div class="v4-acciones" id="v4-acciones">
+        <div class="v4-ritmo">
+        <div class="v4-vel" id="v4-vel" role="group" aria-label="Velocidad">
+          <button type="button" data-v="0.5" aria-pressed="false">0,5×</button>
+          <button type="button" data-v="1" aria-pressed="true">1×</button>
+          <button type="button" data-v="2" aria-pressed="false">2×</button>
+          <button type="button" data-v="4" aria-pressed="false">4×</button>
+        </div>
+        <p class="v4-hueco-nota" id="v4-hueco-nota" hidden></p>
+        <button type="button" class="v4-interruptor v4-interp" id="v4-interp" aria-pressed="false" hidden title="Por defecto solo se enseñan los años con cifra de fuente; aquí, también los años interpolados"><i aria-hidden="true"></i><span>Años interpolados</span></button>
+        </div>
+        <p class="v4-version" id="v4-version"></p>
+        <div class="v4-acciones__btns">
+          <button type="button" data-accion="enlace" title="Copiar enlace"><span data-icono="enlace"></span><span>Copiar enlace</span></button>
+          <button type="button" data-accion="datos" title="Descargar datos (CSV)"><span data-icono="descargar"></span><span>Descargar datos</span></button>
+          <button type="button" data-accion="png" title="Descargar imagen PNG"><span data-icono="imagen"></span><span>PNG</span></button>
+          <button type="button" data-accion="reiniciar" title="Reiniciar la vista"><span data-icono="reiniciar"></span><span>Reiniciar</span></button>
+          <button type="button" data-accion="pantalla" title="Pantalla completa"><span data-icono="pantalla"></span><span>Pantalla completa</span></button>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <!-- ======== Barra derecha: opciones, leyenda, fuente, avisos y ficha ======== -->
+  <aside class="v4-der" id="v4-der" aria-label="Opciones y ficha">
+    <div class="v4-tirador v4-tirador--der" id="v4-tirador-der" role="separator" aria-orientation="vertical" aria-controls="v4-der" aria-label="Ancho de la barra de opciones: arrastra, o flechas; doble clic para el ancho de serie" tabindex="0"></div>
+    <div class="v4-der__tabs" role="tablist" aria-label="Barra derecha">
+      <button type="button" role="tab" id="v4-tab-opc" aria-controls="v4-pane-opc" aria-selected="true">Opciones</button>
+      <button type="button" role="tab" id="v4-tab-ficha" aria-controls="v4-pane-ficha" aria-selected="false" disabled>Ficha</button>
+      <button type="button" class="v4-der__plegar" id="v4-der-plegar" aria-controls="v4-der" title="Ocultar la barra (tecla O)"><span>Ocultar</span><span data-icono="plegarDer"></span></button>
+    </div>
+    <div class="v4-der__pane" id="v4-pane-ficha" role="tabpanel" aria-labelledby="v4-tab-ficha" hidden>
+      <header class="v4-ficha__cab">
+        <p class="v4-k" id="v4-ficha-k">Ficha</p>
+        <h2 class="v4-ficha__titulo" id="v4-ficha-titulo"></h2>
+        <button type="button" class="v4-ficha__grande" id="v4-ficha-grande" hidden>Abrir la ficha del municipio</button>
+        <button type="button" class="v4-icono" id="v4-ficha-cerrar" aria-label="Cerrar la ficha"><span data-icono="cerrar"></span></button>
+      </header>
+      <div class="v4-ficha__cuerpo v3fi" id="v4-ficha-cuerpo"></div>
+    </div>
+  </aside>
+
+  <div class="v4-velo" id="v4-velo" hidden></div>
+  <button type="button" class="v4-asa" id="v4-der-asa" aria-controls="v4-der" title="Mostrar la barra de opciones (tecla O)"><span data-icono="plegarIzq"></span><span>Opciones</span></button>
+</div>
+
+<p class="v4-aviso-copia" id="v4-aviso-copia" role="status" aria-live="polite"></p>
+
+<script type="module" src="js/visor4/main.js"></script>
+</body>
+</html>
