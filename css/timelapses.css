@@ -1,14 +1,10 @@
-/* =====================================================================
-   timelapses.html · solo lo propio de la galería y el reproductor.
-   Tokens: css/atlas2.css (var(--a2-…)). Aquí solo el acento de cada
-   tema (--tema-acento, lo pone el JS).
-   ===================================================================== */
+
 
 :root {
   --tema-acento: var(--a2-accent);
 }
 
-/* ---------------------------------------------------------------- galería */
+
 
 .tl-gal { padding: clamp(28px, 5vw, 72px) 0 40px; }
 .tl-gal__head { max-width: 980px; margin-bottom: clamp(24px, 4vw, 48px); }
@@ -93,7 +89,7 @@ a.tl-card:hover .tl-card__poster canvas { transform: scale(1.035); }
 .tl-gal__foot { margin-top: 28px; color: var(--a2-ink-3); font-size: .85rem; }
 .tl-gal__foot p { margin: 0 0 4px; }
 
-/* ---------------------------------------------------------------- reproductor */
+
 
 body.tl-en-player { overflow-x: hidden; }
 .tl-player { padding: 0; }
@@ -156,11 +152,11 @@ body.tl-en-player { overflow-x: hidden; }
 .tl-spark .sp-dot { fill: var(--a2-ink); }
 .tl-avisos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; min-height: 4px; }
 
-/* mapa a pantalla completa en su celda */
+
 .tl-mapbox { position: relative; border-radius: var(--a2-radius-lg); }
 .tl-mapbox canvas { position: absolute; inset: 0; touch-action: pan-y; cursor: crosshair; }
 
-/* frase del momento: rótulo inferior, aparece con un fundido corto */
+
 .tl-frase {
   position: absolute; left: clamp(12px, 2vw, 24px); top: clamp(12px, 2vw, 22px); max-width: min(560px, 58%);
   pointer-events: none;
@@ -175,7 +171,7 @@ body.tl-en-player { overflow-x: hidden; }
 .tl-frase.is-in span { animation: tl-frase-in .7s var(--a2-ease) both; }
 @keyframes tl-frase-in { from { opacity: 0; filter: blur(4px); transform: translateY(8px); } to { opacity: 1; filter: none; transform: none; } }
 
-/* leyenda */
+
 .tl-legend {
   position: absolute; right: 14px; bottom: 14px; width: min(300px, 38%);
   padding: 12px 14px 10px; border-radius: var(--a2-radius);
@@ -233,7 +229,7 @@ body.tl-en-player { overflow-x: hidden; }
 .tl-frases button:hover, .tl-frases button:focus-visible { background: var(--a2-surface-2); color: var(--a2-ink); }
 .tl-frases b { font-family: var(--a2-font-mono); font-size: .78rem; color: var(--tema-acento); margin-right: 4px; }
 
-/* barra de transporte */
+
 .tl-transport {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px;
   padding: 12px 0 14px; margin-top: 12px; border-top: 1px solid var(--a2-line);
@@ -302,7 +298,7 @@ body.tl-en-player { overflow-x: hidden; }
 .tl-tip__l { font-size: .8rem; opacity: .85; }
 .tl-tip__est { display: inline-block; margin-top: 4px; font: 600 .7rem var(--a2-font-mono); padding: 1px 6px; border: 1px solid currentColor; border-radius: 999px; }
 
-/* ---------------------------------------------------------------- tablet y móvil */
+
 
 @media (min-width: 821px) and (max-height: 920px) {
   .tl-back { margin-bottom: 8px; }
@@ -331,7 +327,7 @@ body.tl-en-player { overflow-x: hidden; }
   .tl-year.is-long { font-size: 2rem; flex-basis: 100%; }
   .tl-fig { margin: 0 0 4px; flex: 1 1 160px; min-width: 0; }
   .tl-spark, .tl-avisos, #tl-cargando { flex-basis: 100%; }
-  .tl-spark { display: none !important; }   /* en móvil, el mapa antes que la mini serie */
+  .tl-spark { display: none !important; }   
   .tl-reserva { flex-basis: 100%; }
   .tl-avisos { margin-top: 4px; }
   .tl-mapbox .tl-frase { display: none; }

@@ -1,14 +1,10 @@
-/* =====================================================================
-   visor.html · visor único a pantalla completa (armazón y vista Mapa).
-   Tokens: css/atlas2.css. Piezas del reproductor (marcas, leyenda, tooltip,
-   rango): css/timelapses.css. Aquí solo la disposición del visor.
-   ===================================================================== */
+
 
 html, body.v3 { height: 100%; }
 body.v3 { overflow: hidden; background: var(--a2-map-bg); }
 .v3 { --v3-barra-h: 60px; --v3-tiempo-h: 74px; --v3-pad: clamp(12px, 1.6vw, 22px); }
 
-/* ---------- barra superior (flota sobre el escenario) */
+
 .v3-barra {
   position: fixed; z-index: 40; left: 0; right: 0; top: 0; min-height: var(--v3-barra-h);
   display: flex; align-items: center; gap: 12px; padding: 8px var(--v3-pad);
@@ -62,13 +58,13 @@ body.v3 { overflow: hidden; background: var(--a2-map-bg); }
 .v3-icono svg { width: 18px; height: 18px; fill: currentColor; }
 .v3-icono[data-ok="true"] { border-color: var(--tema-acento, var(--a2-accent)); color: var(--tema-acento, var(--a2-accent)); }
 
-/* ---------- escenario a pantalla completa */
+
 .v3-main { position: fixed; inset: 0; }
 .v3-escena { position: absolute; inset: 0; outline: none; }
 .v3-cargando { position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--a2-surface); padding: 10px 16px; border-radius: var(--a2-radius); box-shadow: var(--a2-shadow); }
 .v3-cargando[hidden] { display: none; }
 
-/* ---------- pie: insignias y fuente del año (abajo a la izquierda, sobre la barra de tiempo) */
+
 .v3-pie {
   position: fixed; z-index: 20; left: var(--v3-pad); bottom: calc(var(--v3-tiempo-h) + 10px); max-width: min(560px, 46vw);
   display: flex; flex-direction: column; gap: 6px; pointer-events: none;
@@ -89,7 +85,7 @@ body:not([data-vista="mapa"]) .v3-pie { display: none; }
 .v3-nota p { margin: 0 0 6px !important; }
 .v3-nota-res { border-left: 3px solid var(--a2-ochre); padding-left: 8px; }
 
-/* ---------- panel propio de un indicador (p. ej., fronteras): a la derecha, entre la frase y la leyenda */
+
 .v3-panel-ind {
   position: fixed; z-index: 22; right: var(--v3-pad); top: calc(var(--v3-barra-h) + 84px); width: min(380px, 34vw);
   max-height: calc(100vh - var(--v3-barra-h) - var(--v3-tiempo-h) - 320px); overflow: auto;
@@ -98,7 +94,7 @@ body:not([data-vista="mapa"]) .v3-pie { display: none; }
 body:not([data-vista="mapa"]) .v3-panel-ind { display: none; }
 body.v3-con-ficha .v3-panel-ind { right: calc(min(400px, 92vw) + var(--v3-pad)); }
 
-/* ---------- barra de tiempo */
+
 .v3-tiempo {
   position: fixed; z-index: 25; left: 0; right: 0; bottom: 0; min-height: var(--v3-tiempo-h);
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px;
@@ -110,7 +106,7 @@ body.v3-con-ficha .v3-panel-ind { right: calc(min(400px, 92vw) + var(--v3-pad));
 .v3-tiempo[hidden] { display: none; }
 .v3-track { margin-top: 2px; }
 
-/* ---------- cajón de ficha */
+
 .v3-ficha {
   position: fixed; z-index: 45; right: 0; top: var(--v3-barra-h); bottom: 0; width: min(400px, 92vw);
   display: flex; flex-direction: column; background: var(--a2-surface); border-left: 1px solid var(--a2-line); box-shadow: var(--a2-shadow);
@@ -124,9 +120,7 @@ body.v3-con-ficha .v3-panel-ind { right: calc(min(400px, 92vw) + var(--v3-pad));
 .v3-ficha-l { margin: 0 0 4px !important; color: var(--a2-ink-2); }
 body.v3-con-ficha .v3-tiempo { right: min(400px, 92vw); }
 
-/* =====================================================================
-   Vista Mapa (js/visor3/mapa/)
-   ===================================================================== */
+
 .v3m { position: absolute; inset: 0; }
 .v3m-lienzo { position: absolute; inset: 0; border-radius: 0; }
 .v3m-lienzo canvas { position: absolute; inset: 0; touch-action: pan-y; cursor: crosshair; }
@@ -169,7 +163,7 @@ body.v3-con-ficha .v3-tiempo { right: min(400px, 92vw); }
 .v3m-leyenda:empty { display: none; }
 body.v3-con-ficha .v3m-leyenda, body.v3-con-ficha .v3m-frase { right: calc(min(400px, 92vw) + var(--v3-pad)); }
 
-/* ---------- tablet y móvil */
+
 @media (max-width: 1560px) {
   .v3-nivel > span { display: none; }
 }
@@ -198,7 +192,7 @@ body.v3-con-ficha .v3m-leyenda, body.v3-con-ficha .v3m-frase { right: calc(min(4
   body.v3-con-ficha .v3-tiempo { right: 0; }
   body.v3-con-ficha .v3m-leyenda, body.v3-con-ficha .v3m-frase { right: 12px; }
 
-  /* el mapa en móvil: año y cifra arriba, mapa en medio, frase y leyenda debajo */
+  
   .v3m-hero { left: 12px; right: 12px; width: auto; top: calc(var(--v3-barra-h) + 10px); display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
   .v3m-kicker, .v3m-titulo, .v3m-fig__l { flex-basis: 100%; }
   .v3m-kicker { margin: 0 !important; }
@@ -216,7 +210,7 @@ body.v3-con-ficha .v3m-leyenda, body.v3-con-ficha .v3m-frase { right: calc(min(4
   .v3-panel-ind { left: 12px; right: 12px; width: auto; top: auto; bottom: calc(var(--v3-tiempo-h) + 8px); max-height: 40vh; z-index: 26; }
   body.v3-con-ficha .v3-panel-ind { right: 12px; }
   .v3-pie { left: 12px; right: 12px; max-width: none; bottom: auto; top: var(--v3m-hero-b, calc(var(--v3-barra-h) + 150px)); }
-  /* la fuente original sigue a la vista en móvil: una línea; al tocar «nota» se despliega todo */
+  
   .v3-pie .v3-fuente { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .74rem; padding: 4px 8px; }
   .v3-pie .v3-nota { max-height: 40vh; }
   .v3-avisos .a2-badge { font-size: .64rem; }
@@ -226,11 +220,11 @@ body.v3-con-ficha .v3m-leyenda, body.v3-con-ficha .v3m-frase { right: calc(min(4
   .v3m-frase.is-in span { animation: none; }
 }
 
-/* un solo fotograma (geografía de hoy, ganado de 1891): sin barra de tiempo */
+
 body.v3-un-fotograma .v3-tiempo { display: none; }
 body.v3-un-fotograma { --v3-tiempo-h: 0px; }
-/* en series largas a 390 px las marcas finas se juntan: se quitan */
+
 @media (max-width: 760px) { .v3-track .tl-mark.is-mini { display: none; } }
 
-/* indicador con un solo nivel por ahora (población, del proveedor de timelapses) */
+
 .v3-nivel.is-unico select { border-style: dashed; }

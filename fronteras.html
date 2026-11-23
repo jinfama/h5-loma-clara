@@ -3,29 +3,9 @@
 <head>
 <meta name="robots" content="noindex,nofollow,noarchive">
   <meta charset="utf-8">
-  <script>
-    // fronteras.html pasa al visor único (CONTRATO_VISOR_UNICO.md): indicador «fronteras» a nivel de términos de cada año
-    (function () {
-      var q = new URLSearchParams(location.search), p = new URLSearchParams({ ind: 'fronteras', nivel: 'termino' });
-      if (q.get('corte')) p.set('anio', q.get('corte'));
-      if (q.get('m')) p.set('m', q.get('m'));
-      location.replace('visor.html?' + p.toString());
-    })();
-  </script>
+  <script>(function(){var q=new URLSearchParams(location.search),p=new URLSearchParams({ind:"fronteras",nivel:"termino"});if(q.get("corte"))p.set("anio",q.get("corte"));if(q.get("m"))p.set("m",q.get("m"));location.replace("visor.html?"+p.toString())})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script>
-    /* Visor único (CONTRATO_VISOR_UNICO.md): fronteras.html pasa a «Fronteras» dentro de visor.html.
-       ?corte=1900&m=18087 → visor.html?ind=fronteras&anio=1900&ficha=18087&fn=municipio. Con ?v2=1 se ve la página vieja. */
-    (function () {
-      var q = new URLSearchParams(location.search);
-      if (q.get('v2') === '1') return;
-      var p = new URLSearchParams();
-      p.set('ind', 'fronteras');
-      var c = q.get('corte'); if (c && /^(\d{4}|hoy)$/.test(c)) p.set('anio', c);
-      var m = q.get('m'); if (m && /^\d{5}$/.test(m)) { p.set('ficha', m); p.set('fn', 'municipio'); }
-      location.replace('visor.html?' + p.toString());
-    })();
-  </script>
+  <script>(function(){var q=new URLSearchParams(location.search);if(q.get("v2")==="1")return;var p=new URLSearchParams;p.set("ind","fronteras");var c=q.get("corte");if(c&&/^(\d{4}|hoy)$/.test(c))p.set("anio",c);var m=q.get("m");if(m&&/^\d{5}$/.test(m)){p.set("ficha",m);p.set("fn","municipio")}location.replace("visor.html?"+p.toString())})();</script>
   <title>Pueblos y fronteras · Atlas Histórico de Andalucía</title>
   <meta name="description" content="Cómo han cambiado los términos municipales de Andalucía desde 1752 hasta hoy, y la historia de cada municipio con sus fuentes.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%225%22 y=%225%22 width=%2210%22 height=%2210%22 fill=%22%2313171b%22/%3E%3Crect x=%221%22 y=%221%22 width=%2210%22 height=%2210%22 fill=%22%23d63a1f%22/%3E%3C/svg%3E">

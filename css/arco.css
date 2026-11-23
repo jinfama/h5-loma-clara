@@ -1,11 +1,6 @@
-/* =====================================================================================================================
-   Vista «Arco» del tema Elecciones (js/visor4/arco.js, 21-nov-2026; ronda v18, 22-nov-2026). Prefijo arc-. Tokens del
-   visor v4: Syne para lo que se lee de lejos, Instrument Sans para el resto, esquinas cuadradas, tinta #101010.
-   Composición (v18): cabecera · el arco, lo más grande que quepa · Andalucía y sus ocho provincias en una rejilla
-   compacta · recuento por familia y una línea de avisos; el texto largo va en «Cómo se cuenta». Sin barras internas.
-   ===================================================================================================================== */
 
-/* la pestaña, con su rótulo aunque no esté entre las principales del armazón (solo sale en las elecciones) */
+
+
 .v4-vista--extra[data-id="arco"]:not([aria-selected="true"]):not([aria-disabled="true"]) { color: var(--v4-tinta); }
 .v4-vista--extra[data-id="arco"] span { display: inline; }
 
@@ -13,9 +8,9 @@
   color: var(--v4-tinta, #101010); font-family: var(--v4-sans); }
 .arc-in { height: 100%; min-height: 400px; display: grid; grid-template-rows: auto minmax(160px, 1fr) auto auto; }
 
-/* ---------- cabecera: año, frase y controles ---------------------------------------------------------------------- */
+
 .arc-cab { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 16px; padding: 10px 18px 8px; }
-/* arriba a la derecha flotan «Fuente · Info» del armazón (#v4-fi): la cabecera les deja sitio */
+
 @container arc (min-width: 560px) { .arc-tit { padding-right: 150px; } }
 .arc-anio { margin: 0; font: 800 clamp(36px, 6.2cqw, 66px)/.86 var(--v4-serif); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
 .arc-tit { flex: 1 1 260px; min-width: 0; padding-left: 14px; border-left: var(--v4-regla, 2px solid #101010); }
@@ -30,7 +25,7 @@
   font: 600 12px var(--v4-sans); color: var(--v4-tinta, #101010); text-transform: none; letter-spacing: 0; }
 .arc-prov select:focus-visible, .arc-pc:focus-visible, .arc-lista li:focus-visible, .arc-como:focus-visible { outline: 2px solid var(--verde-hondo, #0f3b2c); outline-offset: 1px; }
 
-/* ---------- el arco: todo el sitio que queda ------------------------------------------------------------------------ */
+
 .arc-escenario { position: relative; min-height: 0; overflow: hidden; border-top: 1px solid var(--v4-linea, #e3e3e3); }
 .arc-svg { position: absolute; inset: 0; display: block; touch-action: manipulation; }
 .arc-mapa .arc-and { stroke: var(--v4-linea-2, #c9c9c9); stroke-width: 1; }
@@ -39,7 +34,7 @@
   background: var(--v4-papel, #fff); border: 2px solid var(--v4-tinta, #101010); font: 500 13px/1.4 var(--v4-sans); text-align: left; }
 .arc-vacio[hidden] { display: none; }
 
-/* ---------- Andalucía y sus provincias: una fila de nueve casillas (tres filas en estrecho) ---------------------------- */
+
 .arc-provs { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; padding: 8px 18px; border-top: 1px solid var(--v4-linea, #e3e3e3); }
 .arc-pc { display: grid; grid-template-rows: auto 8px auto; gap: 4px; min-width: 0; margin: 0; padding: 5px 6px 6px; border: 1px solid var(--v4-linea, #e3e3e3);
   border-radius: 0; background: var(--v4-papel, #fff); color: inherit; text-align: left; cursor: pointer; font: inherit; }
@@ -53,11 +48,11 @@
 .arc-pc__v > i { width: 8px; height: 8px; flex: none; }
 .arc-pc__v--mal { font-style: italic; color: var(--v4-tinta-3, #6b6b6b); }
 .arc-pc__f { display: none; overflow: hidden; text-overflow: ellipsis; }
-@container arc (min-width: 1500px) { .arc-pc__f { display: inline; } }   /* el nombre de la familia, solo si cabe entero */
+@container arc (min-width: 1500px) { .arc-pc__f { display: inline; } }   
 
-/* ---------- pie: barra apilada, recuento por familia, cambio y una línea de avisos ---------------------------------- */
+
 .arc-pie { position: relative; padding: 6px 18px 8px; border-top: 1px solid var(--v4-linea, #e3e3e3); }
-/* alto mínimo estable: si el recuento ocupa una línea más un año que otro, el arco no cambia de tamaño */
+
 @container arc (min-width: 720px) { .arc-pie { min-height: 116px; } }
 .arc-barra { display: flex; gap: 2px; height: 12px; background: var(--v4-papel, #fff); }
 .arc-barra i { display: block; min-width: 2px; }
@@ -84,11 +79,11 @@
 .arc-como__pop p:last-child { margin-bottom: 0; }
 .arc-como__x { position: absolute; top: 4px; right: 6px; width: 24px; height: 24px; padding: 0; border: 0; background: none; font: 600 18px/1 var(--v4-sans); color: var(--v4-tinta, #101010); cursor: pointer; }
 
-/* ---------- tooltip --------------------------------------------------------------------------------------------- */
+
 .a2-tooltip .arc-tt-l { display: block; margin-top: 4px; font-size: 12.5px; }
 .a2-tooltip .arc-sw { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: 0; }
 
-/* ---------- estrecho (móvil): una columna que se desplaza, como el resto del visor en móvil ------------------------- */
+
 @container arc (max-width: 559.98px) {
   .arc-in { height: auto; min-height: 0; display: flex; flex-direction: column; }
   .arc-cab { padding: 10px 12px 6px; gap: 6px 12px; }
@@ -99,15 +94,14 @@
   .arc-como__pop { right: 12px; width: calc(100% - 24px); }
 }
 @container arc (min-width: 560px) and (max-width: 899.98px) {
-  .arc-prov > span { display: none; }   /* el desplegable ya dice «Toda Andalucía» o la provincia */
+  .arc-prov > span { display: none; }   
   .arc-provs { gap: 4px; padding: 6px 12px; }
   .arc-pc { padding: 4px 4px 5px; }
   .arc-pc__n { font-size: 11px; }
   .arc-pc__v { font-size: 10.5px; }
 }
 
-/* pantalla baja (la escena mide menos de 600 px de alto; lo decide arco.js): sin la línea de encima del título y, si
-   además es estrecha, las casillas de provincia sin la cifra (va en su título al pasar) */
+
 @container arc (min-width: 560px) {
   .arc--bajo .arc-k { display: none; }
   .arc--bajo .arc-cab { padding-top: 8px; padding-bottom: 6px; }
@@ -117,7 +111,7 @@
   .arc--bajo .arc-pc { grid-template-rows: auto 8px; }
 }
 
-/* ---------- «Evolución» (ronda v22): áreas al 100 % en escalón o una barra por convocatoria ------------------------- */
+
 .arc-ev { position: absolute; inset: 0; display: none; touch-action: manipulation; }
 .arc[data-forma="evolucion"] .arc-svg, .arc[data-forma="evolucion"] .arc-barra { display: none; }
 .arc[data-forma="evolucion"] .arc-ev { display: block; }
@@ -137,21 +131,20 @@
 .a2-tooltip .arc-tt-tab { display: grid; grid-template-columns: 1fr auto; gap: 2px 14px; margin-top: 6px; font-size: 12.5px; }
 .a2-tooltip .arc-tt-tab b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .arc-lista .arc-ley-k { align-self: center; padding-right: 2px; font: 700 11px var(--v4-sans); letter-spacing: .02em; color: var(--v4-tinta-3, #6b6b6b); }
-/* pantalla baja: el gráfico manda. Sin el año grande ni la rejilla de provincias (el desplegable de arriba elige el ámbito)
-   y la leyenda solo con los nombres; las cifras de cada elección salen al pasar */
+
 @container arc (min-width: 560px) {
   .arc--bajo[data-forma="evolucion"] .arc-anio, .arc--bajo[data-forma="evolucion"] .arc-provs,
   .arc--bajo[data-forma="evolucion"] .arc-fam .arc-n, .arc--bajo[data-forma="evolucion"] .arc-ley-k { display: none; }
   .arc--bajo[data-forma="evolucion"] .arc-tit { padding-left: 0; border-left: 0; }
   .arc--bajo[data-forma="evolucion"] .arc-seg button { padding: 0 7px; }
-  .arc--bajo[data-forma="evolucion"] .arc-ctl { padding-right: 140px; }   /* sin el año, los controles suben hasta «Fuente · Info» */
+  .arc--bajo[data-forma="evolucion"] .arc-ctl { padding-right: 140px; }   
   .arc--bajo[data-forma="evolucion"] .arc-lista { gap: 0 6px; font-size: 12px; }
   .arc--bajo[data-forma="evolucion"] .arc-fam { min-height: 20px; padding: 1px 4px; }
   .arc--bajo[data-forma="evolucion"] .arc-pie { padding-top: 4px; padding-bottom: 5px; }
   .arc--bajo[data-forma="evolucion"] .arc-cambio { margin-top: 2px; }
 }
 
-/* ---------- panel del municipio (23-nov-2026): su reparto de votos. Flota sobre la escena y no entra en su maquetación ---- */
+
 .arc-mun { position: absolute; top: 8px; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; background: var(--v4-papel, #fff);
   color: var(--v4-tinta, #101010); border: 2px solid var(--v4-tinta, #101010); box-shadow: 5px 5px 0 rgba(16, 16, 16, .9); font-family: var(--v4-sans); outline: none; }
 .arc-mun[hidden] { display: none; }
@@ -192,7 +185,7 @@
 .v4 .arc-mun a.arc-mun__ir, .v4 .arc-mun a.arc-mun__ir:visited { color: var(--v4-papel, #fff); }
 .arc-mun__ir { display: block; padding: 5px 8px; background: var(--v4-tinta, #101010); color: var(--v4-papel, #fff); font: 600 12px/1.25 var(--v4-sans); text-align: center; text-decoration: none; }
 .v4 .arc-mun a.arc-mun__ir:hover { background: var(--verde-hondo, #0f3b2c); color: #fff; }
-/* a 390 px, hoja inferior: el arco o el mapa quedan enteros encima */
+
 .arc-mun.is-hoja { top: auto; left: 0; right: 0; bottom: 0; width: auto; border-width: 2px 0 0; box-shadow: 0 -6px 18px rgba(16, 16, 16, .2); }
 .arc-mun.is-hoja .arc-mun__svg { max-width: 170px; }
 .arc-mun.is-hoja .arc-mun__cab { padding-top: 5px; padding-bottom: 3px; }
@@ -206,7 +199,7 @@
 .arc-mun.is-bajo .arc-mun__tira { height: 20px; margin-top: 5px; }
 .arc-mun.is-bajo .arc-mun__pie { padding: 4px 12px 5px; }
 .arc-mun.is-bajo .arc-mun__part { margin-top: 3px; }
-/* casillas de provincia en escena estrecha */
+
 @container arc (max-width: 759.98px) { .arc-pc__de { display: none; } }
 @container arc (max-width: 659.98px) { .arc-provs .arc-pc__n { font-size: 10px; letter-spacing: -.01em; } .arc-provs .arc-pc { padding-left: 3px; padding-right: 3px; } }
 @container arc (max-width: 559.98px) { .arc-pc__de { display: inline; } .arc-provs .arc-pc__n { font-size: 12px; letter-spacing: 0; } .arc-provs .arc-pc { padding-left: 6px; padding-right: 6px; } }
@@ -224,7 +217,7 @@
 .arc-mun.is-bajo:not(.is-hoja) .arc-mun__fam { font-size: 11px; }
 .arc-mun.is-bajo:not(.is-hoja) .arc-mun__fam li { line-height: 14px; }
 .arc-mun.is-bajo:not(.is-hoja) .arc-mun__cuerpo { padding-bottom: 3px; }
-/* resultado parcial: el aviso va junto al ganador, a la vista */
+
 .arc-mun__parcial { margin: 3px 0 2px; padding: 3px 6px; border-left: 3px solid var(--a2-ochre, #c27c0e); background: var(--v4-panel-2, #f2f2ef);
   color: var(--v4-tinta, #101010); font: 600 11px/1.3 var(--v4-sans); text-align: left; }
 .arc-mun.is-hoja .arc-mun__parcial { font-size: 10.5px; padding: 2px 5px; }

@@ -1,15 +1,11 @@
-/* visor2.css — capa del visor analítico para el Atlas v2 (19-nov-2026). Se carga DESPUÉS de styles.css y atlas2.css.
-   1. Paleta y tipografía del cromo hacia las del diseño común (css/atlas2.css) sin tocar styles.css:
-      solo se redefinen los tokens --c-* y --ff*. Los colores de DATOS (rampas de js/utils.js) no se tocan.
-   2. Barra de navegación común arriba (js/atlas2/nav.js) sin romper la maquetación a pantalla completa.
-   3. Procedencia: barra #prov-bar, marcas de estimado / con reserva / sin dato, filas de tabla, barras. */
 
-/* ---------- 1. Paleta y tipografía ------------------------------------------------------------ */
+
+
 :root {
-    --c-primary: #1d4f7a;          /* azul «oficial, observado» del diseño común */
+    --c-primary: #1d4f7a;          
     --c-primary-tint: rgba(29,79,122,.09);
     --c-primary-soft: #4b85aa;
-    --c-accent: #d63a1f;           /* almagre */
+    --c-accent: #d63a1f;           
     --c-accent-h: #b02d16;
     --c-accent-soft: #e8836f;
     --c-agua-clara: #93b3c6;
@@ -38,8 +34,8 @@ body { font-size-adjust: none; }
 .map-legend { background: rgba(255,255,255,.96); }
 .tooltip { background: rgba(19,23,27,.96); }
 
-/* ---------- 2. Navegación común ---------------------------------------------------------------- */
-/* body queda en altura de pantalla; la barra de navegación ocupa su alto y #app se lleva el resto */
+
+
 #app { height: calc(100vh - var(--a2-nav-h)); height: calc(100dvh - var(--a2-nav-h)); }
 .a2-nav { flex: none; }
 .loading-screen, .picker-overlay, .settings-overlay { z-index: 1000; }
@@ -47,7 +43,7 @@ body { font-size-adjust: none; }
     .a2-nav__brand { font-size: .92rem; }
 }
 
-/* ---------- 3. Procedencia ---------------------------------------------------------------------- */
+
 .mk-sw-est, .mk-sw-res, .mk-sw-nd, .pb-sw {
     display: inline-block; width: 12px; height: 12px; border: 1px solid var(--c-border); flex-shrink: 0; vertical-align: -2px;
     background-color: #fff;
@@ -98,7 +94,7 @@ body { font-size-adjust: none; }
 .tooltip-row.tt-est .tooltip-value { color: #f1c86a; }
 .tooltip-row.tt-nd .tooltip-value { color: #c9d1d7; }
 
-/* tabla */
+
 .tb-mark { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--c-border); white-space: nowrap; }
 .tb-mark.est { background: #fdf0d3; border-color: #e3ad45; color: #6b4a06; }
 .tb-mark.res { background: #e6eef5; border-color: #93b3c6; color: #1d4f7a; }
@@ -108,7 +104,7 @@ body { font-size-adjust: none; }
 .nd-row .tb-nd { font-style: italic; }
 .est-row td:nth-child(4) { font-style: italic; }
 
-/* barras */
+
 .bars-container { width: 100%; height: 100%; overflow: auto; padding: var(--sp-3) var(--sp-4); }
 .bars-head { font-size: 13px; margin-bottom: 4px; color: var(--c-text-2); }
 .bars-head b { color: var(--c-text); }

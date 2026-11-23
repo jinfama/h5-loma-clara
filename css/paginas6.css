@@ -1,7 +1,4 @@
-/* =====================================================================================================================
-   Páginas de lectura del Atlas con el lenguaje del visor v6 (equipo.html, fuentes.html): Syne + Instrument Sans, papel
-   blanco, tinta #101010, reglas negras de 2 px, esquinas cuadradas y un toque de verde andaluz.
-   ===================================================================================================================== */
+
 :root {
   --p6-papel: #ffffff;
   --p6-tinta: #101010;
@@ -21,7 +18,7 @@ body.p6 { margin: 0; background: var(--p6-papel); color: var(--p6-tinta); font: 
 .p6 :focus-visible { outline: 2px solid var(--verde-andaluz); outline-offset: 2px; }
 .p6-sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* barra superior */
+
 .p6-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 20px; padding: 0 clamp(16px, 4vw, 48px); height: 56px; background: var(--verde-hondo); color: #fff; }
 .p6-marca { display: flex; align-items: center; gap: 10px; color: #fff !important; text-decoration: none; font: 700 11px/1.15 var(--p6-txt); letter-spacing: .14em; text-transform: uppercase; }
 .p6-sello { position: relative; width: 18px; height: 18px; flex: none; }
@@ -31,7 +28,7 @@ body.p6 { margin: 0; background: var(--p6-papel); color: var(--p6-tinta); font: 
 .p6-nav ul a { display: block; padding: 6px 10px; color: #d6e4dc; text-decoration: none; font: 600 13px var(--p6-txt); }
 .p6-nav ul a:hover, .p6-nav ul a[aria-current] { color: #fff; box-shadow: inset 0 -3px 0 #7fd3a3; }
 
-/* cabecera y secciones */
+
 .p6-wrap { max-width: 1120px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); }
 .p6-cab { padding: clamp(28px, 5vw, 56px) 0 24px; border-bottom: 2px solid var(--p6-tinta); }
 .p6-pre { margin: 0; font: 700 12px/1 var(--p6-txt); letter-spacing: .2em; text-transform: uppercase; }
@@ -48,7 +45,7 @@ body.p6 { margin: 0; background: var(--p6-papel); color: var(--p6-tinta); font: 
 .p6-aviso { margin: 16px 0; padding: 12px 16px; border-left: 4px solid var(--verde-andaluz); background: #f1f7f3; font-weight: 500; }
 .p6-pie { padding: 24px 0 48px; font-size: 13px; color: var(--p6-gris); }
 
-/* tablas */
+
 .p6-tablawrap { overflow-x: auto; border-top: 2px solid var(--p6-tinta); }
 .p6-tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .p6-tabla th, .p6-tabla td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--p6-linea); }
@@ -59,7 +56,7 @@ body.p6 { margin: 0; background: var(--p6-papel); color: var(--p6-tinta); font: 
 .p6-tabla .p6-ir { white-space: nowrap; font-weight: 600; }
 .p6-tabla tr:hover td { background: #fafaf8; }
 
-/* bibliografía */
+
 .p6-bib { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--p6-tinta); }
 .p6-bib li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 24px; padding: 12px 0; border-bottom: 1px solid var(--p6-linea); }
 .p6-bib .p6-autor { font-weight: 700; }
@@ -69,11 +66,11 @@ body.p6 { margin: 0; background: var(--p6-papel); color: var(--p6-tinta); font: 
 .p6-bib .p6-uso { grid-column: 1 / -1; font-size: 12.5px; color: var(--p6-gris); }
 .p6-buscar { width: min(420px, 100%); height: 32px; margin: 0 0 12px; padding: 0 10px; border: 1px solid var(--p6-tinta); font: 500 14px var(--p6-txt); }
 
-/* cómo leer */
+
 .p6-leer { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0; border-top: 2px solid var(--p6-tinta); }
 .p6-leer > div { padding: 14px 16px 16px 0; border-bottom: 1px solid var(--p6-linea); }
 .p6-leer b { display: block; font: 800 16px/1.1 var(--p6-disp); letter-spacing: -.01em; margin-bottom: 4px; }
-/* Fuentes: de dónde sale cada dato, bloque a bloque */
+
 .p6-origen { margin: 0; border-top: 2px solid var(--p6-tinta); }
 .p6-origen > div { display: grid; grid-template-columns: minmax(180px, 280px) minmax(0, 1fr); gap: 4px 28px; padding: 14px 0 15px; border-bottom: 1px solid var(--p6-linea); }
 .p6-origen dt { font: 800 16px/1.15 var(--p6-disp); letter-spacing: -.01em; }
@@ -84,14 +81,14 @@ body.p6 { margin: 0; background: var(--p6-papel); color: var(--p6-tinta); font: 
 @media (max-width: 640px) { .p6-origen > div { grid-template-columns: minmax(0, 1fr); } }
 .p6-sw { display: inline-block; width: 28px; height: 14px; margin-right: 8px; vertical-align: -2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
 
-/* parte técnica plegada */
+
 .p6-tecnica > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; padding: 18px 0; font: 800 clamp(22px, 2.4vw, 30px)/1 var(--p6-disp); letter-spacing: -.03em; text-transform: uppercase; }
 .p6-tecnica > summary::-webkit-details-marker { display: none; }
 .p6-tecnica > summary::before { content: ""; width: 0; height: 0; border-left: 9px solid currentColor; border-top: 7px solid transparent; border-bottom: 7px solid transparent; transition: transform .15s; }
 .p6-tecnica[open] > summary::before { transform: rotate(90deg); }
 .p6-tecnica .a2-section { padding-top: 24px; padding-bottom: 24px; }
 
-/* equipo */
+
 .p6-persona { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 24px; align-items: start; padding: 28px 0; border-bottom: 1px solid var(--p6-linea); }
 .p6-persona img { width: 180px; height: 240px; object-fit: cover; display: block; filter: grayscale(.15); }
 .p6-persona h2 { font-size: clamp(28px, 3.4vw, 44px); }
@@ -109,16 +106,16 @@ body.p6 { margin: 0; background: var(--p6-papel); color: var(--p6-tinta); font: 
   .p6-bib li { grid-template-columns: 1fr; }
   .p6-tabla { font-size: 12.5px; }
 }
-/* la parte técnica no ensancha la página en el móvil (códigos y huellas largas) */
+
 .fu-tecnica { max-width: 100%; overflow-x: auto; }
 .fu-tecnica code, .fu-tecnica dt, .fu-tecnica dd, .fu-tecnica .a2-mono { overflow-wrap: anywhere; }
 .fu-tecnica .fu-version > * { min-width: 0; }
-html, body { overflow-x: clip; }   /* sin scroll lateral; la banda verde de la cabecera sí sale a sangre */
+html, body { overflow-x: clip; }   
 
-/* el texto oculto para lectores de pantalla (position: absolute) queda dentro de su tabla con scroll */
+
 .p6-tablawrap, .fu-tablawrap { position: relative; }
 
-/* ronda v11: enlaces de cada fuente (web ↗ y DOI con su tipo), «sin enlace público» con su frase y ficha pendiente */
+
 .p6-bib .p6-enlaces { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; align-self: start; max-width: 100%; }
 .p6-bib .p6-enlaces .p6-enlace { white-space: normal; overflow-wrap: anywhere; }
 .p6-bib .p6-doi { font-weight: 500; }
@@ -127,7 +124,7 @@ html, body { overflow-x: clip; }   /* sin scroll lateral; la banda verde de la c
 .p6-bib .p6-enlaces { max-width: 38ch; justify-self: end; }
 
 
-/* ---------- ronda v13 (Juan, «más chulo»): cabecera en verde hondo con alicatado, tarjetas de fuente, equipo */
+
 .p6-cab { position: relative; background: var(--verde-hondo); color: #fff; border-bottom: 0; box-shadow: 0 0 0 100vmax var(--verde-hondo); clip-path: inset(0 -100vmax); padding-bottom: 36px; }
 .p6-cab::after { content: ""; position: absolute; right: -40px; top: 0; bottom: 0; width: min(46%, 520px); opacity: .22; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='%237fd3a3' stroke-width='1.4'%3E%3Crect x='16' y='16' width='24' height='24'/%3E%3Crect x='16' y='16' width='24' height='24' transform='rotate(45 28 28)'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 56px 56px; }
@@ -139,7 +136,7 @@ html, body { overflow-x: clip; }   /* sin scroll lateral; la banda verde de la c
 .p6-cab .p6-toc a:hover { background: #fff; color: var(--verde-hondo); }
 .p6-sec h2 { position: relative; padding-left: 18px; }
 .p6-sec h2::before { content: ""; position: absolute; left: 0; top: .18em; width: 8px; height: 8px; background: var(--verde-andaluz); outline: 2px solid var(--verde-andaluz); outline-offset: 2px; }
-/* tarjetas de fuente */
+
 .p6-filtros { display: flex; flex-wrap: wrap; gap: 0; margin: 0 0 14px; }
 .p6-filtros button { height: 30px; padding: 0 12px; margin: 0 -1px -1px 0; border: 1px solid var(--p6-tinta); background: #fff; font: 600 12.5px var(--p6-txt); cursor: pointer; }
 .p6-filtros button[aria-pressed="true"] { background: var(--verde-hondo); border-color: var(--verde-hondo); color: #fff; }
@@ -160,7 +157,7 @@ html, body { overflow-x: clip; }   /* sin scroll lateral; la banda verde de la c
 .p6-ficha .p6-uso { margin: 0; font-size: 12px; color: var(--p6-gris); }
 .p6-tema { display: inline-block; padding: 0 6px; border: 1px solid var(--p6-linea); color: var(--p6-tinta); font-size: 11.5px; margin: 0 2px 2px 0; }
 @media (prefers-reduced-motion: reduce) { .p6-bib.p6-fichas .p6-ficha { transition: none; } .p6-bib.p6-fichas .p6-ficha:hover { transform: none; } }
-/* equipo */
+
 .p6-equipo { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 28px; margin: 36px 0; align-items: stretch; }
 .p6-persona { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: end; padding: 0; border: 0; }
 .p6-foto { margin: 0; position: relative; }

@@ -13,11 +13,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="css/visor4.css">
   <link rel="preload" href="data/v2/visor/indicadores.json" as="fetch" crossorigin="anonymous">
-  <script>
-  // arranque en paralelo: todos los módulos a la vez, y las cifras del mapa inicial sin esperar a nada
-  ['visor4/main.js','visor4/paleta.js','timelapses/escalas.js','visor3/vistas/comun.js','atlas2/fmt.js','visor3/escala.js','visor3/datos.js','atlas2/data.js','visor3/registro.js','visor3/estado.js','visor3/frente.js','visor4/vistas-familia.js','visor3/niveles.js','visor3/motor.js','visor3/proveedores/generico.js','atlas2/leyenda.js','fronteras/datos.js','atlas2/mapa.js','timelapses/temas/base.js','visor3/proveedores/timelapses.js','timelapses/temas/index.js','timelapses/temas/poblacion.js','timelapses/temas/tierra.js','timelapses/temas/cosechas.js','timelapses/temas/ganado.js','timelapses/temas/clima.js','timelapses/temas/trabajo.js','atlas2/fuentes.js','visor4/catalogo.js','visor4/iconos.js','visor4/leyenda.js','visor4/buscador.js','pictos/agro.js','visor4/comparar.js','timelapses/mapa.js','visor4/grises.js','visor4/limites.js','visor4/mapa.js','visor4/representa.js','visor4/relieve3d.js','visor4/acciones.js','visor4/capas.js','visor4/municipio.js','visor3/fronteras/base.js','visor3/ficha/serie.js','fronteras/ficha.js','municipio-analisis/boton.js','visor4/seleccion.js','visor3/vistas/index.js','visor3/vistas/lineas.js','visor3/vistas/tabla.js','visor3/vistas/ranking.js','visor3/vistas/franjas.js','visor3/vistas/climograma.js','visor3/vistas/distribucion.js','visor3/fronteras/index.js','visor3/fronteras/indicador.js','visor3/fronteras/panel.js','fronteras/graficos.js','visor3/mapa/index.js','visor3/ficha/index.js','visor4/isotipo.js','visor4/vista-composicion.js','comun/composicion.js'].forEach(function (m) { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = 'js/' + m; document.head.appendChild(l); });
-  (location.search || location.hash ? [] : ['visor/valores/poblacion_densidad__termino.json', 'visor/valores/poblacion_densidad__andalucia.json', 'geo/terminos/1752.topo.json']).concat(['geo/municipios.topo.json', 'geo/cortes.json', 'reservas.json', 'fuentes.json']).forEach(function (f) { var l = document.createElement('link'); l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = 'anonymous'; l.href = 'data/v2/' + f; document.head.appendChild(l); });
-  </script>
+  <script>["visor4/main.js","visor4/paleta.js","timelapses/escalas.js","visor3/vistas/comun.js","atlas2/fmt.js","visor3/escala.js","visor3/datos.js","atlas2/data.js","visor3/registro.js","visor3/estado.js","visor3/frente.js","visor4/vistas-familia.js","visor3/niveles.js","visor3/motor.js","visor3/proveedores/generico.js","atlas2/leyenda.js","fronteras/datos.js","atlas2/mapa.js","timelapses/temas/base.js","visor3/proveedores/timelapses.js","timelapses/temas/index.js","timelapses/temas/poblacion.js","timelapses/temas/tierra.js","timelapses/temas/cosechas.js","timelapses/temas/ganado.js","timelapses/temas/clima.js","timelapses/temas/trabajo.js","atlas2/fuentes.js","visor4/catalogo.js","visor4/iconos.js","visor4/leyenda.js","visor4/buscador.js","pictos/agro.js","visor4/comparar.js","timelapses/mapa.js","visor4/grises.js","visor4/limites.js","visor4/mapa.js","visor4/representa.js","visor4/relieve3d.js","visor4/acciones.js","visor4/capas.js","visor4/municipio.js","visor3/fronteras/base.js","visor3/ficha/serie.js","fronteras/ficha.js","municipio-analisis/boton.js","visor4/seleccion.js","visor3/vistas/index.js","visor3/vistas/lineas.js","visor3/vistas/tabla.js","visor3/vistas/ranking.js","visor3/vistas/franjas.js","visor3/vistas/climograma.js","visor3/vistas/distribucion.js","visor3/fronteras/index.js","visor3/fronteras/indicador.js","visor3/fronteras/panel.js","fronteras/graficos.js","visor3/mapa/index.js","visor3/ficha/index.js","visor4/isotipo.js","visor4/vista-composicion.js","comun/composicion.js"].forEach((function(m){var l=document.createElement("link");l.rel="modulepreload";l.href="js/"+m;document.head.appendChild(l)}));(location.search||location.hash?[]:["visor/valores/poblacion_densidad__termino.json","visor/valores/poblacion_densidad__andalucia.json","geo/terminos/1752.topo.json"]).concat(["geo/municipios.topo.json","geo/cortes.json","reservas.json","fuentes.json"]).forEach((function(f){var l=document.createElement("link");l.rel="preload";l.as="fetch";l.crossOrigin="anonymous";l.href="data/v2/"+f;document.head.appendChild(l)}));</script>
   <script defer src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 </head>
@@ -26,7 +22,7 @@
 
 <div class="v4-app" id="v4-app">
 
-  <!-- ======== Barra izquierda: temas ======== -->
+  
   <nav class="v4-rail" id="v4-rail" aria-label="Temas">
     <a class="v4-marca" href="index.html" title="Portada del Atlas Histórico de Andalucía">
       <span class="v4-marca__sello" aria-hidden="true"></span>
@@ -39,14 +35,14 @@
     </div>
   </nav>
 
-  <!-- ======== Subindicadores del tema ======== -->
+  
   <aside class="v4-sub" id="v4-sub" aria-labelledby="v4-sub-titulo">
     <header class="v4-sub__cab">
       <p class="v4-k">Tema</p>
       <h2 class="v4-sub__titulo" id="v4-sub-titulo">…</h2>
       <p class="v4-sub__lead" id="v4-sub-lead"></p>
     </header>
-    <!-- ronda v12 (Juan): una sola barra a la izquierda; arriba los indicadores del tema, debajo las opciones -->
+    
     <div class="v4-sub__cuerpo" id="v4-sub-cuerpo">
     <section class="v4-sec v4-sec--lista" id="v4-sec-lista" aria-labelledby="v4-h-lista">
       <h2 class="v4-sec__h" id="v4-h-lista">Indicadores</h2>
@@ -61,7 +57,7 @@
     <button class="v4-sub__plegar" id="v4-sub-plegar" type="button" aria-controls="v4-sub" aria-expanded="true" title="Ocultar la barra (tecla O)"><span data-icono="plegarIzq"></span><span class="v4-sr">Ocultar la barra</span></button>
   </aside>
 
-  <!-- ======== Opciones del mapa (ronda v17, Juan: «que se diferencie indicadores de opciones»): a la derecha ======== -->
+  
   <aside class="v4-opc" id="v4-opc" aria-labelledby="v4-opc-t">
     <div class="v4-opc__tirador" id="v4-opc-tirador" role="separator" aria-orientation="vertical" aria-controls="v4-opc" aria-label="Ancho de las opciones: arrastra, o flechas izquierda y derecha; doble clic para el ancho de serie" tabindex="0"></div>
     <header class="v4-opc__cab">
@@ -114,7 +110,7 @@
 
   <button type="button" class="v4-opc__asa" id="v4-opc-asa" aria-controls="v4-opc" aria-expanded="false" title="Abrir o plegar las opciones (tecla O)"><span class="v4-opc__asa-t">Opciones</span></button>
 
-  <!-- ======== Centro ======== -->
+  
   <main class="v4-centro" id="main">
     <header class="v4-cab">
       <button class="v4-cab__btn v4-solo-movil" id="v4-abrir-temas" type="button" aria-controls="v4-sub" aria-expanded="false"><span data-icono="menu"></span><span>Temas</span></button>
@@ -185,7 +181,7 @@
     </footer>
   </main>
 
-  <!-- ======== Barra derecha: opciones, leyenda, fuente, avisos y ficha ======== -->
+  
   <aside class="v4-der" id="v4-der" aria-label="Opciones y ficha">
     <div class="v4-tirador v4-tirador--der" id="v4-tirador-der" role="separator" aria-orientation="vertical" aria-controls="v4-der" aria-label="Ancho de la barra de opciones: arrastra, o flechas; doble clic para el ancho de serie" tabindex="0"></div>
     <div class="v4-der__tabs" role="tablist" aria-label="Barra derecha">

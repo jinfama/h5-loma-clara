@@ -1,12 +1,4 @@
-/* provenance.css — styles for the "Como trabajamos" methods section.
-   Copied verbatim into each viewer alongside js/methods/provenance-panel.js.
-   2026-09-06: los neutros del CROMO (superficies, reglas, texto apagado) pasan a
-   leer los tokens del visor con var(--token, #hex-de-antes), de modo que aquí
-   siguen la paleta albero/cal de la portada y el fichero sigue valiendo tal cual
-   copiado a un visor que no los defina. Los colores de DATOS —observado
-   (#1a4d2e), estimado (#e0b070), sin dato (#d6d3cc)— no se tocan.
-   Mobile first: panels stack, the coverage matrix owns its own horizontal scroll, and every
-   hit target that a finger has to reach is at least 44 px. */
+
 
 .pv-section { max-width: 1100px; margin: 0 auto; padding: 20px 16px 64px; }
 
@@ -26,7 +18,7 @@
 .pv-headline b { display: block; font-size: 1.35rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .pv-headline span { font-size: .8rem; color: var(--c-text-3, #5d5a52); }
 
-/* ── one series panel ───────────────────────────────────────────────────────────────── */
+
 
 .pv-grid { display: grid; gap: 22px; grid-template-columns: 1fr; }
 @media (min-width: 900px) { .pv-grid { grid-template-columns: 1fr 1fr; } }
@@ -70,7 +62,7 @@
     font-size: .84rem; cursor: pointer; min-height: 44px;
 }
 .pv-toggle input { width: 22px; height: 22px; cursor: pointer; flex: 0 0 auto; }
-/* The whole label is the hit target (the input sits inside it), and it clears 44 px. */
+
 .pv-toggle { padding: 0 4px; }
 .pv-dl {
     font: inherit; font-size: .82rem; min-height: 44px; padding: 0 14px;
@@ -82,7 +74,7 @@
 
 .pv-empty { font-size: .85rem; color: var(--c-text-3, #6b675f); padding: 20px 0; }
 
-/* ── coverage matrix ────────────────────────────────────────────────────────────────── */
+
 
 .pv-matrix-scroll {
     overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -90,7 +82,7 @@
 }
 .pv-mx-label { font-size: 9.5px; fill: var(--c-text-3, #5d5a52); }
 
-/* ── tooltip (shared by the series chart and the matrix) ────────────────────────────── */
+
 
 .pv-tip {
     position: fixed; z-index: 9999; display: none; pointer-events: none;
@@ -114,7 +106,7 @@
     font-size: .72rem; color: var(--c-text-3, #6b675f);
 }
 
-/* ── limits and sources ─────────────────────────────────────────────────────────────── */
+
 
 .pv-limits { margin: 28px 0 0; padding: 14px 16px; background: var(--c-bg-s, #fdf8ee);
              border: 1px solid var(--c-accent-soft, #ead9bb); border-radius: 0; }

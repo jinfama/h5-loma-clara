@@ -1,8 +1,4 @@
-/* =====================================================================================================================
-   Atlas Histórico de Andalucía · «Cómo se hace» (como-se-hace.html): relato con scroll, gráfico fijo y texto que pasa.
-   Hereda de paginas6.css (Syne + Instrument Sans, papel blanco, reglas negras). Tres colores de procedencia:
-   extraído (verde), tomado (azul), estimado (ámbar, siempre con trazo hueco o trama además del color).
-   ===================================================================================================================== */
+
 :root {
   --ch-fuente: #007a3d;
   --ch-tomado: #2f6fa8;
@@ -23,7 +19,7 @@
 .ch-m--estimado { background: repeating-linear-gradient(45deg, #f8e6d0 0 2px, var(--ch-estimado) 2px 4px); }
 .ch-aviso { max-width: 1120px; margin: 16px auto; }
 
-/* ---------- relato: texto a la izquierda, gráfico fijo a la derecha ---------- */
+
 .ch-relato { display: grid; grid-template-columns: minmax(330px, 430px) minmax(0, 1fr); gap: 0 clamp(24px, 3vw, 56px); max-width: 1500px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); }
 .ch-texto { grid-column: 1; grid-row: 1; min-width: 0; padding-bottom: 34vh; }
 .ch-lienzo { grid-column: 2; grid-row: 1; position: sticky; top: var(--ch-nav); height: calc(100vh - var(--ch-nav)); height: calc(100svh - var(--ch-nav)); display: flex; flex-direction: column; min-width: 0; padding: 14px 0 10px; background: var(--p6-papel); }
@@ -41,7 +37,7 @@
 .ch-fuente { flex: none; min-height: 2.7em; margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--p6-linea); font-size: 12px; line-height: 1.35; color: var(--p6-gris); }
 .ch-defs { position: absolute; }
 
-/* ---------- pasos de texto ---------- */
+
 .ch-cap { scroll-margin-top: var(--ch-nav); }
 .ch-paso { display: flex; align-items: flex-start; min-height: 74vh; padding: 12px 0 20px; }
 .ch-cap:first-child .ch-paso:first-child { min-height: 62vh; align-items: flex-start; padding-top: 34px; }
@@ -63,7 +59,7 @@
 .ch-cta a:first-child { background: var(--verde-hondo); border-color: var(--verde-hondo); color: #fff; }
 .ch-cta a:hover { box-shadow: inset 0 -3px 0 #7fd3a3; }
 
-/* ---------- marcas del gráfico ---------- */
+
 .ch-svg text { font-family: var(--p6-txt); font-size: 12.5px; fill: var(--p6-tinta); }
 .ch-svg [data-a] { opacity: 0; pointer-events: none; transition: opacity .42s ease; }
 .ch-svg [data-a].on { opacity: 1; pointer-events: auto; }
@@ -89,7 +85,7 @@
 .ch-cruz line { stroke: #707070; stroke-width: 1; stroke-dasharray: 2 3; }
 .ch-svg .ch-hit { fill: transparent; cursor: crosshair; }
 
-/* ---------- fichas del paso 6 ---------- */
+
 .ch-fichas { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 12px; padding: 6px 0; }
 .ch-ficha { display: flex; flex-direction: column; gap: 4px; min-height: 0; padding: clamp(10px, 1.6vw, 22px); border: 1px solid var(--p6-tinta); background: #fff; overflow: hidden; }
 .ch-ficha h3 { margin: 0; font: 800 clamp(15px, 1.5vw, 20px)/1.1 var(--p6-disp); }
@@ -101,7 +97,7 @@
 .ch-m-par { box-shadow: inset 0 0 0 1px #e5484d; }
 .ch-m-sin { background: repeating-linear-gradient(45deg, #8c8c8c 0 1.5px, #ececec 1.5px 5px); }
 
-/* ---------- leyenda dentro del gráfico, tooltip y tabla ---------- */
+
 .ch-tip { position: fixed; z-index: 40; max-width: 270px; padding: 7px 10px; background: var(--p6-tinta); color: #fff; font-size: 12.5px; line-height: 1.35; pointer-events: none; }
 .ch-tip b { display: block; }
 .ch-tabla { padding: 26px 0 10px; border-top: 2px solid var(--p6-tinta); }
@@ -109,7 +105,7 @@
 .ch-tabla td.num { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ch-tabla .p6-tablawrap { margin-top: 10px; }
 
-/* ---------- móvil: el gráfico arriba, fijo; el texto pasa por debajo ---------- */
+
 @media (max-width: 860px) {
   .ch-relato { display: block; padding: 0 16px; }
   .ch-lienzo { z-index: 10; height: 54vh; height: 54svh; min-height: 330px; padding: 8px 0 4px; border-bottom: 2px solid var(--p6-tinta); }
@@ -140,11 +136,11 @@
   .ch-svg .t-tit { font-size: 13px; }
 }
 
-/* ---------- movimiento reducido: sin transiciones, el gráfico cambia de golpe ---------- */
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto !important; }
   .ch-svg [data-a], .ch-html [data-a], .ch-tarjeta { transition: none !important; }
 }
 
-/* v41: teléfono en horizontal: el gráfico no se queda fijo tapando el texto */
+
 @media (orientation: landscape) and (max-height: 520px) { .ch-lienzo { position: static; height: auto; min-height: 0; } }

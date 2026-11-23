@@ -1,9 +1,4 @@
-/* =====================================================================================================================
-   Atlas Histórico de Andalucía · Relatos (relatos.html): portada y relatos con scroll, gráfico fijo y texto que pasa.
-   Hereda de paginas6.css (Syne + Instrument Sans, papel blanco, reglas negras). Código de color:
-   verde = observado y crecimiento; ámbar = estimado (siempre hueco o con trama además del color);
-   ladrillo = pérdida; azul = costa; gris con trama = sin dato.
-   ===================================================================================================================== */
+
 :root {
   --rl-verde: #007a3d;
   --rl-claro: #9fd0b3;
@@ -29,7 +24,7 @@
 .rl-aviso { max-width: 1120px; margin: 16px auto; }
 .rl-cargando { margin: 48px auto; text-align: center; color: var(--p6-gris); }
 
-/* ---------- portada ---------- */
+
 .rl-portada { padding-top: 30px; padding-bottom: 50px; }
 .rl-cartas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2.2vw, 32px); }
 .rl-carta { display: flex; flex-direction: column; min-width: 0; padding: clamp(18px, 2vw, 28px); border: 2px solid var(--p6-tinta); color: var(--p6-tinta) !important; text-decoration: none; background: #fff; transition: box-shadow .18s ease; }
@@ -46,7 +41,7 @@
 .rl-carta__ir { align-self: flex-start; padding: 7px 12px; background: var(--verde-hondo); color: #fff; font: 600 13.5px var(--p6-txt); }
 .rl-portada__nota { margin: 18px 0 0; max-width: 90ch; font-size: 13px; color: var(--p6-gris); }
 
-/* ---------- relato: texto a la izquierda, gráfico fijo a la derecha ---------- */
+
 .rl-relato { display: grid; grid-template-columns: minmax(330px, 430px) minmax(0, 1fr); gap: 0 clamp(24px, 3vw, 56px); max-width: 1500px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); }
 .rl-relato[hidden] { display: none; }
 .rl-texto { grid-column: 1; grid-row: 1; min-width: 0; padding-bottom: 30vh; }
@@ -63,7 +58,7 @@
 .rl-html { position: absolute; inset: 0; pointer-events: none; }
 .rl-fuente { flex: none; min-height: 2.7em; margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--p6-linea); font-size: 12px; line-height: 1.35; color: var(--p6-gris); }
 
-/* ---------- pasos de texto ---------- */
+
 .rl-cap { scroll-margin-top: var(--rl-nav); }
 .rl-paso { display: flex; align-items: flex-start; min-height: 74vh; padding: 12px 0 20px; }
 .rl-cap:first-child .rl-paso:first-child { min-height: 62vh; padding-top: 34px; }
@@ -80,7 +75,7 @@
 .rl-cta a:first-child { background: var(--verde-hondo); border-color: var(--verde-hondo); color: #fff; }
 .rl-cta a:hover { box-shadow: inset 0 -3px 0 #7fd3a3; }
 
-/* ---------- marcas del gráfico ---------- */
+
 .rl-svg text { font-family: var(--p6-txt); font-size: 12.5px; fill: var(--p6-tinta); }
 .rl-svg [data-a] { opacity: 0; pointer-events: none; transition: opacity .42s ease; }
 .rl-svg [data-a].on { opacity: 1; pointer-events: auto; }
@@ -114,7 +109,7 @@
 .rl-ley .rl-m--clase { background: #fff; border: 2px solid var(--p6-tinta); border-radius: 50% !important; }
 .rl-ley .rl-m--lleno { background: var(--rl-verde); border-color: var(--rl-verde); border-radius: 50% !important; }
 
-/* ---------- listas de municipios ---------- */
+
 .rl-listas { position: absolute; inset: 30px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(14px, 2.4vw, 34px); align-content: start; }
 .rl-lista { min-width: 0; }
 .rl-lista h3 { margin: 0 0 3px; font: 800 clamp(14px, 1.3vw, 18px)/1.12 var(--p6-disp); letter-spacing: -.01em; }
@@ -127,7 +122,7 @@
 .rl-fila.est i { background: repeating-linear-gradient(45deg, #f8e6d0 0 2px, var(--rl-estimado) 2px 4px); }
 .rl-fila.perd i { background: var(--rl-perdida); }
 
-/* ---------- final del relato ---------- */
+
 .rl-final { padding-top: 26px; padding-bottom: 52px; border-top: 2px solid var(--p6-tinta); }
 .rl-final h2 { font-size: clamp(24px, 2.6vw, 36px); text-transform: none; }
 .rl-final__g { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px clamp(24px, 4vw, 64px); margin-top: 12px; }
@@ -140,7 +135,7 @@
 .rl-tip { position: fixed; z-index: 40; max-width: 280px; padding: 7px 10px; background: var(--p6-tinta); color: #fff; font-size: 12.5px; line-height: 1.35; pointer-events: none; }
 .rl-tip b { display: block; }
 
-/* ---------- móvil: el gráfico arriba, fijo; el texto pasa por debajo ---------- */
+
 @media (max-width: 860px) {
   .rl-cartas { grid-template-columns: minmax(0, 1fr); }
   .rl-relato { display: block; padding: 0 16px; }
@@ -181,11 +176,11 @@
   .rl .p6-nav ul a { padding: 3px 7px; font-size: 12px; white-space: nowrap; }
 }
 
-/* ---------- movimiento reducido: sin transiciones, el gráfico cambia de golpe ---------- */
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto !important; }
   .rl-svg [data-a], .rl-html [data-a], .rl-tarjeta, .rl-carta { transition: none !important; }
 }
 
-/* v41: teléfono en horizontal: el gráfico no se queda fijo tapando el texto */
+
 @media (orientation: landscape) and (max-height: 520px) { .rl-lienzo { position: static; height: auto; min-height: 0; } }

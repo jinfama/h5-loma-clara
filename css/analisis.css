@@ -1,8 +1,6 @@
-/* analisis.css — vista «Análisis» del visor (js/visor4/analisis/). Lenguaje de la ronda v6 (RONDA_V6.md): Syne para lo
-   que se lee de lejos, Instrument Sans para el texto, esquinas cuadradas, reglas negras de 2 px entre bloques y finas
-   dentro, controles de 28 px. Solo tokens del visor (--v4-*, --acento). */
 
-/* ---------- la pestaña de la vista en la cabecera (sin tocar el armazón): con su rótulo y su icono */
+
+
 .v4-vista--extra[data-id="analisis"] span { display: inline; }
 .v4-vista--extra[data-id="analisis"] { color: var(--v4-tinta); padding: 0 10px; }
 .v4-vista--extra[data-id="analisis"][aria-selected="true"] { color: var(--v4-papel); }
@@ -12,10 +10,10 @@
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M5.5 18.5 20 5.5'/%3E%3Crect x='6.6' y='10.6' width='2.8' height='2.8' fill='black' stroke='none'/%3E%3Crect x='11.1' y='13.1' width='2.8' height='2.8' fill='black' stroke='none'/%3E%3Crect x='13.6' y='6.6' width='2.8' height='2.8' fill='black' stroke='none'/%3E%3Crect x='17.1' y='11.1' width='2.8' height='2.8' fill='black' stroke='none'/%3E%3C/svg%3E") center / 100% no-repeat;
 }
 @media (max-width: 759.98px) { .v4-vista--extra[data-id="analisis"] { display: inline-flex; } }
-/* la leyenda de abajo del armazón es de otras vistas: aquí cada modo trae la suya */
+
 body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 
-/* ---------- armazón de la vista */
+
 .an { position: relative; height: 100%; display: flex; flex-direction: column; background: var(--v4-papel); color: var(--v4-tinta); font: 400 13px/1.45 var(--v4-sans); container-type: inline-size; container-name: an; overflow: hidden; }
 
 .an-vars { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 22px 10px; border-bottom: 1px solid var(--v4-linea); }
@@ -75,7 +73,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-vacio__t { max-width: 520px; margin: 0 auto; font-size: 14px; color: var(--v4-tinta-2); }
 .an-vacio__btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
-/* ---------- tira de años */
+
 .an-tiempo { flex: none; display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; padding: 8px 22px 8px; border-top: 1px solid var(--v4-linea); }
 .an-tiempo[hidden] { display: none; }
 .an-ctl { width: 28px; height: 28px; padding: 0; border: 1px solid var(--v4-tinta); background: var(--v4-papel); font: 600 16px/1 var(--v4-sans); cursor: pointer; display: grid; place-items: center; }
@@ -98,7 +96,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-par { flex: 1 1 100%; margin: 0; font-size: 11.5px; color: var(--v4-tinta-3); }
 .an-par.is-aviso { color: #8a5a00; }
 
-/* ---------- gráficos SVG */
+
 .an-svg { display: block; overflow: visible; }
 .an-svg text { font: 400 11px var(--v4-sans); fill: var(--v4-tinta-2); }
 .an-rej line { stroke: #ededeb; }
@@ -126,7 +124,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-mapa { display: block; }
 .an-mapa-caja { position: absolute; inset: 0; }
 
-/* ---------- panel de resultados */
+
 .an-res > :first-child { margin-top: 0; }
 .an-r__k { margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--v4-linea); font: 700 11px/1.25 var(--v4-serif); letter-spacing: .02em; text-transform: uppercase; color: var(--v4-tinta); }
 .an-res > .an-r__k:first-child { border-top: 0; padding-top: 0; }
@@ -170,18 +168,18 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-pares small { color: var(--v4-tinta-3); }
 .an-rt[hidden] { display: none; }
 
-/* ---------- opciones (barra derecha) */
+
 .an-opc { display: grid; gap: 0; }
 .an-opc-k { margin: 12px 0 0; font: 600 10.5px/1.2 var(--v4-sans); letter-spacing: .1em; text-transform: uppercase; color: var(--v4-tinta-3); }
 .an-opc-k:first-child { margin-top: 2px; }
 .an-descargas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
-/* ---------- tooltip */
+
 .an-tt-f { display: flex; justify-content: space-between; gap: 14px; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .an-tt-f small { color: #8a8a8a; }
 .an-tt-m { font-size: 11.5px; color: #6b6b6b; }
 
-/* ---------- bivariante */
+
 .an-biv-ley { margin: 4px 0 10px; font-size: 11px; }
 .an-biv-t { margin: 0 0 6px; font: 600 11px var(--v4-sans); color: var(--v4-tinta-3); }
 .an-biv-cuerpo { display: flex; align-items: stretch; gap: 4px; }
@@ -195,7 +193,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-biv-ex { margin: 2px 0 0 18px; font-weight: 600; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .an-biv-n { margin: 4px 0 0; color: var(--v4-tinta-3); font-size: 10px; }
 
-/* ---------- matriz */
+
 .an-mz-f { font-size: 11.5px !important; fill: var(--v4-tinta) !important; }
 .an-mz-c { font-size: 10.5px !important; fill: var(--v4-tinta-3) !important; }
 .an-mz-cel text { font-size: 12px !important; fill: var(--v4-tinta) !important; font-variant-numeric: tabular-nums; pointer-events: none; }
@@ -203,7 +201,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-mz-cel text.is-claro { fill: #fff !important; }
 .an-mz-cel:hover rect { stroke: #101010; stroke-width: 2; }
 
-/* ---------- regresión */
+
 .an-reg { position: absolute; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .an-reg__tabla { overflow-x: auto; padding: 10px 22px 6px; border-bottom: 1px solid var(--v4-linea); }
 .an-tabla { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 100%; }
@@ -224,7 +222,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-reg__ley { position: absolute; right: 12px; bottom: 10px; display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(255, 255, 255, .92); font-size: 11px; color: var(--v4-tinta-2); }
 .an-reg__ley i { display: block; width: 90px; height: 8px; }
 
-/* ---------- en el tiempo */
+
 .an-ti { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(0, 1.25fr) minmax(0, 1fr); padding: 8px 14px 4px 8px; }
 .an-ti__series, .an-ti__cc { min-height: 0; }
 .an-serie { fill: none; stroke-width: 1.8; }
@@ -233,7 +231,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-cc-b { fill: #a9a9a5; }
 .an-cc-b.is-fuera { fill: #101010; }
 
-/* ---------- estrecho (móvil, o el centro estrecho con las dos barras abiertas): todo en columna, con scroll */
+
 @container anapp (max-width: 760px) {
   .an { overflow: visible; height: auto; }
   .an-cuerpo { display: block; flex: none; }
@@ -258,13 +256,10 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-mz-ley { display: flex; align-items: center; gap: 6px; margin: 2px 0 6px; font-size: 11px; color: var(--v4-tinta-3); }
 .an-mz-ley i { display: block; flex: 1; max-width: 140px; height: 8px; }
 
-/* =====================================================================================================================
-   Análisis independiente (encargo de Juan, 20-nov-2026): panel izquierdo propio + centro.
-   El modo (registrarModo) pone su panel en la barra izquierda y su centro en el escenario.
-   ===================================================================================================================== */
+
 .an-app { position: absolute; inset: 0; background: var(--v4-papel); container-type: inline-size; container-name: anapp; }
 
-/* ---------- panel izquierdo */
+
 .an-panel { padding: 0 0 24px; font: 400 13px/1.4 var(--v4-sans); color: var(--v4-tinta); background: var(--v4-papel); }
 .an-p-cab { padding: 16px 16px 12px; border-bottom: var(--v4-regla, 2px solid #101010); }
 .an-p-cab__k { margin: 0; font: 800 26px/1 var(--v4-serif); letter-spacing: -.035em; text-transform: uppercase; }
@@ -305,7 +300,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-panel .an-p-sec .v4-campo { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
 .an-panel .an-p-sec .v4-campo__k { display: none; }
 
-/* ---------- botón de indicador (panel y ejes) y su lista con buscador */
+
 .an-ind { display: flex; align-items: center; gap: 0; width: 100%; min-width: 0; height: 30px; padding: 0 8px 0 0; border: 1px solid var(--v4-tinta); background: var(--v4-papel); color: var(--v4-tinta); font: 500 12.5px var(--v4-sans); text-align: left; cursor: pointer; }
 .an-ind:not(:has(.an-tag)) { padding-left: 8px; }
 .an-ind .an-tag { height: 28px; width: 28px; margin-right: 8px; }
@@ -331,14 +326,14 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-pop__it:disabled { color: #b0b0b0; cursor: default; }
 .an-pop__v { padding: 12px; color: var(--v4-tinta-3); }
 
-/* ---------- cabecera del centro: qué es X y qué es Y, siempre a la vista */
+
 .an-cab { flex: none; padding: 14px 22px 10px; border-bottom: var(--v4-regla, 2px solid #101010); }
 .an-cab__k { margin: 0; font: 700 11px/1.2 var(--v4-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--v4-tinta); display: flex; align-items: center; gap: 8px; }
 .an-cab__k::before { content: ""; width: 10px; height: 10px; background: var(--acento); }
 .an-cab__t { margin: 6px 0 4px; font: 800 clamp(20px, 1rem + 1vw, 30px)/1.02 var(--v4-serif); letter-spacing: -.03em; }
 .an-cab__s { margin: 0; font-size: 12.5px; color: var(--v4-tinta-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---------- resultados: lo esencial a la vista, lo demás plegado */
+
 .an-dl--clave { font-size: 13.5px; }
 .an-dl--clave dd { font-size: 14px; }
 .an-mas { margin: 10px 0 4px; border-top: 1px solid var(--v4-linea); }
@@ -349,7 +344,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-tam { margin: 2px 0 8px; }
 .an-tam text { font-size: 10.5px; fill: var(--v4-tinta-2); }
 
-/* ---------- aspecto: ejes marcados */
+
 .an-svg.is-marcado .an-eje path, .an-svg.is-marcado .an-eje line { stroke: #101010; stroke-width: 1.3; }
 .an-svg.is-marcado .an-eje text { fill: var(--v4-tinta); font-weight: 600; }
 
@@ -369,10 +364,10 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
   .an-ti__cc { height: 200px; }
 }
 
-/* ---------- ronda 3 (21-nov-2026): selectores de eje visibles y centrados; filtros en el panel */
+
 .an-app, .an-panel { --an-y: #d23c2f; --an-x: #101010; }
 .an-ind--y .an-tag, .an-var--y .an-tag { background: var(--an-y, #d23c2f) !important; }
-/* píldora del eje: borde del color de su eje, texto de 13,5 px, chevron claro, que se vea que se pincha */
+
 .an-eje-sel { position: absolute; z-index: 3; display: inline-flex; align-items: center; gap: 0; width: auto; height: 34px; padding: 0 12px 0 0;
   border: 2px solid var(--an-x); background: #fff; color: var(--v4-tinta); font: 600 13.5px var(--v4-sans); cursor: pointer; box-shadow: 0 1px 0 rgba(16, 16, 16, .06);
   transition: background var(--v4-rapido, .16s), box-shadow var(--v4-rapido, .16s); }
@@ -390,7 +385,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-eje-sel--y:hover, .an-eje-sel--y:focus-visible { background: #fdf3f2; }
 .an-swap { width: 30px; height: 30px; }
 
-/* ---------- filtrar */
+
 .an-p-sub { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 0 5px; font: 600 11px/1.2 var(--v4-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--v4-tinta-3); }
 .an-p-sec > .an-p-sub:first-of-type { margin-top: 0; }
 .an-p-link { border: 0; background: none; padding: 0; font: 500 11.5px var(--v4-sans); letter-spacing: 0; text-transform: none; color: var(--v4-tinta); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
@@ -423,7 +418,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-p-lista { grid-template-columns: minmax(0, 1fr); }
 .an-p-li { min-width: 0; }
 
-/* ---------- ronda 4 (21-nov-2026): regresión que llena el alto; panel con tabla de artículo; leyendas por clases */
+
 .an-reg { grid-template-rows: auto minmax(0, 1fr); }
 .an-reg__fila { grid-template-columns: minmax(240px, 40%) minmax(0, 1fr); border-bottom: 1px solid var(--v4-linea); }
 .an-reg__beta { padding: 10px 10px 8px 22px; border-right: 1px solid var(--v4-linea); }
@@ -466,7 +461,7 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
 .an-ley--res li { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .an-r__n.is-largo { font-size: 30px; letter-spacing: -.02em; }
 
-/* ---------- ronda 4 bis (21-nov-2026): la nube del panel, tablas estrechas y móvil sin recortes */
+
 .an-pg[hidden] { display: none; }
 .an-pg--coef { overflow-y: auto; }
 .an-pg--nube { border-top: 1px solid var(--v4-linea); padding: 8px 12px 6px 14px; }
@@ -491,10 +486,9 @@ body[data-vista="analisis"] #v4-ley-bajo { display: none; }
   .an-reg__caja { min-height: 260px; }
 }
 
-/* «Fuente» e «Info» del mapa (ronda v15 del armazón) hablan del indicador del mapa, no de las variables del análisis:
-   en este modo no se enseñan (la vista tiene sus «Fuentes originales»). Pedido en PETICIONES_API.md. */
+
 body:has(.an-app) #v4-fi { display: none; }
-/* si el alto no da para tabla y gráficos, se desplaza en vez de aplastar; en la tabla del panel, la primera columna se queda quieta */
+
 .an-reg, .an-pan { overflow-y: auto; }
 .an-ptabla tbody th, .an-ptabla thead th:first-child { position: sticky; left: 0; z-index: 1; background: var(--v4-papel); }
 @container antabla (max-width: 720px) {
@@ -502,7 +496,7 @@ body:has(.an-app) #v4-fi { display: none; }
   .an-ptabla thead th button { padding: 0 4px; height: auto; min-height: 30px; letter-spacing: .02em; }
 }
 
-/* ---------- explicación en llano (21-nov-2026): «¿Qué es esto?», bienvenida y las «i» de los controles */
+
 .an-i { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 17px; height: 17px; margin: 0 0 0 5px; padding: 0; border: 1px solid var(--v4-tinta-3); border-radius: 50%; background: var(--v4-papel); color: var(--v4-tinta-2); font: italic 700 11px/1 Georgia, 'Times New Roman', serif; cursor: pointer; vertical-align: middle; }
 .an-i:hover, .an-i[aria-expanded="true"] { border-color: var(--v4-tinta); color: var(--v4-papel); background: var(--v4-tinta); }
 .an-i:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
@@ -544,7 +538,7 @@ body:has(.an-app) #v4-fi { display: none; }
   .an-ex { border-left: 0; }
 }
 
-/* ---------- año propio de cada variable (21-nov-2026): «Año» con candado, años fijos y media de un periodo */
+
 .an-va-caja { margin: 4px 0 6px; }
 .an-p-li .an-va-caja { flex: 1 1 100%; margin: 0 0 6px; }
 .an-p-li { flex-wrap: wrap; }
@@ -561,8 +555,7 @@ body:has(.an-app) #v4-fi { display: none; }
 .an-va__at[aria-pressed="true"] { border-color: var(--v4-tinta); color: var(--v4-tinta); font-weight: 700; }
 .an-va--fija { font-style: italic; }
 
-/* ---------- ronda 6 (21-nov-2026; Juan: «diferencia mejor el recuadro… que ahora se mezcla todo»):
-   el panel por pasos numerados y plegables, las tarjetas de «¿Qué quieres hacer?» y la tarjeta de resultados */
+
 .an-panel { padding-bottom: 24px; }
 .an-paso { border-bottom: 1px solid var(--v4-linea-2); background: var(--v4-papel); }
 .an-paso:nth-child(even) { background: #f6f6f3; }
@@ -584,7 +577,7 @@ body:has(.an-app) #v4-fi { display: none; }
 .an-panel .an-p-bloque .v4-campo__k { display: none; }
 .an-panel .an-paso__c > .an-p-sub:first-child { margin-top: 0; }
 
-/* «¿Qué quieres hacer?»: una tarjeta por análisis, con su minigráfico, su nombre y su pregunta */
+
 .an-modos { display: grid; gap: 12px; }
 .an-modos__k { margin: 0 0 6px; font: 600 10.5px/1.2 var(--v4-sans); letter-spacing: .07em; text-transform: uppercase; color: var(--v4-tinta-3); }
 .an-modos__r { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -600,7 +593,7 @@ body:has(.an-app) #v4-fi { display: none; }
 .an-modo[aria-checked="true"] { background: var(--acento); border-color: var(--acento); color: #fff; box-shadow: 0 10px 22px rgba(0, 0, 0, .22); transform: translateY(-2px); }
 .an-modo[aria-checked="true"] .an-modo__mini { color: #fff; }
 .an-modo[aria-checked="true"] .an-modo__q { color: rgba(255, 255, 255, .88); }
-/* el gesto al pasar: la recta o las series se dibujan, las casillas laten, los coeficientes se mueven */
+
 @keyframes an-traza { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
 @keyframes an-late { 0%, 100% { opacity: 1; } 45% { opacity: .2; } }
 @keyframes an-empuja { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
@@ -609,7 +602,7 @@ body:has(.an-app) #v4-fi { display: none; }
 .an-modo:hover .an-mini__late { animation: an-late .8s ease-in-out both; }
 .an-modo:hover .an-mini__empuja { animation: an-empuja .6s ease-in-out both; }
 
-/* resultados: la cifra principal y su lectura en una tarjeta; los avisos juntos en una banda; «Más estadísticos» aparte */
+
 .an-res .an-tarjeta { margin: 0 0 12px; padding: 12px 14px 12px; background: #fff; border: 1px solid var(--v4-linea-2); border-top: 4px solid var(--acento); box-shadow: 0 8px 22px rgba(0, 0, 0, .07); }
 .an-tarjeta .an-r__big { margin-top: 2px; }
 .an-tarjeta .an-lectura { margin: 10px 0 0; padding: 9px 0 0 0; border-left: 0; border-top: 1px solid var(--v4-linea); font-size: 13px; color: var(--v4-tinta); }
@@ -624,10 +617,9 @@ body:has(.an-app) #v4-fi { display: none; }
   .an-panel *, .an-res * { animation: none !important; transition: none !important; }
   .an-modo[aria-checked="true"] { transform: none; }
 }
-.an-paso:first-child > .an-paso__s { padding-right: 30px; }   /* deja sitio al botón de plegar la barra del armazón */
+.an-paso:first-child > .an-paso__s { padding-right: 30px; }   
 
-/* ---------- ronda 7 (22-nov-2026; Juan: «mira esto, no se aprovecha espacio»): la columna de resultados solo con lo que
-   sirve para leer y tan estrecha como permita su contenido; las fuentes, en un botón con recuadro flotante */
+
 .an-cuerpo { grid-template-columns: minmax(0, 1fr) var(--an-col, clamp(250px, 30%, 320px)); }
 .an-cuerpo:has(> .an-res:empty) { grid-template-columns: minmax(0, 1fr); }
 .an-res:empty { display: none; }
@@ -650,16 +642,16 @@ body:has(.an-app) #v4-fi { display: none; }
 .an-fu a { color: inherit; text-decoration: underline; text-decoration-color: var(--v4-linea-2); text-underline-offset: 2px; }
 .an-fu a:hover { text-decoration-color: var(--acento); }
 .an-fu__mas { margin: 12px 0 0; padding-top: 9px; border-top: 1px solid var(--v4-linea); font-weight: 600; }
-.an-p-li > .an-va--fija { flex: 1 1 100%; margin: 0 0 6px; }   /* «Cifra fija» en su propia línea: que no corte el nombre de la variable */
+.an-p-li > .an-va--fija { flex: 1 1 100%; margin: 0 0 6px; }   
 
-/* ---------- ronda v24: «Ejes y logaritmos»: el eje solo cambia cómo se ve; el cálculo cambia los resultados */
+
 .an-ej__nota { margin: 0 0 8px; padding: 7px 9px; border-left: 3px solid var(--acento); background: #f6f6f3; font-size: 11.5px; line-height: 1.4; color: var(--v4-tinta-2); }
 .an-paso:nth-child(even) .an-ej__nota { background: #fff; }
 .an-ej__nota b { color: var(--v4-tinta); }
 .an-ej__v { margin: 11px 0 0; font-size: 12px; line-height: 1.3; color: var(--v4-tinta); overflow-wrap: anywhere; }
 .an-ej__v b { display: inline-block; min-width: 16px; margin-right: 3px; font-weight: 800; color: var(--an-x); }
 .an-ej__v b.is-y { color: var(--an-y); }
-.an-panel .an-p-bloque > .v4-campo { grid-template-columns: minmax(0, 1fr); }   /* sin rótulo a la vista, el control ocupa todo el ancho («Por provincia» no se corta) */
+.an-panel .an-p-bloque > .v4-campo { grid-template-columns: minmax(0, 1fr); }   
 .an-ej .an-campo { margin-top: 5px; }
 .an-ej .v4-seg button:disabled { color: var(--v4-tinta-3); background: #f2f2ef; cursor: not-allowed; text-decoration: line-through; }
 .an-ej__fuera { margin: 4px 0 0; font-size: 11px; line-height: 1.35; color: #5f4200; }

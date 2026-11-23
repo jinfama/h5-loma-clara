@@ -1,4 +1,4 @@
-/* js/visor3/ficha · ficha universal (tokens de css/atlas2.css; la historia usa las piezas .fr-* de css/fronteras.css) */
+
 
 .v3fi { font-family: var(--a2-font-text); color: var(--a2-ink); font-size: .94rem; line-height: 1.45; }
 .v3fi section + section { margin-top: 16px; }

@@ -1,4 +1,4 @@
-/* fuentes.html · lo propio de la página (tokens y piezas comunes en atlas2.css) */
+
 .fu-head { padding-top: clamp(24px, 4vw, 48px); padding-bottom: 8px; }
 .fu-head h1 { max-width: 18ch; }
 .fu-autoria { font-size: .92rem; color: var(--a2-ink-2); border-left: 3px solid var(--a2-accent); padding-left: 10px; max-width: 70ch; }
@@ -57,5 +57,5 @@
 .fu-trama p { margin: 0; font-size: .88rem; color: var(--a2-ink-2); }
 .fu-nota { font-size: 1rem; max-width: 80ch; }
 
-/* citas de reservas con rutas o códigos largos sin espacios: que partan (si no, scroll lateral a 390 px) */
+
 .fu-reserva, .fu-reserva .a2-quote { overflow-wrap: anywhere; min-width: 0; }

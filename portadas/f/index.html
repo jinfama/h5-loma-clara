@@ -11,19 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<script>
-  // Antes de pintar: ¿va dentro de la anfitriona? ¿hay WebGL? Sin WebGL se queda la imagen fija del relieve.
-  (function () {
-    var r = document.documentElement;
-    try { if (window.self !== window.top) r.classList.add("embebida"); } catch (e) { r.classList.add("embebida"); }
-    var ok = false;
-    try {
-      var c = document.createElement("canvas");
-      ok = !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl")));
-    } catch (e) { ok = false; }
-    r.classList.add(ok ? "cargando" : "sin3d");
-  })();
-</script>
+<script>(function(){var r=document.documentElement;try{if(window.self!==window.top)r.classList.add("embebida")}catch(e){r.classList.add("embebida")}var ok=false;try{var c=document.createElement("canvas");ok=!!(window.WebGLRenderingContext&&(c.getContext("webgl2")||c.getContext("webgl")))}catch(e){ok=false}r.classList.add(ok?"cargando":"sin3d")})();</script>
 </head>
 <body>
 
@@ -198,31 +186,6 @@
 } }
 </script>
 <script type="module" src="main.js"></script>
-<script>
-  // Panel «Sobre el atlas»: se abre desde los enlaces y se cierra con ✕, con Esc (lo hace el propio dialog) o pulsando
-  // fuera del panel. Funciona también sin WebGL.
-  (function () {
-    var d = document.getElementById("sobre");
-    var abrir = function () { if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); } };
-    var cerrar = function () { if (d.close) d.close(); else d.removeAttribute("open"); };
-    document.querySelectorAll(".abrir-sobre").forEach(function (b) { b.addEventListener("click", abrir); });
-    document.getElementById("cerrarSobre").addEventListener("click", cerrar);
-    d.addEventListener("click", function (e) {
-      if (e.target !== d) return;   // un clic en el fondo oscuro llega al propio dialog, fuera de su caja
-      var r = d.getBoundingClientRect();
-      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) cerrar();
-    });
-  })();
-  // Copiar la cita (también sin WebGL).
-  (function () {
-    var b = document.getElementById("copiar"), c = document.getElementById("cita");
-    b.addEventListener("click", function () {
-      var t = c.textContent.replace(/\s+/g, " ").trim();
-      var listo = function () { b.textContent = "Copiada"; setTimeout(function () { b.textContent = "Copiar la cita"; }, 1800); };
-      var aMano = function () { var s = getSelection(), r = document.createRange(); r.selectNodeContents(c); s.removeAllRanges(); s.addRange(r); };
-      try { navigator.clipboard.writeText(t).then(listo, aMano); } catch (e) { aMano(); }
-    });
-  })();
-</script>
+<script>(function(){var d=document.getElementById("sobre");var abrir=function(){if(!d.open){if(d.showModal)d.showModal();else d.setAttribute("open","")}};var cerrar=function(){if(d.close)d.close();else d.removeAttribute("open")};document.querySelectorAll(".abrir-sobre").forEach((function(b){b.addEventListener("click",abrir)}));document.getElementById("cerrarSobre").addEventListener("click",cerrar);d.addEventListener("click",(function(e){if(e.target!==d)return;var r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)cerrar()}))})();(function(){var b=document.getElementById("copiar"),c=document.getElementById("cita");b.addEventListener("click",(function(){var t=c.textContent.replace(/\s+/g," ").trim();var listo=function(){b.textContent="Copiada";setTimeout((function(){b.textContent="Copiar la cita"}),1800)};var aMano=function(){var s=getSelection(),r=document.createRange();r.selectNodeContents(c);s.removeAllRanges();s.addRange(r)};try{navigator.clipboard.writeText(t).then(listo,aMano)}catch(e){aMano()}}))})();</script>
 </body>
 </html>

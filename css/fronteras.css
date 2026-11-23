@@ -1,4 +1,4 @@
-/* fronteras.html · lo propio de la página (tokens y piezas comunes en atlas2.css) */
+
 
 .fr-head {
   padding-top: clamp(20px, 3.5vw, 40px); padding-bottom: 18px;
@@ -8,7 +8,7 @@
 .fr-head .a2-lede { font-size: 1rem; margin: 0; }
 @media (max-width: 860px) { .fr-head { grid-template-columns: minmax(0, 1fr); } }
 
-/* ---------- escenario: mapa + ficha ---------- */
+
 .fr-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
@@ -33,7 +33,7 @@
 .fr-map__msg { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; padding: 24px; text-align: center; }
 .fr-map__msg[hidden] { display: none; }
 
-/* ---------- controles ---------- */
+
 .fr-controls {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   margin-top: 12px;
@@ -51,7 +51,7 @@
 .fr-legend { margin-top: 14px; display: grid; gap: 10px; }
 .fr-legend .a2-legend-ramp, .fr-legend .a2-legend-ramp__labels { max-width: 300px; }
 
-/* ---------- lado: buscador y ficha ---------- */
+
 .fr-side {
   position: sticky; top: calc(var(--a2-nav-h) + 12px);
   max-height: calc(100vh - var(--a2-nav-h) - 24px);
@@ -79,7 +79,7 @@
 .fr-ficha h3 { font: 600 .74rem var(--a2-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--a2-ink-3); margin: 20px 0 8px; }
 .fr-ficha .a2-badge { margin: 0 4px 4px 0; }
 
-/* línea de tiempo por cortes */
+
 .fr-tl { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; margin-top: 4px; }
 .fr-tl button {
   height: 30px; border: 0; padding: 0; border-radius: 2px; cursor: pointer; position: relative;
@@ -96,7 +96,7 @@
 .fr-tramos li { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: baseline; }
 .fr-tramos .a2-mono { font-size: .78rem; color: var(--a2-ink-2); }
 
-/* mini-mapas */
+
 .fr-minis { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
 .fr-mini {
   flex: none; width: 124px; scroll-snap-align: start; border: 1px solid var(--a2-line); border-radius: var(--a2-radius);
@@ -108,7 +108,7 @@
 .fr-mini b { display: block; font: 600 .78rem var(--a2-font-mono); padding: 2px 6px 0; }
 .fr-mini span { display: block; font-size: .72rem; color: var(--a2-ink-2); padding: 0 6px; line-height: 1.25; }
 
-/* relaciones */
+
 .fr-rels { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .fr-rel { border-left: 3px solid var(--a2-blue); padding: 2px 0 2px 12px; }
 .fr-rel[data-revision="true"] { border-left-color: var(--a2-ochre); }
@@ -127,7 +127,7 @@
 .fr-resumen { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
 .fr-resumen .a2-stat__value { font-size: 2rem; }
 
-/* ---------- gráfico de conteo ---------- */
+
 .fr-chart { height: 260px; margin: 12px 0 6px; }
 .fr-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .fr-chart .bar { fill: var(--a2-seq-2); cursor: pointer; }
@@ -142,7 +142,7 @@
 .fr-chart .val { font: 600 11px var(--a2-font-mono); fill: var(--a2-ink); }
 .fr-chart .gap-label { font: 400 11px var(--a2-font-text); fill: var(--a2-ink-3); }
 
-/* ---------- Ensenada ---------- */
+
 .fr-ens-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 32px; align-items: start; margin-top: 16px; }
 .fr-ens-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .fr-ens-stats .a2-panel { padding: 16px; }
@@ -153,11 +153,11 @@
 .fr-ens-bar__track span { display: block; height: 100%; }
 .fr-ens-text code { font-family: var(--a2-font-mono); font-size: .86em; background: var(--a2-surface-2); padding: 1px 5px; border-radius: 3px; }
 
-/* ---------- cómo leer ---------- */
+
 .fr-leer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px 32px; margin-top: 12px; }
 .fr-leer-grid p { font-size: .95rem; color: var(--a2-ink-2); }
 
-/* ---------- móvil ---------- */
+
 @media (max-width: 980px) {
   .fr-stage { grid-template-columns: minmax(0, 1fr); }
   .fr-side { position: static; max-height: none; }

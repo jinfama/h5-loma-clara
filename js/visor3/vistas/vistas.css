@@ -1,4 +1,4 @@
-/* Estilos de las vistas no cartográficas (js/visor3/vistas/). Solo tokens --a2-* del diseño común (css/atlas2.css). */
+
 .vv { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding-top: var(--v3-barra-h, 60px); box-sizing: border-box; display: flex; flex-direction: column; background: var(--a2-bg); color: var(--a2-ink); font-family: var(--a2-font-text); overflow: hidden; }
 .vv-bar { flex: none; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; padding: 10px clamp(12px, 2vw, 24px) 8px; background: var(--a2-surface); border-bottom: 1px solid var(--a2-line); }
 .vv-ctl { display: inline-flex; flex-direction: column; gap: 2px; font: 600 .68rem var(--a2-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--a2-ink-3); }
@@ -69,10 +69,10 @@
 }
 @media (prefers-reduced-motion: reduce) { .vv * { transition: none !important; animation: none !important; } }
 
-/* ---- Ronda v16 ---------------------------------------------------------------------------------------------------- */
-/* sin pie si no hay nada que decir (la fuente está en el botón «Fuente», arriba) */
+
+
 .vv-pie:empty { display: none; }
-/* series que se encienden y apagan al pincharlas; resaltar al pasar el puntero */
+
 .vv-pinchable { cursor: pointer; }
 .vv-pinchable:focus { outline: none; }
 .vv-pinchable:focus-visible { outline: 2px solid var(--a2-accent, #c8102e); outline-offset: 2px; }
@@ -83,7 +83,7 @@ svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text
 .vv-con-foco [data-serie]:not(.is-foco) { opacity: .16; }
 .vv-con-foco .vv-fila[data-serie]:not(.is-foco), .vv-con-foco .vv-fila-rot[data-serie]:not(.is-foco) { opacity: .38; }
 .vv-svg .vv-fila-rot { font-size: 12px; }
-/* recuadro flotante: solo datos */
+
 .vv-tt-t { display: block; margin-bottom: 2px; }
 .vv-tt-fila { display: flex; gap: 12px; justify-content: space-between; white-space: nowrap; line-height: 1.35; }
 .vv-tt-fila i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
@@ -92,10 +92,10 @@ svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text
 .vv-tt-fila.is-foco { font-weight: 700; }
 .vv-tt-fila.is-sub { padding-left: 14px; font-size: .92em; opacity: .85; }
 .vv-tt-fila.is-sub .vv-tt-v { font-weight: 500; }
-/* Líneas: timelapse (año grande mientras se reproduce) */
+
 .vv .vv-svg text.vv-tl-anio { font: 800 30px var(--a2-font-display, sans-serif); fill: var(--a2-ink-3); opacity: .35; }
 .vv .vv-svg .vv-tl-guia { stroke: var(--a2-ink-2); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
-/* Líneas: selector de periodo (tira con dos asas) */
+
 .vv-tira { flex: none; display: flex; align-items: center; padding: 2px clamp(8px, 2vw, 24px) 6px; background: var(--a2-bg); }
 .vv-tira[hidden] { display: none; }
 .vv-tira svg { flex: 1 1 auto; min-width: 0; height: 46px; display: block; overflow: visible; }
@@ -112,11 +112,11 @@ svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text
   .vv-tira { flex-wrap: wrap; }
   .vv-tira-bot { order: -1; width: 100%; grid-template-columns: repeat(4, auto); justify-content: start; padding: 2px 0 2px; }
 }
-/* Líneas: «+2» de la leyenda de una faceta, como chip */
+
 .vv-svg .vv-chip-mas rect { fill: var(--a2-surface, #fff); stroke: var(--a2-line-2); }
 .vv-svg .vv-chip-mas text { font-size: 11px; font-weight: 600; fill: var(--a2-ink-2); }
 .vv-svg .vv-chip-mas:hover rect { stroke: var(--a2-ink); }
-/* Líneas (ronda v21): leyenda de series con casillas, a la derecha del gráfico o debajo si no cabe */
+
 .vv-graf { position: relative; flex: 1; min-height: 0; display: flex; }
 .vv-graf[hidden] { display: none; }
 .vv-graf > .vv-cuerpo { flex: 1 1 0; min-width: 0; }
@@ -147,7 +147,7 @@ svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text
 .vv-series-abajo .vv-tira { flex-wrap: wrap; }
 .vv-series-abajo .vv-tira-bot { order: -1; width: 100%; grid-template-columns: repeat(4, auto); justify-content: start; padding: 2px 0; }
 .vv-svg text.vv-rot-tl { font-size: 11.5px; paint-order: stroke; stroke: var(--a2-bg, #fff); stroke-width: 3px; }
-/* Líneas en Comparar: dos paneles dibujados con la misma función */
+
 .vv-pares { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .vv-pares[hidden] { display: none; }
 .vv-pares .v4-par { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -160,7 +160,7 @@ svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text
 .vv-series-par .vv-series-l { flex-direction: row; flex-wrap: wrap; gap: 1px 6px; }
 .vv-series-par .vv-series-bot button { flex: none; }
 
-/* «Frente a Andalucía» (ronda v23): la línea del cero, rotulada; columna aparte en la Tabla */
+
 .vv-svg .vv-cero { stroke: var(--a2-ink, #101010); stroke-width: 1.6; }
 .vv .vv-svg text.vv-cero-t { font-weight: 700; fill: var(--a2-ink, #101010); paint-order: stroke; stroke: var(--a2-bg, #fff); stroke-width: 3px; }
 .vv .vv-svg text.vv-val-fr { fill: var(--a2-ink); font-weight: 600; }
@@ -170,22 +170,22 @@ svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text
 .vv-tabla-wrap.is-densa .vv-marca { padding-top: 0; padding-bottom: 0; }
 .vv-tabla-wrap.is-densa .vv-tabla td:last-child { white-space: nowrap; }
 .vv-tabla-wrap.is-densa .vv-tabla th, .vv-tabla-wrap.is-densa .vv-tabla td { padding-left: 6px; padding-right: 6px; }
-/* sin sitio para dos marcas: «9,0 % estimado» ya dice que la cifra es parcialmente estimada */
+
 .vv-tabla-wrap.is-densa .vv-marca-4:has(+ .vv-marca-x) { display: none; }
 .vv-fr-c { display: inline-block; width: 10px; height: 10px; margin-right: 6px; box-shadow: inset 0 0 0 1px rgba(28, 34, 30, .18); }
 .vv .vv-tabla tr.vv-fila-and td { font-weight: 700; background: var(--a2-surface-2); border-bottom: 1px solid var(--a2-line-2); }
 .vv-tt-frente { margin-top: 4px; font-weight: 600; white-space: normal; max-width: 300px; }
 
-/* «Todo interpolado» (ronda v19): lo que interpola el Atlas no es un dato; más claro y en cursiva */
+
 .vv-tabla tr.vv-interp td { font-style: italic; color: var(--a2-ink-3); }
 .vv .vv-marca.vv-marca-I { border-style: dashed; color: var(--a2-ink-3); font-style: italic; background: transparent; }
 .vv-clases .vv-sw-interp { background: linear-gradient(90deg, rgba(93, 102, 111, .9) 50%, rgba(93, 102, 111, .38) 50%); }
 .vv-tt-nota { margin-top: 4px; font-size: .86em; font-style: italic; opacity: .8; white-space: normal; max-width: 280px; }
 .vv-lt-interp { color: var(--a2-ink-2); }
 .vv-pie-interp { font-style: italic; }
-/* Tabla: con pocas filas, filas más altas (que no quede media pantalla vacía) */
+
 .vv-tabla tbody tr { height: var(--vv-fila-h, auto); }
-/* leyenda de las franjas: por clases, grande y pegada a ellas */
+
 .vv-fr-ley { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 6px 0 10px; color: var(--a2-ink-2); }
 .vv-fr-ley-t { flex: 0 0 auto; margin: 0; font-weight: 600; font-size: 13px; color: var(--a2-ink); white-space: nowrap; }
 .vv-clases { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 13.5px; }
@@ -199,14 +199,14 @@ svg .vv-pinchable:focus-visible text, svg text.vv-pinchable:focus-visible { text
 .vv-clases .vv-sw-res { background: radial-gradient(circle, var(--a2-ochre, #b8860b) 1px, transparent 1.4px) 0 0 / 5px 5px, var(--a2-surface-2, #eee); }
 .vv-clases .vv-sw-nd { background: linear-gradient(45deg, transparent 46%, var(--a2-nodata-line, #aaa) 46% 54%, transparent 54%), linear-gradient(-45deg, transparent 46%, var(--a2-nodata-line, #aaa) 46% 54%, transparent 54%), var(--a2-nodata, #eee); background-size: 6px 6px; }
 .vv-fr-nota { font-size: 11.5px; color: var(--a2-ink-3); }
-/* la nota de la vista no corre por debajo de los botones flotantes «Fuente» e «Info» del visor v4 */
+
 @media (min-width: 760px) { body:has(#v4-fi) .vv > .vv-nota { padding-right: 160px; } body:has(#v4-fi) .vv.vv-en-cmp > .vv-nota { padding-right: 22px; } body:has(#v4-fi) .vv-tabla-vista > .vv-bar { padding-right: 160px; } body:has(#v4-fi) .vv.vv-tabla-vista > .vv-nota { padding-right: 22px; } }
 @media (max-width: 640px) {
   .vv-clases { font-size: 12px; gap: 4px 10px; }
   .vv-clases i { width: 16px; height: 16px; }
 }
 
-/* El armazón pone la barra fija arriba, la de tiempo abajo (solo en vistas que la usan) y la ficha a la derecha */
+
 .vv-tiempo { padding-bottom: var(--v3-tiempo-h, 74px); }
 body.v3-con-ficha .vv { right: min(400px, 92vw); }
 .vv-nota-salto { font: 600 11px/1 var(--v4-sans, sans-serif); fill: var(--v4-tinta-3, #6b6b6b); letter-spacing: .01em; }

@@ -14,20 +14,6 @@
 </head>
 <body>
 <iframe id="portada" title="Portada del atlas" src="about:blank"></iframe>
-<script>
-(function () {
-  // Solo queda la portada F (Juan, 20-nov-2026: «quita lo de 8 temas»): sin selector visible. Las demás se siguen
-  // abriendo con ?p=e, a, b, c o d para quien tenga el enlace; sus carpetas siguen en portadas/.
-  var PORTADAS = { f: "En relieve" };
-  var POR_DEFECTO = "f";
-  var FONDOS = { c: "#fff", e: "#fff", f: "#0f3b2c" };   // color del marco mientras carga: sin parpadeo
-  var frame = document.getElementById("portada");
-  var p = new URLSearchParams(location.search).get("p");
-  if (!PORTADAS[p]) p = POR_DEFECTO;
-  frame.style.background = FONDOS[p] || "";
-  frame.setAttribute("src", "portadas/" + p + "/index.html");
-  document.title = p === POR_DEFECTO ? "Atlas Histórico de Andalucía" : "Atlas Histórico de Andalucía · " + PORTADAS[p];
-})();
-</script>
+<script>(function(){var PORTADAS={f:"En relieve"};var POR_DEFECTO="f";var FONDOS={c:"#fff",e:"#fff",f:"#0f3b2c"};var frame=document.getElementById("portada");var p=new URLSearchParams(location.search).get("p");if(!PORTADAS[p])p=POR_DEFECTO;frame.style.background=FONDOS[p]||"";frame.setAttribute("src","portadas/"+p+"/index.html");document.title=p===POR_DEFECTO?"Atlas Histórico de Andalucía":"Atlas Histórico de Andalucía · "+PORTADAS[p]})();</script>
 </body>
 </html>

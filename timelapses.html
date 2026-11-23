@@ -3,19 +3,7 @@
 <head>
 <meta name="robots" content="noindex,nofollow,noarchive">
   <meta charset="utf-8">
-  <script>
-    // timelapses.html pasa al visor único (CONTRATO_VISOR_UNICO.md): se lleva al estado equivalente de visor.html
-    (function () {
-      var q = new URLSearchParams(location.search), t = q.get('tema'), v = q.get('vista'), a = q.get('anio');
-      var def = { poblacion: 'densidad', tierra: 'olivar', cosechas: 'est', ganado: 'ovino', clima: 't', trabajo: 'agricultura' };
-      var p = new URLSearchParams();
-      if (t === 'fronteras') { p.set('ind', 'fronteras'); p.set('nivel', 'termino'); }
-      else if (t && def[t]) p.set('ind', t + '.' + (v || def[t]));
-      if (a) p.set('anio', a);
-      var s = p.toString();
-      location.replace('visor.html' + (s ? '?' + s : ''));
-    })();
-  </script>
+  <script>(function(){var q=new URLSearchParams(location.search),t=q.get("tema"),v=q.get("vista"),a=q.get("anio");var def={poblacion:"densidad",tierra:"olivar",cosechas:"est",ganado:"ovino",clima:"t",trabajo:"agricultura"};var p=new URLSearchParams;if(t==="fronteras"){p.set("ind","fronteras");p.set("nivel","termino")}else if(t&&def[t])p.set("ind",t+"."+(v||def[t]));if(a)p.set("anio",a);var s=p.toString();location.replace("visor.html"+(s?"?"+s:""))})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Timelapses · Atlas Histórico de Andalucía</title>
   <meta name="description" content="Piezas cortas animadas sobre Andalucía: población, tierra, cosechas, ganado, clima y trabajo, municipio a municipio, con su fuente original en cada fotograma.">
@@ -28,7 +16,7 @@
 <body class="a2 tl">
 <main id="main">
 
-  <!-- ============ Galería ============ -->
+  
   <section id="galeria" class="tl-gal" aria-labelledby="tl-gal-title">
     <div class="a2-wrap">
       <header class="tl-gal__head">
@@ -53,7 +41,7 @@
     </div>
   </section>
 
-  <!-- ============ Reproductor ============ -->
+  
   <section id="player" class="tl-player" hidden aria-labelledby="tl-title">
     <div class="tl-stage">
       <header class="tl-head">

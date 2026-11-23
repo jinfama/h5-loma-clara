@@ -1,17 +1,11 @@
-/* =====================================================================
-   Atlas Histórico de Andalucía v2 · sistema de diseño común
-   Páginas interiores: timelapses.html, fronteras.html (y las que vengan).
-   Documentación: docs/v2/DISENO.md. Dueño: agente de fronteras.
-   Fuentes (Google Fonts): Bricolage Grotesque (titulares), Schibsted Grotesk
-   (texto e interfaz), JetBrains Mono (cifras y códigos).
-   ===================================================================== */
+
 
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,700;1,400&display=swap");
 
-/* ---------- 1. Tokens ---------------------------------------------- */
+
 :root {
   color-scheme: light;
-  /* superficie y tinta: neutros fríos, nada de crema */
+  
   --a2-bg:        #f3f4f2;
   --a2-surface:   #ffffff;
   --a2-surface-2: #e9ebe8;
@@ -20,35 +14,35 @@
   --a2-ink-3:     #5d666f;
   --a2-line:      #d3d7d4;
   --a2-line-2:    #b6bcb8;
-  /* acento fuerte: almagre (el rojo de las cales y los zócalos) */
+  
   --a2-accent:    #d63a1f;
   --a2-accent-ink:#ffffff;
   --a2-accent-soft:#fbe3dc;
-  /* secundarios con significado */
-  --a2-blue:      #1d4f7a;   /* oficial, observado */
+  
+  --a2-blue:      #1d4f7a;   
   --a2-teal:      #2f7d74;
-  --a2-ochre:     #c98a1b;   /* en revisión */
-  --a2-violet:    #6c4fa3;   /* supuesto */
-  /* escala secuencial común (claro → oscuro), 6 pasos, apta en ambos temas */
+  --a2-ochre:     #c98a1b;   
+  --a2-violet:    #6c4fa3;   
+  
   --a2-seq-0: #e6ecef;
   --a2-seq-1: #c3d4de;
   --a2-seq-2: #93b3c6;
   --a2-seq-3: #6390ac;
   --a2-seq-4: #3b6b8c;
   --a2-seq-5: #1c4565;
-  /* sin dato y estimado */
+  
   --a2-nodata:      #d9dbd8;
   --a2-nodata-line: #b3b7b3;
   --a2-est-line:    rgba(19, 23, 27, .38);
-  /* mapa */
+  
   --a2-map-bg:      #e8ebe8;
   --a2-map-stroke:  rgba(255,255,255,.9);
   --a2-map-outline: #13171b;
-  /* tipografía */
+  
   --a2-font-display: "Bricolage Grotesque", "Schibsted Grotesk", system-ui, sans-serif;
   --a2-font-text:    "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   --a2-font-mono:    "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-  /* medidas */
+  
   --a2-radius: 6px;
   --a2-radius-lg: 12px;
   --a2-gap: 16px;
@@ -123,7 +117,7 @@
   --a2-shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
 }
 
-/* ---------- 2. Base ------------------------------------------------- */
+
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body.a2 {
@@ -162,7 +156,7 @@ body.a2 {
 .a2-skip { position: absolute; left: 8px; top: -60px; z-index: 100; background: var(--a2-accent); color: var(--a2-accent-ink); padding: 8px 12px; border-radius: var(--a2-radius); }
 .a2-skip:focus { top: 8px; }
 
-/* ---------- 3. Barra de navegación común ---------------------------- */
+
 .a2-nav {
   position: sticky; top: 0; z-index: 50;
   height: var(--a2-nav-h);
@@ -210,14 +204,14 @@ body.a2 {
   .a2-nav__links a { padding: 11px 12px; border-radius: var(--a2-radius); font-size: 1rem; }
 }
 
-/* ---------- 4. Disposición ----------------------------------------- */
+
 .a2-wrap { max-width: 1400px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 32px); }
 .a2-section { padding-top: clamp(28px, 5vw, 64px); padding-bottom: clamp(28px, 5vw, 64px); }
 .a2-section + .a2-section { border-top: 1px solid var(--a2-line); }
 .a2-grid { display: grid; gap: var(--a2-gap); }
 .a2-footer { border-top: 1px solid var(--a2-line); padding: 24px 0 40px; color: var(--a2-ink-3); font-size: .85rem; }
 
-/* ---------- 5. Paneles, tarjetas, cifras ---------------------------- */
+
 .a2-panel {
   background: var(--a2-surface);
   border: 1px solid var(--a2-line);
@@ -240,7 +234,7 @@ body.a2 {
   font-style: italic; color: var(--a2-ink-2); font-size: .92rem;
 }
 
-/* ---------- 6. Controles -------------------------------------------- */
+
 .a2-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 40px; padding: 8px 14px; border-radius: 999px;
@@ -264,7 +258,7 @@ body.a2 {
 .a2-seg button[aria-pressed="true"] { background: var(--a2-ink); color: var(--a2-bg); }
 input[type="range"].a2-range { width: 100%; accent-color: var(--a2-accent); height: 28px; }
 
-/* ---------- 7. Insignias ------------------------------------------- */
+
 .a2-badge {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 9px 3px 7px; border-radius: 999px;
@@ -279,13 +273,12 @@ input[type="range"].a2-range { width: 100%; accent-color: var(--a2-accent); heig
 .a2-badge--estimado  { color: var(--a2-ink-2); background: var(--a2-surface-2); }
 .a2-badge--accent    { color: var(--a2-accent); background: var(--a2-accent-soft); }
 
-/* ---------- 8. Tramas: estimado y sin dato (para HTML) ---------------- */
-/* Estimado: rayado diagonal fino sobre el color del dato. Uso: añadir la
-   clase sobre un elemento que ya tiene su background-color. */
+
+
 .a2-trama-estimado {
   background-image: repeating-linear-gradient(135deg, var(--a2-est-line) 0 1.2px, transparent 1.2px 5px);
 }
-/* Sin dato: gris neutro con trama cruzada. Nunca el color más bajo de la escala. */
+
 .a2-trama-sindato {
   background-color: var(--a2-nodata);
   background-image:
@@ -293,7 +286,7 @@ input[type="range"].a2-range { width: 100%; accent-color: var(--a2-accent); heig
     repeating-linear-gradient(-45deg, var(--a2-nodata-line) 0 1px, transparent 1px 6px);
 }
 
-/* ---------- 9. Leyendas -------------------------------------------- */
+
 .a2-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: .82rem; color: var(--a2-ink-2); margin: 0; padding: 0; list-style: none; }
 .a2-legend__item { display: inline-flex; align-items: center; gap: 7px; }
 .a2-swatch { width: 18px; height: 12px; border-radius: 2px; flex: none; border: 1px solid color-mix(in srgb, var(--a2-ink) 18%, transparent); }
@@ -304,7 +297,7 @@ input[type="range"].a2-range { width: 100%; accent-color: var(--a2-accent); heig
 .a2-legend-ramp span { height: 10px; }
 .a2-legend-ramp__labels { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; max-width: 320px; font: 400 .72rem var(--a2-font-mono); color: var(--a2-ink-3); }
 
-/* ---------- 10. Tooltip -------------------------------------------- */
+
 .a2-tooltip {
   position: fixed; z-index: 80; pointer-events: none;
   max-width: 280px; padding: 9px 11px;
@@ -317,7 +310,7 @@ input[type="range"].a2-range { width: 100%; accent-color: var(--a2-accent); heig
 .a2-tooltip strong { font-family: var(--a2-font-display); font-size: .98rem; display: block; }
 .a2-tooltip .a2-tt-meta { font-family: var(--a2-font-mono); font-size: .72rem; opacity: .75; }
 
-/* ---------- 11. Mapa ----------------------------------------------- */
+
 .a2-map { position: relative; background: var(--a2-map-bg); border-radius: var(--a2-radius-lg); overflow: hidden; }
 .a2-map canvas, .a2-map svg { display: block; width: 100%; height: 100%; }
 .a2-map__corner { position: absolute; left: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 24px); pointer-events: none; }
@@ -329,7 +322,7 @@ input[type="range"].a2-range { width: 100%; accent-color: var(--a2-accent); heig
 }
 .a2-map__attrib[hidden] { display: none; }
 
-/* ---------- 12. Estado de carga ------------------------------------ */
+
 .a2-loading { color: var(--a2-ink-3); font: 400 .85rem var(--a2-font-mono); }
 .a2-empty { padding: 24px; text-align: center; color: var(--a2-ink-3); border: 1px dashed var(--a2-line-2); border-radius: var(--a2-radius-lg); }
 

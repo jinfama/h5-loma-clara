@@ -1,7 +1,4 @@
-/* Portada F · «Atlas Histórico»: una maqueta viva de Andalucía en relieve sobre verde hondo. Unos botones de tema
-   cambian lo que enseña (población, paisajes, transporte, fronteras, clima) con su propia línea temporal; debajo,
-   «Sobre el atlas». Lenguaje común v6: Syne 800 para lo que se lee de lejos, Instrument Sans para el texto, esquinas
-   cuadradas y el verde andaluz como acento. En la primera pantalla no hay fuentes ni atribuciones: todo va abajo. */
+
 :root {
   --verde-hondo: #0f3b2c;
   --verde-andaluz: #007a3d;
@@ -18,13 +15,13 @@
   --titulo: clamp(30px, min(5.5vw, calc((100vw - 2 * var(--mx)) / 11.9)), 100px);
 }
 * { box-sizing: border-box; }
-/* Una sola pantalla, sin desplazamiento de página (Juan, 21-nov-2026). */
+
 html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
 body { color: #fff; font-family: var(--txt); -webkit-font-smoothing: antialiased; background: var(--verde-hondo); }
 a { color: inherit; }
 button { font: inherit; }
 
-/* =============== Primera pantalla =============== */
+
 .portada {
   position: relative; height: 100vh; height: 100svh; overflow: hidden; overflow: clip;
   background: radial-gradient(120% 95% at 56% 60%, #1a5643 0%, #0f3b2c 46%, var(--noche) 100%);
@@ -37,7 +34,7 @@ button { font: inherit; }
 #lienzo:active { cursor: grabbing; }
 :root.listo #lienzo { opacity: 1; }
 :root.sin3d #lienzo { display: none; }
-/* Tela de lacería bajo la maqueta: solo se ve sobre el verde, alrededor del cursor. La mueve el compositor. */
+
 .lazo {
   position: absolute; left: 0; top: 0; width: 340px; height: 340px; overflow: hidden; pointer-events: none; opacity: 0;
   will-change: transform, opacity;
@@ -54,7 +51,7 @@ button { font: inherit; }
   box-shadow: 0 0 0 1px rgba(15, 59, 44, .25);
 }
 :root.listo .cap { opacity: 1; }
-/* Velo bajo el título y la barra: solo cuando la cámara se acerca y la maqueta llena la pantalla. */
+
 .velo {
   position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .6s ease;
   background:
@@ -70,12 +67,12 @@ button { font: inherit; }
 :root.cargando .carga { opacity: 1; animation: latido 1.6s ease-in-out infinite; }
 @keyframes latido { 50% { opacity: .35; } }
 
-/* Sin WebGL: la imagen fija del relieve sombreado, con el mismo título y botón. */
+
 .respaldo { position: absolute; inset: 0; display: none; place-items: center; padding: 38vh 4vw 60px 24vw; }
 .respaldo img { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(10px 14px 0 rgba(3, 20, 13, .45)); }
 :root.sin3d .respaldo { display: grid; }
 
-/* ---------- Título y entrada ---------- */
+
 .cab { position: absolute; left: 0; top: 0; padding: 34px var(--mx) 0; pointer-events: none; z-index: 2; }
 h1 { margin: 0; font-family: var(--disp); font-weight: 800; text-transform: uppercase; line-height: .9; font-size: var(--titulo); letter-spacing: -.05em; }
 h1 span { display: block; white-space: nowrap; }
@@ -104,14 +101,13 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
 .ayuda .dedo { display: none; }
 @media (hover: none) { .ayuda .raton { display: none; } .ayuda .dedo { display: inline; } }
 
-/* ---------- Temas, leyenda y barra de fechas ---------- */
+
 .tiempo {
   position: absolute; z-index: 2; left: var(--mx); right: var(--mx); bottom: 22px;
   display: grid; grid-template-columns: 36px minmax(0, 1fr) clamp(230px, 22vw, 340px); column-gap: 18px; align-items: end;
   grid-template-areas: "aviso aviso fecha" "temas temas fecha" "leyenda leyenda fecha" "play pista fecha";
 }
-/* Las cinco palabras: texto grande en Syne, sin recuadro, siempre en una línea en escritorio (el tamaño sale del
-   ancho disponible). La activa, blanca y subrayada; las otras, apagadas. */
+
 .aviso-temas {
   grid-area: aviso; margin: 0 0 6px; font: 600 12px/1 var(--txt); letter-spacing: .12em; text-transform: uppercase;
   color: var(--verde-luz); transition: opacity .8s ease, transform .8s ease;
@@ -124,7 +120,7 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
   gap: 0 .4em; margin-bottom: 12px; font: 800 clamp(16px, 1.75vw, 40px)/1 var(--disp); letter-spacing: -.035em; white-space: nowrap; }
 @supports (font-size: 1cqw) {
   .temas { gap: 0 min(16px, 1cqw); }
-  #temas button, #temas .sep { font-size: min(40px, calc(100cqw / 52)); }   /* el tamaño de cuando eran seis */
+  #temas button, #temas .sep { font-size: min(40px, calc(100cqw / 52)); }   
   #temas .ymas { font-size: min(28px, calc(100cqw / 54)); }
 }
 .temas button {
@@ -136,7 +132,7 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
 .temas button[aria-pressed="true"] { color: #fff; box-shadow: inset 0 -4px 0 var(--verde-luz); }
 .temas button:focus-visible { outline: 2px solid var(--verde-luz); outline-offset: 5px; }
 .temas .sep { color: rgba(233, 241, 236, .28); }
-/* En escritorio, una sola línea (Juan, 21-nov-2026): las palabras que no caben no se ponen. */
+
 .ymas { font: 700 .8em/1 var(--disp); letter-spacing: -.02em; color: rgba(233, 241, 236, .4); text-decoration: none;
   white-space: nowrap; margin-left: .15em; transition: color .2s; }
 .ymas:hover, .ymas:focus-visible { color: #fff; outline: none; }
@@ -186,7 +182,7 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
 }
 .nota[hidden] { display: none; }
 
-/* Agua: sin línea temporal; en su lugar, una frase. */
+
 .frase { display: none; grid-column: 1 / -1; grid-row: -2 / -1; margin: 6px 0 4px; font: 600 16px/1.35 var(--txt); color: var(--claro); }
 .frase em { display: block; margin-top: 4px; font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: .12em;
   text-transform: uppercase; color: var(--verde-luz); }
@@ -195,7 +191,7 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
 @media (hover: none) { .frase .raton { display: none; } .frase .dedo { display: inline; } }
 .sin-tiempo .frase { display: block; }
 .sin-tiempo .play, .sin-tiempo .pista, .sin-tiempo .fecha { display: none; }
-/* Clima: las franjas de Andalucía año a año, bajo la pista. */
+
 .franjas { position: absolute; left: 0; right: 0; bottom: 4px; height: 14px; }
 .franjas span { position: absolute; top: 0; bottom: 0; }
 .pista.con-franjas .raya, .pista.con-franjas .hecho, .pista.con-franjas .marcas i { display: none; }
@@ -205,7 +201,7 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
 .solo-op-a, .solo-op-b { display: none; }
 :root.op-a .solo-op-a, :root.op-b .solo-op-b { display: list-item; }
 
-/* ---------- Lo que hay bajo el cursor ---------- */
+
 .ficha {
   position: fixed; left: 0; top: 0; z-index: 5; pointer-events: none; max-width: 290px;
   background: var(--cal); color: var(--tinta); padding: 9px 12px 10px; border-left: 4px solid var(--verde-andaluz);
@@ -229,8 +225,8 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
 :root.listo .solo3d { visibility: visible; }
 :root.sin3d .tiempo, :root.sin3d .ayuda { display: none; }
 
-/* =============== Sobre el atlas =============== */
-/* Panel «Sobre el atlas»: a la derecha, a toda la altura, en verde hondo; el fondo se oscurece. */
+
+
 .sobre {
   position: fixed; inset: 0 0 0 auto; margin: 0; width: min(760px, 100vw); max-width: 100vw; height: 100%; max-height: 100%;
   padding: 0; border: 0; border-left: 2px solid rgba(233, 241, 236, .9); border-radius: 0; overflow: auto; overscroll-behavior: contain;
@@ -286,7 +282,7 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
 .final { margin-top: 56px; padding-top: 28px; border-top: 2px solid rgba(233, 241, 236, .85); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; }
 .final .entrar { margin-top: 0; }
 
-/* ---------- Pantallas estrechas y bajas ---------- */
+
 @media (max-width: 900px) {
   .lista-temas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dos { grid-template-columns: minmax(0, 1fr); }
@@ -302,7 +298,7 @@ button.bajar { background: none; border: 0; border-bottom: 2px solid var(--verde
     bottom: 12px; grid-template-columns: 34px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px;
     grid-template-areas: "temas temas temas" "leyenda leyenda leyenda" "fecha fecha bajar" "play pista pista";
   }
-  /* A 390 px, las cinco palabras en dos líneas. */
+  
   .tiempo { grid-template-areas: "aviso aviso aviso" "temas temas temas" "leyenda leyenda leyenda" "fecha fecha bajar" "play pista pista"; }
   .aviso-temas { font-size: 10.5px; margin-bottom: 4px; }
   .temas { font-size: min(3.75vw, 22px); letter-spacing: -.04em; flex-wrap: wrap; gap: .3em .42em; margin-bottom: 8px; white-space: normal; }

@@ -1,7 +1,4 @@
-/* =====================================================================================================================
-   Análisis del municipio · retrato de cada municipio con el lenguaje del Atlas: Syne + Instrument Sans, papel blanco,
-   tinta negra, reglas de 2 px, esquinas cuadradas, verde hondo, albero y almagre.
-   ===================================================================================================================== */
+
 .ma {
   --ma-hondo: #0f3b2c; --ma-verde: #007a3d; --ma-albero: #d2a24c; --ma-almagre: #a3412a; --ma-papel: #fff; --ma-tinta: #101010;
   --ma-gris: #6b6b6b; --ma-linea: #e3e3e3; --ma-panel: #f4f4f1; --ma-rev: #b9770e;
@@ -14,7 +11,7 @@
 .ma svg { display: block; max-width: 100%; }
 .ma svg.ma-f { display: inline-block; width: .62em; height: .62em; margin: 0 .14em 0 .22em; vertical-align: .08em; flex: none; }
 
-/* cabecera */
+
 .ma-hero { background: var(--ma-hondo); color: #fff; padding: clamp(18px, 2.4vw, 36px) 0 clamp(16px, 2.2vw, 30px); }
 .ma-hero__g { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: clamp(20px, 4vw, 64px); align-items: start; }
 .ma-pre { margin: 0; font: 700 12px/1 var(--p6-txt); letter-spacing: .2em; text-transform: uppercase; color: #7fd3a3; }
@@ -40,7 +37,7 @@
 .ma-kpi__v svg.ma-f { width: .36em; height: .36em; color: #f2c14e; vertical-align: .34em; }
 .ma-kpi__n { font-size: 12.5px; color: #bcd2c6; }
 
-/* barra fija: nombre, mapa de situación, partes y cambiar de municipio */
+
 .ma .p6-nav { position: relative; }
 .ma-barra { position: sticky; top: 0; z-index: 30; background: #fff; border-bottom: 2px solid var(--ma-tinta); }
 .ma-barra__g { display: flex; align-items: center; gap: 14px; min-height: 54px; }
@@ -60,7 +57,7 @@
 .ma-barra__cambia:hover { background: #fff; color: var(--ma-hondo); }
 .ma-barra__c { display: none; }
 
-/* entrada: el mapa en blanco */
+
 body.ma-entrada { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
 body.ma-entrada #ma-raiz { flex: 1 1 auto; min-height: 0; position: relative; }
 .ma-sel { position: absolute; inset: 0; background: #fff; }
@@ -93,7 +90,7 @@ body.ma-entrada #ma-raiz { flex: 1 1 auto; min-height: 0; position: relative; }
 .ma-capa .ma-sel { position: absolute; inset: 0; }
 body.ma-sin-scroll { overflow: hidden; }
 
-/* cómo leer */
+
 .ma-leer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding-top: 12px; padding-bottom: 12px; font-size: 12.5px; color: #333; }
 .ma-leer > span { font-weight: 700; }
 .ma-conv { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; padding: 0; list-style: none; }
@@ -111,7 +108,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-ley-clara { background: repeating-linear-gradient(0deg, #e8dcc2, #e8dcc2 4px, #d3d7da 4px, #d3d7da 8px); }
 .ma-ley-col { background: var(--ma-tinta); width: 5px !important; }
 
-/* secciones */
+
 .ma-sec { padding: clamp(32px, 4vw, 60px) 0; border-top: 2px solid var(--ma-tinta); scroll-margin-top: 66px; }
 .ma-sec__h { display: flex; align-items: baseline; gap: 12px; margin-bottom: clamp(14px, 1.6vw, 22px); }
 .ma-sec__c { min-width: 0; }
@@ -149,7 +146,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-conmuta button[aria-pressed="true"] { background: var(--ma-tinta); color: #fff; }
 
 
-/* tiras */
+
 .ma-tiras { margin: 0; padding: 0; list-style: none; }
 .ma-tira { display: grid; grid-template-columns: minmax(200px, 5fr) minmax(0, 6fr); gap: 20px; align-items: center; padding: 12px 0; border-top: 1px solid var(--ma-linea); }
 .ma-tira:first-child { border-top: 0; padding-top: 0; }
@@ -163,7 +160,7 @@ body.ma-sin-scroll { overflow: hidden; }
 
 .ma-tira__dif { margin-top: 2px !important; font-size: 12.5px !important; color: var(--ma-almagre); font-weight: 600; }
 
-/* huella */
+
 .ma-huella { margin-top: 8px; }
 .ma-hd .ma-tiras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 44px; }
 .ma-hd .ma-tira { align-items: start; }
@@ -176,7 +173,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-ver-mas { margin-top: 10px; min-height: 34px; padding: 4px 14px; border: 2px solid var(--ma-tinta); background: #fff; font: 700 13px var(--p6-txt); cursor: pointer; }
 .ma-ver-mas:hover { background: var(--ma-tinta); color: #fff; }
 
-/* tabla comparada: en móvil, una ficha por indicador */
+
 .ma-tabla-w { min-width: 0; }
 .ma-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ma-tabla thead th { padding: 5px 8px 5px 0; border-bottom: 2px solid var(--ma-tinta); text-align: left; vertical-align: bottom; font: 700 11px/1.2 var(--p6-txt); color: var(--ma-gris); }
@@ -209,7 +206,7 @@ body.ma-sin-scroll { overflow: hidden; }
 
 .ma-graf .ma-eti-rev { font: 700 11px var(--p6-txt); fill: var(--ma-rev); paint-order: stroke; stroke: #fff; stroke-width: 3px; }
 
-/* sus fronteras */
+
 .ma-fr__tit { margin: 0; font: 800 clamp(21px, 2.1vw, 32px)/1.05 var(--p6-disp); letter-spacing: -.03em; }
 .ma-fr__tit--mantiene { color: var(--ma-verde); }
 .ma-fr__tit--contorno { color: #8a6410; }
@@ -251,14 +248,14 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-fr__no li { margin-bottom: 3px; }
 .ma-fr__no span { color: var(--ma-gris); font-size: 12px; }
 
-/* voto comparado: todas las elecciones */
+
 .ma-vl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin-bottom: 8px; }
 .ma-vl__f { margin: 0; min-width: 0; }
 .ma-vl__f figcaption { font-size: 12.5px; font-weight: 700; }
 .ma-dv__f--cab span b { font-size: 9.5px; font-weight: 700; letter-spacing: -.03em; }
 .ma-dv__f--cab span i { display: none; font-style: normal; }
 
-/* cociente de localización */
+
 .ma-lq { display: grid; gap: 2px; font-size: 12px; }
 .ma-lq__f { display: grid; grid-template-columns: minmax(112px, 1.9fr) repeat(var(--cols), minmax(0, 1fr)); gap: 2px; align-items: stretch; }
 .ma-lq__f--cab span { padding-bottom: 2px; text-align: center; font-size: 11px; font-weight: 700; color: #444; white-space: nowrap; overflow: hidden; }
@@ -275,7 +272,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-lq__c.is-decl { position: relative; }
 .ma-lq__c.is-decl::after { content: ''; position: absolute; top: 0; right: 0; border: 4px solid; border-color: #101010 #101010 transparent transparent; }
 
-/* voto comparado */
+
 .ma-dv { display: grid; gap: 2px; font-size: 11px; }
 .ma-dv__f { display: grid; grid-template-columns: minmax(94px, 2.1fr) repeat(var(--cols), minmax(0, 1fr)); gap: 1px; align-items: stretch; }
 .ma-dv__f--cab span { text-align: center; font-weight: 700; color: #444; }
@@ -284,7 +281,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-dv__c { display: flex; align-items: center; justify-content: center; min-height: 25px; font-size: 10px; font-weight: 700; letter-spacing: -.03em; overflow: hidden; background: #f7f7f3; }
 .ma-dv__c--no { background: repeating-linear-gradient(45deg, #efefeb, #efefeb 2px, #dcdcd6 2px, #dcdcd6 4px); }
 
-/* diseminado comparado */
+
 .ma-pesa { margin: 0; padding: 0; list-style: none; }
 .ma-pesa li { display: grid; grid-template-columns: 96px minmax(0, 1fr) 132px; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--ma-linea); font-size: 13px; }
 .ma-pesa__a { font-weight: 700; line-height: 1.1; }
@@ -294,7 +291,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-pesa__v { position: absolute; top: 1px; width: 10px; height: 10px; margin-left: -5px; background: var(--ma-verde); border-radius: 50% !important; }
 .ma-pesa__n { text-align: right; font-weight: 600; font-size: 12.5px; }
 
-/* caminos */
+
 .ma-epocas { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
 .ma-epocas li { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; border-top: 2px solid var(--ma-tinta); min-width: 0; }
 .ma-epocas .is-vacia { border-top-color: #bbb; color: #777; }
@@ -306,7 +303,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-epocas__v svg.ma-f { width: .42em; height: .42em; vertical-align: .3em; }
 .ma-epocas__q { font-size: 11.5px; line-height: 1.25; color: #555; }
 
-/* parecidos */
+
 .ma-pares { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .ma-par { display: flex; flex-direction: column; gap: 5px; height: 100%; padding: 12px 13px 13px; border: 2px solid var(--ma-tinta); color: var(--ma-tinta) !important; text-decoration: none; transition: transform .12s, box-shadow .12s; }
 .ma-par:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--ma-albero); }
@@ -317,7 +314,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-par__t { font-size: 12.5px; line-height: 1.35; color: #333; }
 .ma-mapa--claro { margin-top: 10px; }
 
-/* tierra */
+
 .ma-ganado { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--ma-linea); }
 .ma .ma-ganado h3 { margin: 0 0 8px; font: 800 17px/1.1 var(--p6-disp); letter-spacing: -.02em; }
 .ma-ganado h3 small { font: 500 12.5px var(--p6-txt); color: var(--ma-gris); letter-spacing: 0; }
@@ -340,7 +337,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-det summary { cursor: pointer; font-weight: 600; color: var(--ma-tinta); }
 .ma-det ul { margin: 6px 0 0; padding-left: 18px; }
 
-/* voto */
+
 .ma-cinta { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; }
 .ma-cinta__c { display: flex; align-items: flex-end; justify-content: center; height: 54px; padding-bottom: 4px; color: #fff; font-size: 11.5px; }
 .ma-cinta__c b { font-weight: 700; }
@@ -351,7 +348,7 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-cinta__pie { margin: 6px 0 16px; font-size: 12.5px; color: var(--ma-gris); }
 .ma-pt { display: inline-block; width: 9px; height: 9px; margin-right: 5px; }
 
-/* geografía */
+
 .ma-geo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 26px; margin: 0; padding: 0; list-style: none; }
 .ma-geo li { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 8px; border-top: 2px solid var(--ma-tinta); }
 .ma-geo__r { font-size: 13px; font-weight: 600; }
@@ -363,14 +360,14 @@ body.ma-sin-scroll { overflow: hidden; }
 .ma-geo__b i { position: absolute; top: -4px; width: 3px; height: 15px; margin-left: -1.5px; background: var(--ma-almagre); box-shadow: 0 0 0 1px #fff; }
 .ma-geo__e { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--ma-gris); }
 
-/* fuentes y pie */
+
 .ma-sec--fin h2 { margin-bottom: 8px !important; }
 .ma-intro { margin: 0 0 12px; max-width: 80ch; }
 .ma-lista-f { columns: 2; column-gap: 34px; margin: 0; padding: 0 0 0 16px; font-size: 13.5px; }
 .ma-lista-f li { margin-bottom: 4px; break-inside: avoid; }
 .ma-pie-pag { padding-top: 22px; padding-bottom: 46px; border-top: 2px solid var(--ma-tinta); font-weight: 600; }
 
-/* ayuda flotante */
+
 .ma-tip { position: fixed; z-index: 60; max-width: min(320px, calc(100vw - 16px)); padding: 7px 10px; background: var(--ma-tinta); color: #fff; font: 500 12.5px/1.4 var(--p6-txt); pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.28); }
 .ma-tip[hidden] { display: none; }
 .ma-tip svg.ma-f { color: #f2c14e; }
